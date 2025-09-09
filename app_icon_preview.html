@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R-Gram App Icon Preview</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        h1 {
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .icon-preview {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        .icon-preview:hover {
+            transform: translateY(-5px);
+        }
+        .icon-preview h3 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: block;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .icon.large {
+            width: 120px;
+            height: 120px;
+        }
+        .icon.small {
+            width: 60px;
+            height: 60px;
+        }
+        .description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .backgrounds {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .bg-preview {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        .bg-preview h4 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .bg-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 0 auto;
+            display: block;
+        }
+        .bg-white { background: #f8f9fa; }
+        .bg-dark { background: #343a40; }
+        .bg-gradient { background: linear-gradient(45deg, #ff6b6b, #4ecdc4); }
+        .bg-pattern { background: repeating-linear-gradient(45deg, #f0f0f0, #f0f0f0 10px, #e0e0e0 10px, #e0e0e0 20px); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 R-Gram App Icon Preview</h1>
+        
+        <div class="icon-grid">
+            <div class="icon-preview">
+                <h3>📱 App Icon (Standard)</h3>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="icon large">
+                <p class="description">This is your new app icon featuring the beautiful "R gram" design with the peace sign symbol and subtle gradient background.</p>
+            </div>
+            
+            <div class="icon-preview">
+                <h3>🔍 Icon Details</h3>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="icon">
+                <p class="description">Circular design with embossed "R gram" text and peace sign symbol. Cream background with yellow-to-blue gradient aura.</p>
+            </div>
+            
+            <div class="icon-preview">
+                <h3>📐 Different Sizes</h3>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="icon large">
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="icon">
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="icon small">
+                <p class="description">The icon scales beautifully across all device sizes and resolutions.</p>
+            </div>
+        </div>
+        
+        <h2 style="color: white; margin-top: 50px; margin-bottom: 30px;">🎨 Icon on Different Backgrounds</h2>
+        
+        <div class="backgrounds">
+            <div class="bg-preview bg-white">
+                <h4>Light Background</h4>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="bg-icon">
+            </div>
+            
+            <div class="bg-preview bg-dark">
+                <h4 style="color: white;">Dark Background</h4>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="bg-icon">
+            </div>
+            
+            <div class="bg-preview bg-gradient">
+                <h4 style="color: white;">Gradient Background</h4>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="bg-icon">
+            </div>
+            
+            <div class="bg-preview bg-pattern">
+                <h4>Pattern Background</h4>
+                <img src="assets/images/app-icon.jpeg" alt="R-Gram App Icon" class="bg-icon">
+            </div>
+        </div>
+        
+        <div style="margin-top: 50px; color: white; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px;">
+            <h3>✨ Icon Features</h3>
+            <ul style="text-align: left; max-width: 600px; margin: 0 auto;">
+                <li><strong>Design:</strong> Clean, minimalist circular emblem</li>
+                <li><strong>Text:</strong> "R gram" embossed along the upper curve</li>
+                <li><strong>Symbol:</strong> Peace sign in the center</li>
+                <li><strong>Colors:</strong> Cream background with subtle yellow-to-blue gradient aura</li>
+                <li><strong>Style:</strong> 3D embossed effect with soft shadows</li>
+                <li><strong>Scalability:</strong> Works perfectly at all sizes</li>
+            </ul>
+        </div>
+        
+        <div style="margin-top: 30px; color: white; font-size: 14px;">
+            <p>🎉 Your new app icon has been successfully set! The icon will appear on:</p>
+            <p>• Android home screen and app drawer</p>
+            <p>• iOS home screen and app switcher</p>
+            <p>• App store listings</p>
+            <p>• Notifications and settings</p>
+        </div>
+    </div>
+</body>
+</html>

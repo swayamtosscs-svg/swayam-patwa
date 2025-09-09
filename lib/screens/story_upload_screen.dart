@@ -1,0 +1,499 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+import 'package:provider/provider.dart';
+import '../services/story_service.dart';
+import '../services/media_upload_service.dart';
+import '../models/story_model.dart';
+import '../providers/auth_provider.dart';
+
+class StoryUploadScreen extends StatefulWidget {
+  final String token;
+
+  const StoryUploadScreen({
+    Key? key,
+    required this.token,
+  }) : super(key: key);
+
+  @override
+  State<StoryUploadScreen> createState() => _StoryUploadScreenState();
+}
+
+class _StoryUploadScreenState extends State<StoryUploadScreen> {
+  dynamic _selectedMedia; // Use dynamic to support both File and XFile
+  String _mediaType = 'image';
+  bool _isUploading = false;
+  bool _isVideoInitialized = false;
+  VideoPlayerController? _videoController;
+  final ImagePicker _picker = ImagePicker();
+  final TextEditingController _captionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    _captionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        setState(() {
+          if (kIsWeb) {
+          // On web, use the image object directly
+          _selectedMedia = image;
+        } else {
+          // On mobile, convert to File
+          _selectedMedia = File(image.path);
+        }
+          _mediaType = 'image';
+        });
+        _disposeVideoController();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error picking image: $e');
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    try {
+      final XFile? video = await _picker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(seconds: 15), // Stories are typically short
+      );
+
+      if (video != null) {
+        setState(() {
+          if (kIsWeb) {
+            // On web, use the video object directly
+            _selectedMedia = video;
+          } else {
+            // On mobile, convert to File
+            _selectedMedia = File(video.path);
+          }
+          _mediaType = 'video';
+        });
+        _initializeVideoController();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error picking video: $e');
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1080,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (photo != null) {
+        setState(() {
+          if (kIsWeb) {
+            // On web, use the photo object directly
+            _selectedMedia = photo;
+          } else {
+            // On mobile, convert to File
+            _selectedMedia = File(photo.path);
+          }
+          _mediaType = 'image';
+        });
+        _disposeVideoController();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error taking photo: $e');
+    }
+  }
+
+  Future<void> _takeVideo() async {
+    try {
+      final XFile? video = await _picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(seconds: 15),
+      );
+
+      if (video != null) {
+        setState(() {
+          if (kIsWeb) {
+            // On web, use the video object directly
+            _selectedMedia = video;
+          } else {
+            // On mobile, convert to File
+            _selectedMedia = File(video.path);
+          }
+          _mediaType = 'video';
+        });
+        _initializeVideoController();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error taking video: $e');
+    }
+  }
+
+  void _initializeVideoController() {
+    if (_selectedMedia != null) {
+      if (kIsWeb) {
+        // For web, we can't use VideoPlayerController.file
+        // Skip video preview on web for now
+        setState(() {
+          _isVideoInitialized = false;
+        });
+        return;
+      }
+      
+      _videoController = VideoPlayerController.file(_selectedMedia!)
+        ..initialize().then((_) {
+          setState(() {
+            _isVideoInitialized = true;
+          });
+        });
+    }
+  }
+
+  void _disposeVideoController() {
+    _videoController?.dispose();
+    _videoController = null;
+  }
+
+  Future<void> _uploadStory() async {
+    if (_selectedMedia == null) {
+      _showErrorSnackBar('Please select media first');
+      return;
+    }
+
+    print('StoryUploadScreen: Starting upload process');
+    print('StoryUploadScreen: Media file: ${_selectedMedia!.path}');
+    print('StoryUploadScreen: Media type: $_mediaType');
+    print('StoryUploadScreen: Token: ${widget.token.substring(0, 20)}...');
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      // Get current user ID from AuthProvider
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.userProfile?.id;
+      
+      if (currentUserId == null) {
+        _showErrorSnackBar('User not authenticated');
+        return;
+      }
+
+      // Upload story directly using the story service
+      final result = await StoryService.uploadStoryFromFile(
+        file: _selectedMedia!,
+        userId: currentUserId,
+        caption: _captionController.text.isNotEmpty ? _captionController.text : 'My story',
+        token: widget.token,
+      );
+
+      print('StoryUploadScreen: Upload result - Success: ${result.success}');
+      print('StoryUploadScreen: Upload result - Message: ${result.message}');
+
+      if (result.success) {
+        if (result.message.contains('locally')) {
+          _showSuccessSnackBar('Story uploaded and stored locally! (Server unavailable)');
+        } else {
+          _showSuccessSnackBar('Story uploaded successfully!');
+        }
+        // Wait a bit before navigating back to show the success message
+        await Future.delayed(const Duration(seconds: 1));
+        Navigator.pop(context, true);
+      } else {
+        _showErrorSnackBar('Upload failed: ${result.message}');
+      }
+    } catch (e) {
+      print('StoryUploadScreen: Exception during upload: $e');
+      _showErrorSnackBar('Error uploading story: $e');
+    } finally {
+      setState(() {
+        _isUploading = false;
+      });
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Upload Story'),
+        backgroundColor: Colors.black87,
+        foregroundColor: Colors.white,
+        actions: [
+          if (_selectedMedia != null)
+            TextButton(
+              onPressed: _isUploading ? null : _uploadStory,
+              child: _isUploading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      'Share',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+        ],
+      ),
+      backgroundColor: Colors.black,
+      body: Column(
+        children: [
+          // Media Preview
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: _selectedMedia != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _mediaType == 'image'
+                          ? kIsWeb
+                              ? Image.network(
+                                  _selectedMedia!.path,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[800],
+                                      child: const Icon(
+                                        Icons.image,
+                                        color: Colors.white,
+                                        size: 50,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Image.file(
+                                  _selectedMedia!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                )
+                          : _videoController?.value.isInitialized == true
+                              ? Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    AspectRatio(
+                                      aspectRatio: _videoController!.value.aspectRatio,
+                                      child: VideoPlayer(_videoController!),
+                                    ),
+                                    FloatingActionButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          if (_videoController!.value.isPlaying) {
+                                            _videoController!.pause();
+                                          } else {
+                                            _videoController!.play();
+                                          }
+                                        });
+                                      },
+                                      child: Icon(
+                                        _videoController!.value.isPlaying
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                    )
+                  : MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: InkWell(
+                        onTap: _pickImage, // Opens gallery when tapped
+                        borderRadius: BorderRadius.circular(12),
+                        splashColor: Colors.grey[600]!.withOpacity(0.3),
+                        highlightColor: Colors.grey[600]!.withOpacity(0.1),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          transform: Matrix4.identity()..scale(1.0), // Removed _isTapping
+                          width: double.infinity,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[900],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.grey[600]!, // Removed _isTapping
+                              width: 2,
+                              style: BorderStyle.solid,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.grey[800]!.withOpacity(0.3), // Removed _isTapping
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  size: 80,
+                                  color: Colors.grey,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Select media for your story',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Tap to open gallery',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 14,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+
+          // Caption Input Field
+          if (_selectedMedia != null)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _captionController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Add a caption to your story...',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  filled: true,
+                  fillColor: Colors.grey[800],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                maxLines: 3,
+                maxLength: 200,
+              ),
+            ),
+
+          // Media Selection Buttons
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildMediaButton(
+                      icon: Icons.photo_library,
+                      label: 'Gallery',
+                      onTap: _pickImage,
+                    ),
+                    _buildMediaButton(
+                      icon: Icons.camera_alt,
+                      label: 'Camera',
+                      onTap: _takePhoto,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildMediaButton(
+                      icon: Icons.video_library,
+                      label: 'Video Gallery',
+                      onTap: _pickVideo,
+                    ),
+                    _buildMediaButton(
+                      icon: Icons.videocam,
+                      label: 'Video Camera',
+                      onTap: _takeVideo,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMediaButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        child: ElevatedButton.icon(
+          onPressed: onTap,
+          icon: Icon(icon),
+          label: Text(label),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[800],
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
