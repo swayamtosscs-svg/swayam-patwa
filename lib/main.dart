@@ -18,7 +18,7 @@ import 'screens/notifications_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
-// import 'widgets/cloudinary_image_widget.dart';
+// Cloudinary dependency removed
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

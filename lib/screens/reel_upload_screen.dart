@@ -171,8 +171,8 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
         return;
       }
 
-      // First upload video to Cloudinary with userId
-      print('Starting video upload to Cloudinary...');
+      // First upload video to local storage with userId
+      print('Starting video upload to local storage...');
       final mediaUploadResult = await MediaUploadService.uploadVideo(
         _selectedVideo!,
         currentUserId,
@@ -180,10 +180,10 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
             ? _contentController.text.trim() 
             : 'Reel Upload',
       );
-      print('Cloudinary upload result: ${mediaUploadResult.success} - ${mediaUploadResult.message}');
+      print('Local storage upload result: ${mediaUploadResult.success} - ${mediaUploadResult.message}');
       
       if (mediaUploadResult.success && mediaUploadResult.data != null) {
-        print('Video uploaded successfully to Cloudinary: ${mediaUploadResult.data!.secureUrl}');
+        print('Video uploaded successfully to local storage: ${mediaUploadResult.data!.secureUrl}');
         
         // Video uploaded successfully, now create reel
         final token = authProvider.authToken;
@@ -227,7 +227,7 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
           print('Reel saved locally successfully');
           
           setState(() {
-            _uploadResult = '✅ Reel uploaded successfully!\n\nVideo uploaded to Cloudinary\nReel created and saved locally\nYou can now see it in your profile!';
+            _uploadResult = '✅ Reel uploaded successfully!\n\nVideo uploaded to local storage\nReel created and saved locally\nYou can now see it in your profile!';
             _isLoading = false;
           });
 
@@ -260,7 +260,7 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
           await LocalStorageService.saveReel(localReel);
           
           setState(() {
-            _uploadResult = '⚠️ Video uploaded to Cloudinary but reel service failed\n\nVideo is saved locally and will appear in your profile\nError: ${response.message}';
+            _uploadResult = '⚠️ Video uploaded to local storage but reel service failed\n\nVideo is saved locally and will appear in your profile\nError: ${response.message}';
             _isLoading = false;
           });
           

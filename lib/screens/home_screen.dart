@@ -13,6 +13,7 @@ import '../utils/app_theme.dart';
 import '../screens/story_upload_screen.dart';
 import '../screens/story_viewer_screen.dart';
 import '../screens/post_full_view_screen.dart';
+import '../screens/live_stream_screen.dart';
 import '../services/story_service.dart';
 // Removed local story service import to prevent showing old local stories
 import '../services/feed_service.dart';
@@ -26,6 +27,7 @@ import '../screens/chat_list_screen.dart'; // Added import for ChatListScreen
 import '../services/post_service.dart'; // Added import for PostService
 import '../screens/discover_users_screen.dart'; // Added import for DiscoverUsersScreen
 import '../screens/notifications_screen.dart'; // Added import for NotificationsScreen
+import '../screens/baba_pages_screen.dart'; // Added import for BabaPagesScreen
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -81,8 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
         print('HomeScreen: Current user ID: ${authProvider.userProfile!.id}');
         print('HomeScreen: Calling FeedService.getFeedPosts...');
         
-        // Use FeedService to get posts from followed users
-        final posts = await FeedService.getFeedPosts(
+        // Use FeedService to get mixed feed (user posts + Baba Ji posts)
+        final posts = await FeedService.getMixedFeed(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: 1,
@@ -132,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.userProfile != null) {
         final nextPage = (_posts.length ~/ _postsPerPage) + 1;
-        final newPosts = await FeedService.getFeedPosts(
+        final newPosts = await FeedService.getMixedFeed(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: nextPage,
@@ -1242,6 +1244,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               
+              // Baba Ji Pages
+              _buildNavItem(
+                icon: Icons.self_improvement,
+                label: 'Baba Ji',
+                isSelected: false,
+                onTap: () {
+                  // Navigate to Baba Ji pages screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const BabaPagesScreen(),
+                    ),
+                  );
+                },
+              ),
+              
               // Live Darshan
               _buildNavItem(
                 icon: Icons.live_tv,
@@ -1249,6 +1267,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 isSelected: false,
                 onTap: () {
                   // Navigate to live darshan
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LiveStreamScreen(),
+                    ),
+                  );
                 },
               ),
               

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'custom_http_client.dart';
-import '../widgets/cloudinary_image_widget.dart';
+// Removed Cloudinary dependency
 
 class MemoryOptimizationService {
   static const int _maxImageCacheSize = 50;
@@ -56,7 +56,8 @@ class MemoryOptimizationService {
     
     // Clear custom image caches
     try {
-      CloudinaryImageWidget.clearCache();
+      // Clear image cache
+      PaintingBinding.instance.imageCache.clear();
     } catch (e) {
       print('MemoryOptimizationService: Could not clear Cloudinary cache: $e');
     }
@@ -102,12 +103,13 @@ class MemoryOptimizationService {
     
     // Clear custom image cache if it's getting large
     try {
-      if (CloudinaryImageWidget.cacheSize > _maxImageCacheSize * 0.8) {
-        CloudinaryImageWidget.clearCache();
+      if (PaintingBinding.instance.imageCache.currentSize > _maxImageCacheSize * 0.8) {
+        // Clear image cache
+        PaintingBinding.instance.imageCache.clear();
         print('MemoryOptimizationService: Custom image cache cleared due to size');
       }
     } catch (e) {
-      print('MemoryOptimizationService: Could not check/clear Cloudinary cache: $e');
+      print('MemoryOptimizationService: Could not check/clear image cache: $e');
     }
   }
   
@@ -117,13 +119,7 @@ class MemoryOptimizationService {
     // to get actual memory usage from the OS
     
     // For now, we'll use a heuristic based on cache sizes
-    int cloudinaryCacheSize = 0;
-    try {
-      cloudinaryCacheSize = CloudinaryImageWidget.cacheSize;
-    } catch (e) {
-      print('MemoryOptimizationService: Could not get Cloudinary cache size: $e');
-    }
-    final totalCacheSize = PaintingBinding.instance.imageCache.currentSize + cloudinaryCacheSize;
+    final totalCacheSize = PaintingBinding.instance.imageCache.currentSize;
     
     if (totalCacheSize > _maxImageCacheSize * 1.5) {
       if (!_isLowMemoryMode) {
@@ -141,7 +137,7 @@ class MemoryOptimizationService {
     return {
       'flutterImageCacheSize': PaintingBinding.instance.imageCache.currentSize,
       'flutterImageCacheMaxSize': PaintingBinding.instance.imageCache.maximumSize,
-      'customImageCacheSize': _getCloudinaryCacheSize(),
+      'imageCacheSize': PaintingBinding.instance.imageCache.currentSize,
       'customImageCacheMaxSize': _maxImageCacheSize,
       'isLowMemoryMode': _isLowMemoryMode,
       'lastCleanup': _lastCleanup?.toIso8601String(),
@@ -155,12 +151,12 @@ class MemoryOptimizationService {
     });
   }
   
-  /// Get Cloudinary cache size safely
-  static int _getCloudinaryCacheSize() {
+  /// Get image cache size safely
+  static int _getImageCacheSize() {
     try {
-      return CloudinaryImageWidget.cacheSize;
+      return PaintingBinding.instance.imageCache.currentSize;
     } catch (e) {
-      print('MemoryOptimizationService: Could not get Cloudinary cache size: $e');
+      print('MemoryOptimizationService: Could not get image cache size: $e');
       return 0;
     }
   }

@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../services/custom_http_client.dart';
-import 'cloudinary_image_widget.dart';
+// Removed Cloudinary dependency
 import '../utils/app_theme.dart';
 
 class StoryWidget extends StatelessWidget {
@@ -125,25 +125,7 @@ class StoryWidget extends StatelessWidget {
   Widget _buildStoryImage(String imageUrl) {
     print('StoryWidget: Building image for URL: $imageUrl');
     
-    // Check if it's a Cloudinary URL
-    if (imageUrl.contains('cloudinary.com')) {
-      print('StoryWidget: Using CloudinaryImageWidget for Cloudinary URL');
-      return CloudinaryImageWidget(
-        imageUrl: imageUrl,
-        width: 70,
-        height: 70,
-        fit: BoxFit.cover,
-        placeholder: const Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-          ),
-        ),
-        errorWidget: _buildDefaultStoryContent(),
-      );
-    }
-    
-    // For non-Cloudinary URLs, use Image.network
+    // Use Image.network for all URLs
     return Image.network(
       imageUrl,
       fit: BoxFit.cover,
@@ -152,10 +134,17 @@ class StoryWidget extends StatelessWidget {
       },
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
-        return const Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+        return Container(
+          color: Colors.grey[200],
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+              ),
+            ),
           ),
         );
       },

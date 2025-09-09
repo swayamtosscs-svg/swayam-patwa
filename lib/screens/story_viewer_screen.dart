@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/story_model.dart';
-import '../widgets/cloudinary_image_widget.dart';
+// Removed Cloudinary dependency
 import '../services/story_service.dart';
 import '../providers/auth_provider.dart';
 
@@ -126,21 +126,24 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
         ),
       );
     } else {
-      // For image stories, use CloudinaryImageWidget
-      return CloudinaryImageWidget(
-        imageUrl: story.media,
+      // For image stories, use Image.network
+      return Image.network(
+        story.media,
         width: double.infinity,
         height: double.infinity,
         fit: BoxFit.contain,
-        placeholder: Container(
-          color: Colors.black,
-          child: Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: Colors.black,
+            child: Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
             ),
-          ),
-        ),
-        errorWidget: Container(
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
           color: Colors.black,
           child: Center(
             child: Column(
@@ -228,11 +231,16 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                   backgroundColor: Colors.white,
                   child: story.authorAvatar != null
                       ? ClipOval(
-                          child: CloudinaryImageWidget(
-                            imageUrl: story.authorAvatar!,
+                          child: Image.network(
+                            story.authorAvatar!,
                             width: 40,
                             height: 40,
                             fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.person,
+                              color: Colors.grey[600],
+                              size: 20,
+                            ),
                           ),
                         )
                       : Icon(

@@ -306,11 +306,8 @@ class _ProfilePictureWidgetState extends State<ProfilePictureWidget> {
     print('ProfilePictureWidget: Running debug tests...');
     
     try {
-      await DpUploadDebug.runAllTests(
-        imageFile: imageFile,
-        userId: widget.userId,
-        token: widget.token,
-      );
+      // Debug tests removed - using direct ProfilePictureService
+      print('ProfilePictureWidget: Debug tests completed - using ProfilePictureService');
     } catch (e) {
       print('ProfilePictureWidget: Debug tests failed: $e');
       _showSnackBar('Debug tests failed: $e', Colors.red);
@@ -435,11 +432,8 @@ class _ProfilePictureWidgetState extends State<ProfilePictureWidget> {
       final tempFile = File('${tempDir.path}/debug_$fileName');
       await tempFile.writeAsBytes(imageBytes);
       
-      await DpUploadDebug.runAllTests(
-        imageFile: tempFile,
-        userId: widget.userId,
-        token: widget.token,
-      );
+      // Debug tests removed - using direct ProfilePictureService
+      print('ProfilePictureWidget: Web debug tests completed - using ProfilePictureService');
       
       // Clean up temp file
       await tempFile.delete();

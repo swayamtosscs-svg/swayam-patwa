@@ -97,7 +97,7 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
         return;
       }
 
-      // Upload media to Cloudinary with userId
+      // Upload media to local storage with userId
       final uploadResponse = await MediaUploadService.uploadImage(
         _selectedImage!,
         currentUserId,
@@ -392,7 +392,7 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Your image will be uploaded to Cloudinary and shared with your spiritual community.',
+                      'Your image will be uploaded to local storage and shared with your spiritual community.',
                       style: TextStyle(
                         fontSize: 14,
                         color: const Color(0xFF6366F1),

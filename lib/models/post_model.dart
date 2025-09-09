@@ -22,6 +22,7 @@ class Post {
   final DateTime createdAt;
   final List<String> hashtags;
   final String? thumbnailUrl;
+  final bool isBabaJiPost;
 
   Post({
     required this.id,
@@ -43,6 +44,7 @@ class Post {
     required this.createdAt,
     this.hashtags = const [],
     this.thumbnailUrl,
+    this.isBabaJiPost = false,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -69,6 +71,7 @@ class Post {
       createdAt: DateTime.parse(json['createdAt']),
       hashtags: List<String>.from(json['hashtags'] ?? []),
       thumbnailUrl: json['thumbnailUrl'],
+      isBabaJiPost: json['isBabaJiPost'] ?? false,
     );
   }
 
@@ -93,6 +96,7 @@ class Post {
       'createdAt': createdAt.toIso8601String(),
       'hashtags': hashtags,
       'thumbnailUrl': thumbnailUrl,
+      'isBabaJiPost': isBabaJiPost,
     };
   }
 

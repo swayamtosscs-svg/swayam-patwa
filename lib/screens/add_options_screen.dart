@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import 'story_upload_screen.dart';
 import 'post_upload_screen.dart';
 import 'reel_upload_screen.dart';
+import 'baba_page_creation_screen.dart';
 
 class AddOptionsScreen extends StatelessWidget {
   const AddOptionsScreen({Key? key}) : super(key: key);
@@ -111,6 +112,19 @@ class AddOptionsScreen extends StatelessWidget {
                         subtitle: 'Create a short video to inspire others',
                         color: const Color(0xFFF59E0B),
                         onTap: () => _navigateToReelUpload(context),
+                        isCompact: isSmallScreen,
+                      ),
+                      
+                      SizedBox(height: isSmallScreen ? 16 : 24),
+                      
+                      // Create Baba Ji Page Option
+                      _buildOptionCard(
+                        context,
+                        icon: Icons.self_improvement,
+                        title: 'Create Baba Ji Page',
+                        subtitle: 'Create a spiritual page for a spiritual leader',
+                        color: const Color(0xFF8B5CF6),
+                        onTap: () => _navigateToBabaPageCreation(context),
                         isCompact: isSmallScreen,
                       ),
                       
@@ -269,6 +283,20 @@ class AddOptionsScreen extends StatelessWidget {
       );
     } else {
       _showErrorSnackBar(context, 'Please login to upload reels');
+    }
+  }
+
+  void _navigateToBabaPageCreation(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.authToken != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const BabaPageCreationScreen(),
+        ),
+      );
+    } else {
+      _showErrorSnackBar(context, 'Please login to create Baba Ji pages');
     }
   }
 

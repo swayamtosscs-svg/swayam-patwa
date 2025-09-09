@@ -202,13 +202,12 @@ class PostService {
   /// Extract media ID from URL (helper method)
   static String? _extractMediaIdFromUrl(String url) {
     // This is a simple extraction - you might need to adjust based on your URL format
-    if (url.contains('cloudinary.com')) {
-      final parts = url.split('/');
-      if (parts.length > 0) {
-        final lastPart = parts.last;
-        if (lastPart.contains('.')) {
-          return lastPart.split('.').first;
-        }
+    // Use standard image loading for all URLs
+    final parts = url.split('/');
+    if (parts.length > 0) {
+      final lastPart = parts.last;
+      if (lastPart.contains('.')) {
+        return lastPart.split('.').first;
       }
     }
     return null;

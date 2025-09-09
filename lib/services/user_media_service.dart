@@ -55,7 +55,7 @@ class UserMediaService {
                 id: mediaData.mediaId,
                 userId: userId, // Use userId from API
                 username: authorUsername,
-                userAvatar: 'https://res.cloudinary.com/dtuxhmf4t/image/upload/v1755682779/ys2ymuyibo5p5rpzgib2.jpg',
+                userAvatar: 'https://via.placeholder.com/50/6366F1/FFFFFF?text=${authorUsername.isNotEmpty ? authorUsername[0].toUpperCase() : 'U'}',
                 caption: 'A post by $authorUsername',
                 imageUrl: mediaData.secureUrl,
                 type: PostType.image,
@@ -89,7 +89,7 @@ class UserMediaService {
                 id: mediaData.mediaId,
                 userId: userId, // Use userId from API
                 username: authorUsername,
-                userAvatar: 'https://res.cloudinary.com/dtuxhmf4t/image/upload/v1755682779/ys2ymuyibo5p5rpzgib2.jpg',
+                userAvatar: 'https://via.placeholder.com/50/6366F1/FFFFFF?text=${authorUsername.isNotEmpty ? authorUsername[0].toUpperCase() : 'U'}',
                 caption: 'A reel by $authorUsername',
                 videoUrl: mediaData.secureUrl,
                 type: PostType.video,

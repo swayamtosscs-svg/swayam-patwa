@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'baba_pages_screen.dart';
+import 'live_stream_screen.dart';
+import '../widgets/app_loader.dart';
 
 class DashboardScreen extends StatefulWidget {
   DashboardScreen({super.key});
@@ -268,12 +271,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.grey,
+        currentIndex: _selectedTabIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedTabIndex = index;
+          });
+          
+          // Handle navigation for Baba Ji pages
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BabaPagesScreen(),
+              ),
+            );
+          }
+          // Handle navigation for Live Darshan
+          else if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LiveStreamScreen(),
+              ),
+            );
+          }
+        },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.play_circle_outline), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
+          BottomNavigationBarItem(icon: Icon(Icons.self_improvement), label: 'Baba Ji'),
+          BottomNavigationBarItem(icon: Icon(Icons.play_circle_outline), label: 'Live Darshan'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Account'),
         ],
       ),
     );
@@ -488,8 +516,10 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     if (!_isInitialized) {
       return Container(
         color: Colors.black,
-        child: const Center(
-          child: CircularProgressIndicator(color: Colors.white),
+        child: const AppLoader(
+          message: 'Loading video...',
+          color: Colors.white,
+          size: 24.0,
         ),
       );
     }
