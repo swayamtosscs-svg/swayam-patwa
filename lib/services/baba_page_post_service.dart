@@ -47,6 +47,7 @@ class BabaPagePostService {
 
       print('BabaPagePostService: Response status: ${response.statusCode}');
       print('BabaPagePostService: Response body: ${response.body}');
+      print('BabaPagePostService: Response headers: ${response.headers}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final jsonResponse = jsonDecode(response.body);
@@ -89,15 +90,33 @@ class BabaPagePostService {
       print('BabaPagePostService: Response body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        return BabaPagePostListResponse.fromJson(jsonResponse);
+        try {
+          final jsonResponse = jsonDecode(response.body);
+          return BabaPagePostListResponse.fromJson(jsonResponse);
+        } catch (e) {
+          print('BabaPagePostService: Error parsing JSON response: $e');
+          print('BabaPagePostService: Response body: ${response.body}');
+          return BabaPagePostListResponse(
+            success: false,
+            message: 'Error parsing response: $e',
+            posts: [],
+          );
+        }
       } else {
-        final jsonResponse = jsonDecode(response.body);
-        return BabaPagePostListResponse(
-          success: false,
-          message: jsonResponse['message'] ?? 'Failed to fetch posts',
-          posts: [],
-        );
+        try {
+          final jsonResponse = jsonDecode(response.body);
+          return BabaPagePostListResponse(
+            success: false,
+            message: jsonResponse['message'] ?? 'Failed to fetch posts',
+            posts: [],
+          );
+        } catch (e) {
+          return BabaPagePostListResponse(
+            success: false,
+            message: 'Failed to fetch posts: HTTP ${response.statusCode}',
+            posts: [],
+          );
+        }
       }
     } catch (e) {
       print('BabaPagePostService: Error fetching posts: $e');
@@ -109,44 +128,6 @@ class BabaPagePostService {
     }
   }
 
-  /// Like a Baba Ji page post
-  static Future<BabaPagePostResponse> likeBabaPagePost({
-    required String babaPageId,
-    required String postId,
-    required String token,
-  }) async {
-    try {
-      print('BabaPagePostService: Liking post: $postId');
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/baba-pages/$babaPageId/posts/$postId/like'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      print('BabaPagePostService: Like response status: ${response.statusCode}');
-      print('BabaPagePostService: Like response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        return BabaPagePostResponse.fromJson(jsonResponse);
-      } else {
-        final jsonResponse = jsonDecode(response.body);
-        return BabaPagePostResponse(
-          success: false,
-          message: jsonResponse['message'] ?? 'Failed to like post',
-        );
-      }
-    } catch (e) {
-      print('BabaPagePostService: Error liking post: $e');
-      return BabaPagePostResponse(
-        success: false,
-        message: 'Error liking post: $e',
-      );
-    }
-  }
 
   /// Delete a Baba Ji page post
   static Future<BabaPagePostResponse> deleteBabaPagePost({

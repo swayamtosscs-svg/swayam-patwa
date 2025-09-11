@@ -3,11 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import '../providers/auth_provider.dart';
+import '../services/theme_service.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
+import '../models/baba_page_reel_model.dart';
 import '../widgets/story_widget.dart';
 import '../widgets/enhanced_post_widget.dart';
+import '../widgets/in_app_video_widget.dart';
 import '../widgets/app_loader.dart';
 import '../utils/app_theme.dart';
 import '../screens/story_upload_screen.dart';
@@ -42,18 +45,31 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Post> _posts = []; // Cache posts to avoid regeneration
   bool _isLoadingStories = false;
   bool _isLoadingPosts = false;
+  bool _isRefreshing = false; // Single loading state for refresh operations
   final ScrollController _scrollController = ScrollController();
   int _currentPostIndex = 0;
-  static const int _postsPerPage = 5; // Load fewer posts initially
-  static const int _maxPostsInMemory = 50; // Maximum posts to keep in memory
+  static const int _postsPerPage = 3; // Load even fewer posts initially for faster loading
+  static const int _maxPostsInMemory = 30; // Maximum posts to keep in memory
 
   @override
   void initState() {
     super.initState();
     _clearLocalStories(); // Clear any old local stories first
-    _loadStories();
-    _loadInitialPosts();
+    _loadInitialData(); // Load stories and posts in parallel
     _scrollController.addListener(_onScroll);
+  }
+
+  // Load initial data in parallel for faster startup
+  Future<void> _loadInitialData() async {
+    try {
+      // Load stories and posts in parallel for faster initial loading
+      await Future.wait([
+        _loadStories(),
+        _loadInitialPosts(),
+      ]);
+    } catch (e) {
+      print('HomeScreen: Error loading initial data: $e');
+    }
   }
 
   @override
@@ -95,7 +111,12 @@ class _HomeScreenState extends State<HomeScreen> {
         
         if (mounted) {
           setState(() {
-            _posts = posts.take(_maxPostsInMemory).toList(); // Limit posts in memory
+            // Remove duplicates based on post ID
+            final uniquePosts = <String, Post>{};
+            for (final post in posts) {
+              uniquePosts[post.id] = post;
+            }
+            _posts = uniquePosts.values.take(_maxPostsInMemory).toList();
             _isLoadingPosts = false;
           });
           print('HomeScreen: Loaded ${posts.length} posts from followed users');
@@ -143,8 +164,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (mounted && newPosts.isNotEmpty) {
           setState(() {
-            // Add new posts but maintain memory limit
-            final totalPosts = [..._posts, ...newPosts];
+            // Add new posts but maintain memory limit and remove duplicates
+            final existingIds = _posts.map((p) => p.id).toSet();
+            final uniqueNewPosts = newPosts.where((post) => !existingIds.contains(post.id)).toList();
+            final totalPosts = [..._posts, ...uniqueNewPosts];
             _posts = totalPosts.take(_maxPostsInMemory).toList();
             _isLoadingPosts = false;
           });
@@ -352,22 +375,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Refresh the entire feed
+  // Refresh the entire feed - Optimized for speed
   Future<void> _refreshFeed() async {
     print('HomeScreen: Refreshing feed...');
     setState(() {
-      _posts = [];
-      _stories = [];
-      _groupedStories = {};
+      _isRefreshing = true; // Set single loading state for refresh
     });
     
-    await Future.wait([
-      _loadStories(),
-      _loadInitialPosts(),
-    ]);
+    try {
+      // Load stories and posts in parallel for faster loading
+      final futures = <Future>[];
+      
+      // Always reload stories (they're lightweight)
+      futures.add(_loadStories());
+      
+      // Only refresh posts if we have very few posts (less than 5)
+      if (_posts.length < 5) {
+        futures.add(_loadInitialPosts());
+      }
+      
+      // Wait for all operations to complete in parallel
+      await Future.wait(futures);
+      
+    } catch (e) {
+      print('HomeScreen: Error during refresh: $e');
+    }
+    
+    setState(() {
+      _isRefreshing = false; // Clear loading state
+    });
     
     print('HomeScreen: Feed refresh completed');
   }
+
 
   // Helper method to get list of users that current user is following
   Future<List<String>> _getFollowedUsers(String token) async {
@@ -408,13 +448,29 @@ class _HomeScreenState extends State<HomeScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.backgroundColor,
       body: SafeArea( // Add SafeArea to prevent overflow on different screen sizes
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
-            if (authProvider.userProfile == null) {
-              return const AppLoader(message: 'Loading...');
+            // Show single loader for any loading state
+            if (authProvider.userProfile == null || _isRefreshing || (_isLoadingStories && _stories.isEmpty) || (_isLoadingPosts && _posts.isEmpty)) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      authProvider.userProfile == null 
+                        ? 'Loading...' 
+                        : 'Refreshing feed...',
+                    ),
+                  ],
+                ),
+              );
             }
 
             return RefreshIndicator(
@@ -437,166 +493,264 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
+        );
+      },
     );
   }
 
   Widget _buildAppBar(UserModel userProfile) {
-    return SliverAppBar(
-      expandedHeight: 80,
-      floating: false,
-      pinned: true,
-      backgroundColor: AppTheme.surfaceColor,
-      elevation: 0,
-      flexibleSpace: FlexibleSpaceBar(
-        title: Row(
-          children: [
-            // App Logo
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  'assets/icons/RGRAM logo.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.self_improvement,
-                        color: Colors.white,
-                        size: 24,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return SliverAppBar(
+          expandedHeight: 80,
+          floating: false,
+          pinned: true,
+          backgroundColor: themeService.surfaceColor,
+          elevation: 0,
+          flexibleSpace: FlexibleSpaceBar(
+            title: Row(
+              children: [
+                // App Logo
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/icons/RGRAM logo.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.self_improvement,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(width: 12),
+              ],
+            ),
+            titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
+          ),
+          actions: [
+            // Refresh Button
+            IconButton(
+              onPressed: () {
+                _refreshFeed();
+              },
+              icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
+              tooltip: 'Refresh Feed',
+            ),
+            // Notification Icon with Badge
+            Stack(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    // Navigate to notifications screen
+                    Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsScreen(),
+                    ),
+                  );
+                  },
+                  icon: const Icon(Icons.notifications, color: AppTheme.primaryColor),
+                  tooltip: 'Notifications',
+                ),
+                // Unread notification badge
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: FutureBuilder<int>(
+                    future: _getUnreadNotificationCount(),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data ?? 0;
+                      if (count == 0) return const SizedBox.shrink();
+                      
+                      return Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          count > 99 ? '99+' : count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            // Message Icon with Badge
+            Stack(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    // Navigate to chat list screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ChatListScreen(),
                       ),
                     );
                   },
+                  icon: const Icon(Icons.message, color: AppTheme.primaryColor),
+                  tooltip: 'Messages',
                 ),
-              ),
+                // Unread message badge
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: FutureBuilder<int>(
+                    future: _getUnreadMessageCount(),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data ?? 0;
+                      if (count == 0) return const SizedBox.shrink();
+                      
+                      return Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                    ),
+                    child: Text(
+                      count > 99 ? '99+' : count.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                },
+                  ),
+                ),
+              ],
             ),
             
-            const SizedBox(width: 12),
-          ],
-        ),
-        titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
-      ),
-      actions: [
-        // Refresh Button
-        IconButton(
-          onPressed: () {
-            _refreshFeed();
-          },
-          icon: const Icon(Icons.refresh, color: Color(0xFF6366F1)),
-          tooltip: 'Refresh Feed',
-        ),
-        // Notification Icon with Badge
-        Stack(
-          children: [
-            IconButton(
-              onPressed: () {
-                // Navigate to notifications screen
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
+            // Theme Switcher Button
+            Consumer<ThemeService>(
+              builder: (context, themeService, child) {
+                final currentReligion = themeService.userReligion.toLowerCase();
+                final nextReligion = _getNextReligion(currentReligion);
+                
+                return IconButton(
+                  onPressed: () {
+                    themeService.setUserReligion(nextReligion);
+                  },
+                  icon: Icon(
+                    _getThemeIcon(currentReligion),
+                    color: _getThemeColor(currentReligion),
                   ),
+                  tooltip: 'Switch to ${_getReligionDisplayName(nextReligion)} Theme',
                 );
               },
-              icon: const Icon(Icons.notifications, color: Color(0xFF6366F1)),
-              tooltip: 'Notifications',
-            ),
-            // Unread notification badge
-            Positioned(
-              right: 8,
-              top: 8,
-              child: FutureBuilder<int>(
-                future: _getUnreadNotificationCount(),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  if (count == 0) return const SizedBox.shrink();
-                  
-                  return Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      count > 99 ? '99+' : count.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                },
-              ),
             ),
           ],
-        ),
-        // Message Icon with Badge
-        Stack(
-          children: [
-            IconButton(
-              onPressed: () {
-                // Navigate to chat list screen
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ChatListScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.message, color: Color(0xFF6366F1)),
-              tooltip: 'Messages',
-            ),
-            // Unread message badge
-            Positioned(
-              right: 8,
-              top: 8,
-              child: FutureBuilder<int>(
-                future: _getUnreadMessageCount(),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  if (count == 0) return const SizedBox.shrink();
-                  
-                  return Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      count > 99 ? '99+' : count.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ],
+        );
+      },
     );
+  }
+
+  // Theme switcher helper methods
+  String _getNextReligion(String currentReligion) {
+    const religions = ['hinduism', 'islam', 'christianity', 'jainism', 'buddhism', 'default'];
+    final currentIndex = religions.indexOf(currentReligion);
+    return religions[(currentIndex + 1) % religions.length];
+  }
+
+  IconData _getThemeIcon(String religion) {
+    switch (religion) {
+      case 'hinduism':
+      case 'hindu':
+        return Icons.auto_awesome;
+      case 'islam':
+      case 'muslim':
+        return Icons.star;
+      case 'christianity':
+      case 'christian':
+        return Icons.add;
+      case 'jainism':
+      case 'jain':
+        return Icons.eco;
+      case 'buddhism':
+      case 'buddhist':
+        return Icons.self_improvement;
+      default:
+        return Icons.palette;
+    }
+  }
+
+  Color _getThemeColor(String religion) {
+    switch (religion) {
+      case 'hinduism':
+      case 'hindu':
+        return ThemeService.hinduSaffronOrange;
+      case 'islam':
+      case 'muslim':
+        return ThemeService.islamDarkGreen;
+      case 'christianity':
+      case 'christian':
+        return ThemeService.christianDeepBlue;
+      case 'jainism':
+      case 'jain':
+        return ThemeService.jainDeepRed;
+      case 'buddhism':
+      case 'buddhist':
+        return ThemeService.buddhistMonkOrange;
+      default:
+        return ThemeService.defaultPrimary;
+    }
+  }
+
+  String _getReligionDisplayName(String religion) {
+    switch (religion) {
+      case 'hinduism':
+      case 'hindu':
+        return 'Hindu';
+      case 'islam':
+      case 'muslim':
+        return 'Islamic';
+      case 'christianity':
+      case 'christian':
+        return 'Christian';
+      case 'jainism':
+      case 'jain':
+        return 'Jain';
+      case 'buddhism':
+      case 'buddhist':
+        return 'Buddhist';
+      default:
+        return 'Default';
+    }
   }
 
   // Responsive helper methods
@@ -645,9 +799,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             
             // Show stories or no stories message
-            if (_isLoadingStories)
-              const AppLoader(message: 'Loading stories...')
-            else if (_groupedStories.isEmpty)
+            if (_groupedStories.isEmpty)
               // No stories available message
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -823,9 +975,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
                   colors: [
-                    Color(0xFF6366F1),
-                    Color(0xFF8B5CF6),
-                    Color(0xFFEC4899),
+                    AppTheme.primaryColor,
+                    AppTheme.secondaryColor,
+                    AppTheme.accentColor,
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -839,7 +991,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Icon(
                   Icons.add,
-                  color: const Color(0xFF6366F1),
+                  color: AppTheme.primaryColor,
                   size: screenWidth < 600 ? 24 : 30,
                 ),
               ),
@@ -854,7 +1006,7 @@ class _HomeScreenState extends State<HomeScreen> {
               'Add Story',
               style: TextStyle(
                 fontSize: fontSize,
-                color: const Color(0xFF1A1A1A),
+                color: AppTheme.textPrimary,
                 fontWeight: FontWeight.w500,
                 fontFamily: 'Poppins',
               ),
@@ -1029,7 +1181,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeedContent() {
-    if (_posts.isEmpty && !_isLoadingPosts) {
+    if (_posts.isEmpty && !_isRefreshing && !_isLoadingPosts) {
       // Show message when no posts are available
       return SliverToBoxAdapter(
         child: Container(
@@ -1123,8 +1275,8 @@ class _HomeScreenState extends State<HomeScreen> {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           if (index >= _posts.length) {
-            // Show loading indicator at the bottom
-            if (_isLoadingPosts && _currentPostIndex < _maxPostsInMemory) {
+            // Show loading indicator at the bottom (only when not refreshing)
+            if (_isLoadingPosts && _currentPostIndex < _maxPostsInMemory && !_isRefreshing) {
               return Container(
                 padding: const EdgeInsets.all(16),
                 child: const Center(
@@ -1137,6 +1289,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final post = _posts[index];
           
+          // Check if this is a reel and use video widget
+          if (post.isReel && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
+            // Convert Post to BabaPageReel for video widget
+            final reel = BabaPageReel(
+              id: post.id,
+              babaPageId: post.userId,
+              title: (post.caption ?? '').split('\n').first, // First line as title
+              description: post.caption ?? '',
+              video: ReelVideo(
+                url: post.videoUrl!,
+                filename: '',
+                size: 0,
+                duration: 0,
+                mimeType: 'video/mp4',
+                publicId: '',
+              ),
+              thumbnail: ReelThumbnail(
+                url: post.thumbnailUrl ?? post.imageUrl ?? '',
+                filename: '',
+                size: 0,
+                mimeType: 'image/jpeg',
+                publicId: '',
+              ),
+              category: 'reel',
+              viewsCount: 0, // Post model doesn't have views property
+              likesCount: post.likes,
+              commentsCount: post.comments,
+              sharesCount: post.shares,
+              isActive: true,
+              createdAt: post.createdAt,
+              updatedAt: post.createdAt,
+            );
+            
+            return Container(
+              margin: EdgeInsets.symmetric(
+                horizontal: _getResponsiveHorizontalPadding() * 0.5,
+                vertical: _getResponsiveVerticalPadding(),
+              ),
+              child: InAppVideoWidget(
+                reel: reel,
+                autoplay: true, // Auto-play videos on home screen
+                showFullDetails: true,
+                onTap: () {
+                  _openPostInFullView(post);
+                },
+              ),
+            );
+          }
+          
           return Container(
             margin: EdgeInsets.symmetric(
               horizontal: _getResponsiveHorizontalPadding() * 0.5,
@@ -1144,9 +1345,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: EnhancedPostWidget(
               post: post,
-              onLike: () {
-                print('Liked post: ${post.id}');
-              },
+              onLike: post.isBabaJiPost ? () {
+                print('Liked Baba Ji post: ${post.id}');
+              } : null,
               onComment: () {
                 print('Comment on post: ${post.id}');
               },
@@ -1174,7 +1375,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         },
-        childCount: _posts.length + (_isLoadingPosts && _currentPostIndex < _maxPostsInMemory ? 1 : 0),
+        childCount: _posts.length + (_isLoadingPosts && _currentPostIndex < _maxPostsInMemory && !_isRefreshing ? 1 : 0),
       ),
     );
   }
@@ -1185,17 +1386,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBottomNavigationBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceColor,
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Container(
+          decoration: BoxDecoration(
+            color: themeService.surfaceColor,
+            boxShadow: [
+              BoxShadow(
+                color: themeService.primaryColor.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
           ),
-        ],
-      ),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1295,6 +1498,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+        );
+      },
     );
   }
 
@@ -1304,28 +1509,32 @@ class _HomeScreenState extends State<HomeScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? AppTheme.primaryColor : AppTheme.textLight,
-            size: 24,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return GestureDetector(
+          onTap: onTap,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isSelected ? AppTheme.primaryColor : AppTheme.textLight,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-              fontFamily: 'Poppins',
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1458,7 +1667,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawOmSymbol(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFF97316)
+      ..color = AppTheme.primaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.1;
     
@@ -1473,7 +1682,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawCross(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFA855F7)
+      ..color = AppTheme.secondaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.15;
     
@@ -1491,7 +1700,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawCrescent(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFEF4444)
+      ..color = AppTheme.accentColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.1;
     
@@ -1507,7 +1716,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawDharmaWheel(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFEAB308)
+      ..color = AppTheme.goldColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.08;
     
@@ -1531,7 +1740,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawStarOfDavid(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFF0EA5E9)
+      ..color = AppTheme.maroonColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.1;
     
@@ -1554,7 +1763,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawAhimsaHand(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFEC4899)
+      ..color = AppTheme.crimsonColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.1;
     
@@ -1570,7 +1779,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawKhanda(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFF97316)
+      ..color = AppTheme.primaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.1;
     
@@ -1594,7 +1803,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawBahaiStar(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFF22C55E)
+      ..color = AppTheme.successColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = size * 0.1;
     
@@ -1615,7 +1824,7 @@ class ReligiousDiversityPainter extends CustomPainter {
   
   void _drawStar(Canvas canvas, Offset center, double size) {
     final paint = Paint()
-      ..color = const Color(0xFFF59E0B)
+      ..color = AppTheme.goldColor
       ..style = PaintingStyle.fill;
     
     final path = Path();

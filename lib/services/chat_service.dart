@@ -32,6 +32,7 @@ class ChatService {
         
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
           final List<dynamic> messagesData = jsonResponse['data']['messages'] ?? [];
+          print('ChatService: Found ${messagesData.length} messages');
           
           // Group messages by thread to create conversation threads
           final Map<String, List<dynamic>> threadGroups = {};
@@ -45,6 +46,8 @@ class ChatService {
               threadGroups[threadId]!.add(messageData);
             }
           }
+          
+          print('ChatService: Grouped into ${threadGroups.length} threads');
           
           final List<ChatThread> threads = [];
           
@@ -93,6 +96,9 @@ class ChatService {
                   ).length,
                 );
                 threads.add(thread);
+                print('ChatService: Created thread with ${otherUsername} (${otherFullName})');
+              } else {
+                print('ChatService: Skipping thread - otherUserId: $otherUserId, currentUserId: $currentUserId');
               }
             }
           });
@@ -124,7 +130,7 @@ class ChatService {
       
       // Get all messages for the current user
       final response = await http.get(
-        Uri.parse('$baseUrl/quick-message?userId=$currentUserId&limit=1000'),
+        Uri.parse('$baseUrl/message-crud?userId=$currentUserId&limit=1000'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -229,7 +235,7 @@ class ChatService {
     }
   }
 
-  /// Get messages for a specific thread
+  /// Get messages for a specific thread using the correct API endpoint
   static Future<List<Message>> getMessagesByThreadId({
     required String threadId,
     required String token,
@@ -238,7 +244,7 @@ class ChatService {
       print('ChatService: Getting messages for thread: $threadId');
       
       final response = await http.get(
-        Uri.parse('$baseUrl/quick-message?threadId=$threadId&limit=100'),
+        Uri.parse('$baseUrl/quick-message?threadId=$threadId&limit=50'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',

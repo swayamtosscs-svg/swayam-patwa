@@ -1,48 +1,63 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // RGRAM Brand Colors - Religious beige and brown theme
-  static const Color primaryColor = Color(0xFF8B4513); // Saddle Brown - Main brand color
-  static const Color secondaryColor = Color(0xFFA0522D); // Sienna - Secondary brand color
-  static const Color accentColor = Color(0xFFD2691E); // Chocolate - Accent color
-  static const Color backgroundColor = Color(0xFFFDF5E6); // Old Lace - Warm beige background
-  static const Color surfaceColor = Color(0xFFFFF8DC); // Cornsilk - Light beige surface
-  static const Color cardColor = Color(0xFFF5E6D3); // Warm beige for cards
-  static const Color textPrimary = Color(0xFF3E2723); // Dark brown for primary text
-  static const Color textSecondary = Color(0xFF5D4037); // Medium brown for secondary text
-  static const Color textLight = Color(0xFF8D6E63); // Light brown for light text
-  static const Color successColor = Color(0xFF4CAF50); // Green for success (keeping for functionality)
-  static const Color warningColor = Color(0xFFFF9800); // Orange for warnings (keeping for functionality)
-  static const Color errorColor = Color(0xFFD32F2F); // Red for errors (keeping for functionality)
-  static const Color borderColor = Color(0xFFD7CCC8); // Light beige border color
+  // RGRAM Brand Colors - Based on Logo (Warm Beige and Brown)
+  static const Color primaryColor = Color(0xFFD2691E); // Golden Orange from logo text
+  static const Color secondaryColor = Color(0xFFFFD700); // Gold from logo glow
+  static const Color accentColor = Color(0xFF8B4513); // Rich Brown from logo text
+  static const Color backgroundColor = Color(0xFFFDF5E6); // Very light beige from logo background
+  static const Color surfaceColor = Color(0xFFFFF3E0); // Light cream from logo disc
+  static const Color cardColor = Color(0xFFFFFDE7); // Very light cream for cards
+  static const Color textPrimary = Color(0xFF8B4513); // Rich Brown for primary text
+  static const Color textSecondary = Color(0xFFD2691E); // Golden Orange for secondary text
+  static const Color textLight = Color(0xFFDAA520); // Goldenrod for light text
+  static const Color successColor = Color(0xFF228B22); // Forest Green for success
+  static const Color warningColor = Color(0xFFFF8C00); // Dark Orange for warnings
+  static const Color errorColor = Color(0xFFDC143C); // Crimson for errors
+  static const Color borderColor = Color(0xFFFFD700); // Gold border color
   
-  // Gradient colors for backgrounds - Religious beige and brown theme
+  // Religious Theme Colors - Beige and Brown Palette
+  static const Color saffronColor = Color(0xFFD2691E); // Golden Orange
+  static const Color goldColor = Color(0xFFDAA520); // Goldenrod
+  static const Color crimsonColor = Color(0xFF8B4513); // Rich Brown
+  static const Color maroonColor = Color(0xFF654321); // Dark Brown
+  static const Color creamColor = Color(0xFFFDF5E6); // Old Lace
+  
+  // Gradient colors for backgrounds - Based on Logo
   static const List<Color> primaryGradient = [
-    Color(0xFF8B4513), // Saddle Brown
-    Color(0xFFA0522D), // Sienna
-    Color(0xFFD2691E), // Chocolate
+    Color(0xFFD2691E), // Golden Orange from logo text
+    Color(0xFFFFD700), // Gold from logo glow
+    Color(0xFF8B4513), // Rich Brown from logo text
   ];
   
   static const List<Color> backgroundGradient = [
-    Color(0xFFFDF5E6), // Old Lace
-    Color(0xFFF5E6D3), // Warm beige
-    Color(0xFFFFF8DC), // Cornsilk
+    Color(0xFFFDF5E6), // Very light beige from logo background
+    Color(0xFFFFF3E0), // Light cream from logo disc
+    Color(0xFFFFFDE7), // Very light cream
   ];
   
   static const List<Color> splashGradient = [
-    Color(0xFF3E2723), // Dark brown
-    Color(0xFF5D4037), // Medium brown
-    Color(0xFF8B4513), // Saddle Brown
+    Color(0xFF8B4513), // Rich Brown
+    Color(0xFFD2691E), // Golden Orange
+    Color(0xFFFFD700), // Gold
+    Color(0xFFDAA520), // Goldenrod
   ];
   
   static const List<Color> cardGradient = [
-    Color(0xFFFFF8DC), // Cornsilk
-    Color(0xFFF5E6D3), // Warm beige
+    Color(0xFFFFFDE7), // Very light cream
+    Color(0xFFFFF3E0), // Light cream
   ];
   
   static const List<Color> buttonGradient = [
-    Color(0xFF8B4513), // Saddle Brown
-    Color(0xFFA0522D), // Sienna
+    Color(0xFF8B4513), // Rich Brown
+    Color(0xFFD2691E), // Golden Orange
+  ];
+  
+  static const List<Color> religiousGradient = [
+    Color(0xFF8B4513), // Rich Brown
+    Color(0xFFDAA520), // Goldenrod
+    Color(0xFFD2691E), // Golden Orange
+    Color(0xFF654321), // Dark Brown
   ];
 
   // Text styles
@@ -166,17 +181,17 @@ class AppTheme {
   // App theme
   static ThemeData get theme {
     return ThemeData(
-      primarySwatch: MaterialColor(0xFF8B4513, {
-        50: Color(0xFFF3E5D1),
-        100: Color(0xFFE6D1B8),
-        200: Color(0xFFD4B896),
-        300: Color(0xFFC29E74),
-        400: Color(0xFFB58A5A),
-        500: Color(0xFF8B4513),
-        600: Color(0xFF7A3D11),
-        700: Color(0xFF69350F),
-        800: Color(0xFF582D0D),
-        900: Color(0xFF47250B),
+      primarySwatch: MaterialColor(0xFFFF6B35, {
+        50: Color(0xFFFFF3E0),
+        100: Color(0xFFFFE0B2),
+        200: Color(0xFFFFCC80),
+        300: Color(0xFFFFB74D),
+        400: Color(0xFFFFA726),
+        500: Color(0xFFFF6B35),
+        600: Color(0xFFFF5722),
+        700: Color(0xFFE64A19),
+        800: Color(0xFFD84315),
+        900: Color(0xFFBF360C),
       }),
       primaryColor: primaryColor,
       scaffoldBackgroundColor: backgroundColor,

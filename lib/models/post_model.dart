@@ -23,6 +23,8 @@ class Post {
   final List<String> hashtags;
   final String? thumbnailUrl;
   final bool isBabaJiPost;
+  final bool isReel;
+  final String? babaPageId;
 
   Post({
     required this.id,
@@ -45,6 +47,8 @@ class Post {
     this.hashtags = const [],
     this.thumbnailUrl,
     this.isBabaJiPost = false,
+    this.isReel = false,
+    this.babaPageId,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -72,6 +76,8 @@ class Post {
       hashtags: List<String>.from(json['hashtags'] ?? []),
       thumbnailUrl: json['thumbnailUrl'],
       isBabaJiPost: json['isBabaJiPost'] ?? false,
+      isReel: json['isReel'] ?? false,
+      babaPageId: json['babaPageId'],
     );
   }
 
@@ -97,6 +103,8 @@ class Post {
       'hashtags': hashtags,
       'thumbnailUrl': thumbnailUrl,
       'isBabaJiPost': isBabaJiPost,
+      'isReel': isReel,
+      'babaPageId': babaPageId,
     };
   }
 
@@ -120,6 +128,9 @@ class Post {
     DateTime? createdAt,
     List<String>? hashtags,
     String? thumbnailUrl,
+    bool? isBabaJiPost,
+    bool? isReel,
+    String? babaPageId,
   }) {
     return Post(
       id: id ?? this.id,
@@ -141,6 +152,9 @@ class Post {
       createdAt: createdAt ?? this.createdAt,
       hashtags: hashtags ?? this.hashtags,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      isBabaJiPost: isBabaJiPost ?? this.isBabaJiPost,
+      isReel: isReel ?? this.isReel,
+      babaPageId: babaPageId ?? this.babaPageId,
     );
   }
 } 

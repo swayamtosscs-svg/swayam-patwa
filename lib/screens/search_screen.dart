@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/theme_service.dart';
 // Removed unused imports
 import '../screens/user_profile_screen.dart';
 import '../screens/chat_screen.dart';
@@ -80,24 +81,26 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      appBar: AppBar(
-        title: const Text(
-          'Search Users',
-          style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w600,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.backgroundColor,
+          appBar: AppBar(
+            title: Text(
+              'Search Users',
+              style: TextStyle(
+                color: themeService.onBackgroundColor,
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            backgroundColor: themeService.surfaceColor,
+            elevation: 0,
+            leading: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: Icon(Icons.arrow_back, color: themeService.onBackgroundColor),
+            ),
           ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-        ),
-      ),
       body: Column(
         children: [
           // Search Bar
@@ -109,7 +112,7 @@ class _SearchScreenState extends State<SearchScreen> {
               return Container(
                 margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: themeService.surfaceColor,
                   borderRadius: BorderRadius.circular(25),
                   boxShadow: [
                     BoxShadow(
@@ -125,13 +128,13 @@ class _SearchScreenState extends State<SearchScreen> {
                   onChanged: _onSearchChanged,
                   decoration: InputDecoration(
                     hintText: 'Search for users...',
-                    hintStyle: const TextStyle(
-                      color: Color(0xFF999999),
+                    hintStyle: TextStyle(
+                      color: themeService.onSurfaceColor.withOpacity(0.6),
                       fontFamily: 'Poppins',
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.search,
-                      color: Color(0xFF6366F1),
+                      color: themeService.primaryColor,
                     ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
@@ -165,17 +168,21 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ],
       ),
+        );
+      },
     );
   }
 
   Widget _buildSearchResults() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFF6366F1),
-        ),
-      );
-    }
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        if (_isLoading) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: themeService.primaryColor,
+            ),
+          );
+        }
 
     if (!_hasSearched) {
       return Center(
@@ -264,21 +271,25 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       },
     );
+      },
+    );
   }
 
   Widget _buildUserCard(Map<String, dynamic> userData, bool isSmallScreen) {
-    final username = userData['username'] ?? 'Unknown';
-    final fullName = userData['fullName'] ?? 'No Name';
-    final bio = userData['bio'] ?? '';
-    final avatar = userData['avatar'] ?? '';
-    final followersCount = userData['followersCount'] ?? 0;
-    final followingCount = userData['followingCount'] ?? 0;
-    final postsCount = userData['postsCount'] ?? 0;
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        final username = userData['username'] ?? 'Unknown';
+        final fullName = userData['fullName'] ?? 'No Name';
+        final bio = userData['bio'] ?? '';
+        final avatar = userData['avatar'] ?? '';
+        final followersCount = userData['followersCount'] ?? 0;
+        final followingCount = userData['followingCount'] ?? 0;
+        final postsCount = userData['postsCount'] ?? 0;
 
-    return Container(
-      margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+        return Container(
+          margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
+          decoration: BoxDecoration(
+            color: themeService.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -415,14 +426,20 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         },
       ),
+        );
+      },
     );
   }
 
   Widget _buildDefaultAvatar() {
-    return const Icon(
-      Icons.person,
-      size: 30,
-      color: Color(0xFF6366F1),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Icon(
+          Icons.person,
+          size: 30,
+          color: themeService.primaryColor,
+        );
+      },
     );
   }
 

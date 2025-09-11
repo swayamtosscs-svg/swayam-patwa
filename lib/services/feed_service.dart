@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/post_model.dart';
 import '../models/baba_page_post_model.dart';
+import '../models/baba_page_reel_model.dart';
 import 'baba_page_post_service.dart';
+import 'baba_page_reel_service.dart';
 
 class FeedService {
   static const String _baseUrl = 'https://api-rgram1.vercel.app/api';
@@ -39,10 +41,18 @@ class FeedService {
 
           for (final postData in postsData) {
             try {
+              final username = postData['author']?['username'] ?? 'Unknown User';
+              
+              // Filter out demo posts
+              if (username == 'dfg' || username == 'demo' || username == 'test') {
+                print('FeedService: Skipping demo post from user: $username');
+                continue;
+              }
+              
               final post = Post(
                 id: postData['_id'] ?? '',
                 userId: postData['author']?['_id'] ?? '',
-                username: postData['author']?['username'] ?? 'Unknown User',
+                username: username,
                 userAvatar: postData['author']?['avatar'] ?? '',
                 caption: postData['content'] ?? '',
                 imageUrl: postData['images']?.isNotEmpty == true ? postData['images'][0] : null,
@@ -312,6 +322,7 @@ class FeedService {
                   hashtags: [],
                   thumbnailUrl: null,
                   isBabaJiPost: true, // Mark as Baba Ji post
+                  babaPageId: babaPost.babaPageId,
                 );
                 allBabaPosts.add(post);
               }
@@ -322,11 +333,62 @@ class FeedService {
         }
       }
 
-      // Sort by creation date (newest first)
-      allBabaPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // Get reels from each Baba Ji page
+      final List<Post> allBabaReels = [];
+      
+      for (final babaPage in babaPages) {
+        final babaPageId = babaPage['_id'] ?? babaPage['id'];
+        if (babaPageId != null) {
+          try {
+            final reelsResponse = await BabaPageReelService.getBabaPageReels(
+              babaPageId: babaPageId,
+              token: token,
+              page: 1,
+              limit: 10,
+            );
 
-      print('FeedService: Found ${allBabaPosts.length} Baba Ji posts');
-      return allBabaPosts;
+            if (reelsResponse['success'] == true) {
+              final reelsData = reelsResponse['data']['videos'] as List<dynamic>;
+              for (final reelData in reelsData) {
+                final reel = BabaPageReel.fromJson(reelData);
+                // Convert Baba Ji reel to regular Post for feed
+                final post = Post(
+                  id: 'baba_reel_${reel.id}',
+                  userId: reel.babaPageId,
+                  username: babaPage['name'] ?? 'Baba Ji',
+                  userAvatar: babaPage['avatar'] ?? '',
+                  caption: '${reel.title}\n\n${reel.description}',
+                  imageUrl: reel.thumbnail.url,
+                  videoUrl: reel.video.url,
+                  type: PostType.video,
+                  likes: reel.likesCount,
+                  comments: reel.commentsCount,
+                  shares: reel.sharesCount,
+                  isLiked: false,
+                  createdAt: reel.createdAt,
+                  hashtags: [],
+                  thumbnailUrl: reel.thumbnail.url,
+                  isBabaJiPost: true, // Mark as Baba Ji post
+                  isReel: true, // Mark as reel
+                  babaPageId: reel.babaPageId,
+                );
+                allBabaReels.add(post);
+              }
+            }
+          } catch (e) {
+            print('FeedService: Error getting reels from Baba Ji page $babaPageId: $e');
+          }
+        }
+      }
+
+      // Combine posts and reels
+      final List<Post> allBabaContent = [...allBabaPosts, ...allBabaReels];
+      
+      // Sort by creation date (newest first)
+      allBabaContent.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      print('FeedService: Found ${allBabaPosts.length} Baba Ji posts and ${allBabaReels.length} Baba Ji reels');
+      return allBabaContent;
     } catch (e) {
       print('FeedService: Error getting Baba Ji posts: $e');
       return [];

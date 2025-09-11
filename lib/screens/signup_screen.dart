@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '../utils/app_theme.dart';
-import '../widgets/app_loader.dart';
+import '../services/theme_service.dart';
+import '../services/otp_service.dart';
+import 'package:provider/provider.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -22,6 +22,18 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
   String? _error;
   String? _selectedReligion;
+  bool _isPrivate = false;
+
+  final List<Map<String, dynamic>> _religions = [
+    {'name': 'Hindu', 'displayName': '🕉 Hinduism'},
+    {'name': 'Islam', 'displayName': '🌙 Islam'},
+    {'name': 'Christianity', 'displayName': '✝ Christianity'},
+    {'name': 'Jainism', 'displayName': '🕊 Jainism'},
+    {'name': 'Buddhism', 'displayName': '☸ Buddhism'},
+    {'name': 'Sikhism', 'displayName': '⚔ Sikhism'},
+    {'name': 'Judaism', 'displayName': '✡ Judaism'},
+    {'name': 'Other', 'displayName': '🕉 Other'},
+  ];
 
   @override
   void dispose() {
@@ -44,38 +56,56 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
+    if (_selectedReligion == null) {
+      setState(() {
+        _error = 'Please select a religion';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final response = await http.post(
-        Uri.parse('https://your-api-endpoint.com/signup'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': _nameController.text,
-          'email': _emailController.text,
-          'username': _usernameController.text,
-          'password': _passwordController.text,
-          'bio': _bioController.text,
-          'religion': _selectedReligion,
-        }),
+      // First, send OTP for email verification
+      final otpResponse = await OtpService.sendOtp(
+        email: _emailController.text.trim(),
+        purpose: 'signup',
       );
 
-      if (response.statusCode == 200) {
-        // Handle successful signup
+      if (otpResponse.success) {
+        // OTP sent successfully, navigate to verification screen
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/login');
+          final userData = {
+            'name': _nameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'username': _usernameController.text.trim(),
+            'password': _passwordController.text,
+            'bio': _bioController.text.trim(),
+            'religion': _selectedReligion!,
+            'isPrivate': _isPrivate,
+          };
+
+          Navigator.pushNamed(
+            context,
+            '/otp-verification',
+            arguments: {
+              'email': _emailController.text.trim(),
+              'purpose': 'signup',
+              'userData': userData,
+            },
+          );
         }
       } else {
         setState(() {
-          _error = 'Signup failed. Please try again.';
+          _error = otpResponse.message;
         });
       }
     } catch (e) {
       setState(() {
-        _error = 'Network error. Please check your connection.';
+        _error = 'Error sending verification code: $e';
       });
     } finally {
       setState(() {
@@ -86,15 +116,21 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: AppTheme.backgroundGradient,
-          ),
-        ),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  themeService.backgroundColor,
+                  themeService.surfaceColor,
+                  themeService.backgroundColor,
+                ],
+              ),
+            ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -215,6 +251,82 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 16),
                     
+                    // Religion Selection
+                    DropdownButtonFormField<String>(
+                      value: _selectedReligion,
+                      decoration: AppTheme.inputDecoration('Select Religion'),
+                      items: _religions.map((religion) {
+                        return DropdownMenuItem<String>(
+                          value: religion['name'],
+                          child: Text(religion['displayName']),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedReligion = newValue;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a religion';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Privacy Toggle
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isPrivate ? Icons.lock : Icons.public,
+                            color: _isPrivate ? Colors.orange : Colors.green,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _isPrivate ? 'Private Account' : 'Public Account',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  _isPrivate 
+                                      ? 'Only approved followers can see your posts'
+                                      : 'Anyone can see your posts and follow you',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _isPrivate,
+                            onChanged: (bool value) {
+                              setState(() {
+                                _isPrivate = value;
+                              });
+                            },
+                            activeColor: Colors.orange,
+                            inactiveThumbColor: Colors.green,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
                     if (_error != null) ...[
                       Text(
                         _error!,
@@ -235,10 +347,13 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         onPressed: _isLoading ? null : _signup,
                         child: _isLoading
-                            ? const AppLoader(
-                                size: 20.0,
-                                color: Colors.white,
-                                showMessage: false,
+                            ? const SizedBox(
+                                width: 20.0,
+                                height: 20.0,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                ),
                               )
                             : const Text(
                                 'Sign Up',
@@ -265,6 +380,8 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
       ),
+        );
+      },
     );
   }
 }

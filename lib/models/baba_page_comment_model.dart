@@ -1,0 +1,157 @@
+class BabaPageComment {
+  final String id;
+  final String? userId;
+  final String content;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  BabaPageComment({
+    required this.id,
+    this.userId,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory BabaPageComment.fromJson(Map<String, dynamic> json) {
+    try {
+      return BabaPageComment(
+        id: json['_id'] ?? json['id'] ?? '',
+        userId: json['userId'],
+        content: json['content'] ?? '',
+        createdAt: _parseDateTime(json['createdAt']),
+        updatedAt: _parseDateTime(json['updatedAt']),
+      );
+    } catch (e) {
+      print('BabaPageComment: Error parsing comment: $e');
+      print('BabaPageComment: Comment data: $json');
+      rethrow;
+    }
+  }
+
+  static DateTime _parseDateTime(dynamic dateValue) {
+    try {
+      if (dateValue == null) {
+        return DateTime.now();
+      }
+      if (dateValue is String) {
+        return DateTime.parse(dateValue);
+      }
+      return DateTime.now();
+    } catch (e) {
+      print('BabaPageComment: Error parsing date: $e');
+      return DateTime.now();
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'userId': userId,
+      'content': content,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  BabaPageComment copyWith({
+    String? id,
+    String? userId,
+    String? content,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return BabaPageComment(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      content: content ?? this.content,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
+class BabaPageCommentResponse {
+  final bool success;
+  final String message;
+  final List<BabaPageComment> comments;
+  final BabaPageCommentPagination? pagination;
+
+  BabaPageCommentResponse({
+    required this.success,
+    required this.message,
+    required this.comments,
+    this.pagination,
+  });
+
+  factory BabaPageCommentResponse.fromJson(Map<String, dynamic> json) {
+    try {
+      // Handle different response structures
+      List<dynamic> commentsData = [];
+      Map<String, dynamic>? paginationData;
+      
+      if (json['data'] != null) {
+        if (json['data'] is List) {
+          // If data is directly a list of comments
+          commentsData = json['data'];
+        } else if (json['data'] is Map<String, dynamic>) {
+          // If data is an object with comments property
+          commentsData = json['data']['comments'] ?? [];
+          paginationData = json['data']['pagination'];
+        }
+      }
+      
+      return BabaPageCommentResponse(
+        success: json['success'] ?? false,
+        message: json['message'] ?? '',
+        comments: commentsData
+            .map((commentJson) {
+              try {
+                return BabaPageComment.fromJson(commentJson);
+              } catch (e) {
+                print('BabaPageCommentResponse: Error parsing comment: $e');
+                print('BabaPageCommentResponse: Comment data: $commentJson');
+                return null;
+              }
+            })
+            .where((comment) => comment != null)
+            .cast<BabaPageComment>()
+            .toList(),
+        pagination: paginationData != null
+            ? BabaPageCommentPagination.fromJson(paginationData)
+            : null,
+      );
+    } catch (e) {
+      print('BabaPageCommentResponse: Error parsing response: $e');
+      print('BabaPageCommentResponse: Response data: $json');
+      return BabaPageCommentResponse(
+        success: false,
+        message: 'Error parsing response: $e',
+        comments: [],
+      );
+    }
+  }
+}
+
+class BabaPageCommentPagination {
+  final int currentPage;
+  final int totalPages;
+  final int totalComments;
+  final int commentsPerPage;
+
+  BabaPageCommentPagination({
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalComments,
+    required this.commentsPerPage,
+  });
+
+  factory BabaPageCommentPagination.fromJson(Map<String, dynamic> json) {
+    return BabaPageCommentPagination(
+      currentPage: json['currentPage'] ?? 1,
+      totalPages: json['totalPages'] ?? 1,
+      totalComments: json['totalComments'] ?? 0,
+      commentsPerPage: json['commentsPerPage'] ?? 10,
+    );
+  }
+}

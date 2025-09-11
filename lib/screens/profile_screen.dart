@@ -13,9 +13,9 @@ import '../services/post_service.dart';
 import '../services/user_media_service.dart';
 import '../screens/user_profile_screen.dart'; // Added import for UserProfileScreen
 import '../screens/chat_screen.dart'; // Added import for ChatScreen
+import '../widgets/dp_widget.dart'; // Added import for DPWidget
+import '../services/dp_service.dart'; // Added import for DPService
 
-import '../widgets/profile_picture_widget.dart'; // Added import for ProfilePictureWidget
-import '../screens/profile_picture_test_screen.dart'; // Added import for ProfilePictureTestScreen
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -168,19 +168,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   icon: const Icon(Icons.edit, color: Color(0xFF1A1A1A)),
                 ),
                 
-                // Test Profile Picture Button
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ProfilePictureTestScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.camera_alt, color: Color(0xFF10B981)),
-                  tooltip: 'Test Profile Picture',
-                ),
                 
                 // Message Button (only show if not own profile)
                 if (Provider.of<AuthProvider>(context, listen: false).userProfile?.id != user.id)
@@ -193,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                             recipientUserId: user.id,
                             recipientUsername: user.username ?? '',
                             recipientFullName: user.name,
-                            recipientAvatar: user.profileImageUrl,
+                            recipientAvatar: '',
                             threadId: null, // New conversation
                           ),
                         ),
@@ -228,39 +215,31 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               children: [
                 const SizedBox(height: 20),
                 
-                // Profile Image
-                Builder(
-                  builder: (context) {
-                    print('ProfileScreen: Building ProfilePictureWidget');
-                    print('ProfileScreen: User profile image URL: ${user.profileImageUrl}');
-                    print('ProfileScreen: User ID: ${user.id}');
-                    print('ProfileScreen: Auth token available: ${Provider.of<AuthProvider>(context, listen: false).authToken?.isNotEmpty}');
-                    
-                    return ProfilePictureWidget(
-                      currentImageUrl: user.profileImageUrl,
-                      userId: user.id,
-                      token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
-                                        onImageChanged: (String newImageUrl) async {
-                        print('ProfileScreen: Profile picture changed to: $newImageUrl');
-                        // Update the user profile with new image URL
-                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                        if (authProvider.userProfile != null) {
-                          print('ProfileScreen: Updating local user profile');
-                          final updatedUser = authProvider.userProfile!.copyWith(
-                            profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
-                          );
-                          print('ProfileScreen: Updated user profile image: ${updatedUser.profileImageUrl}');
-                          authProvider.updateLocalUserProfile(updatedUser);
-                        } else {
-                          print('ProfileScreen: No user profile found in auth provider');
-                        }
-                      },
-                      size: 120,
-                      borderColor: _getReligionColor(user.selectedReligion),
-                      showEditButton: true,
-                    );
+                // Display Picture Widget
+                DPWidget(
+                  currentImageUrl: user.profileImageUrl,
+                  userId: user.id,
+                  token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+                  onImageChanged: (String newImageUrl) async {
+                    print('ProfileScreen: DP changed to: $newImageUrl');
+                    // Update the user profile with new image URL
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    if (authProvider.userProfile != null) {
+                      print('ProfileScreen: Updating local user profile');
+                      final updatedUser = authProvider.userProfile!.copyWith(
+                        profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                      );
+                      print('ProfileScreen: Updated user profile image: ${updatedUser.profileImageUrl}');
+                      authProvider.updateLocalUserProfile(updatedUser);
+                    } else {
+                      print('ProfileScreen: No user profile found in auth provider');
+                    }
                   },
+                  size: 120,
+                  borderColor: _getReligionColor(user.selectedReligion),
+                  showEditButton: true,
                 ),
+                
                 
                 const SizedBox(height: 16),
                 
@@ -599,7 +578,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           tabs: const [
             Tab(icon: Icon(Icons.grid_on), text: 'Posts'),
             Tab(icon: Icon(Icons.play_circle_outline), text: 'Reels'),
-            Tab(icon: Icon(Icons.favorite), text: 'Liked'),
             Tab(icon: Icon(Icons.bookmark), text: 'Saved'),
           ],
         ),
@@ -614,7 +592,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           children: [
             _buildPostsTab(user),
             _buildReelsTab(user),
-            _buildLikedTab(),
             _buildSavedTab(),
           ],
         ),
@@ -707,25 +684,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     margin: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8), // Reduce margin
                     child: PostWidget(
                       post: post,
-                      onLike: () async {
-                        try {
-                          await PostService.toggleLike(
-                            postId: post.id,
-                            token: authProvider.authToken!,
-                          );
-                          // Refresh the posts tab
-                          setState(() {});
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to like post: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      },
                       onComment: () {
                         // Handle comment
                       },
@@ -839,25 +797,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     margin: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8), // Reduce margin
                     child: PostWidget(
                       post: reel,
-                      onLike: () async {
-                        try {
-                          await PostService.toggleLike(
-                            postId: reel.id,
-                            token: authProvider.authToken!,
-                          );
-                          // Refresh the reels tab
-                          setState(() {});
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to like reel: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      },
                       onComment: () {
                         // Handle comment
                       },
@@ -885,91 +824,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildLikedTab() {
-    return FutureBuilder<List<Post>>(
-      future: Provider.of<AuthProvider>(context, listen: false).getLikedPosts(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                const SizedBox(height: 16),
-                Text('Error loading liked posts: ${snapshot.error}'),
-              ],
-            ),
-          );
-        }
-        
-        final posts = snapshot.data ?? [];
-        
-        if (posts.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.favorite_border, size: 48, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('No liked posts yet'),
-                Text('Like some posts to see them here!', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
-          );
-        }
-        
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.5, // Fixed height
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: posts.length,
-            itemBuilder: (context, index) {
-              final post = posts[index];
-              return PostWidget(
-                post: post,
-                onLike: () async {
-                  try {
-                    await Provider.of<AuthProvider>(context, listen: false).likePost(post.id);
-                    // Refresh the liked posts tab
-                    setState(() {});
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to like post: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                onComment: () {
-                  // Handle comment
-                },
-                onShare: () {
-                  // Handle share
-                },
-                onUserTap: () {
-                  _navigateToUserProfile(post);
-                },
-                onDelete: () {
-                  // Remove the deleted post from the list and refresh
-                  setState(() {
-                    posts.removeWhere((p) => p.id == post.id);
-                  });
-                  print('Post deleted: ${post.id}');
-                },
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildSavedTab() {
     return FutureBuilder<List<Map<String, dynamic>>>(
@@ -1018,22 +872,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               final post = _createPostFromData(postData);
               return PostWidget(
                 post: post,
-                onLike: () async {
-                  try {
-                    await Provider.of<AuthProvider>(context, listen: false).likePost(post.id);
-                    // Refresh the saved posts tab
-                    setState(() {});
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to like post: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
                 onComment: () {
                   // Handle comment
                 },

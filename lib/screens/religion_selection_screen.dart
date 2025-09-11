@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/theme_service.dart';
 import 'home_screen.dart';
 
 class ReligionSelectionScreen extends StatefulWidget {
@@ -25,38 +26,73 @@ class _ReligionSelectionScreenState extends State<ReligionSelectionScreen> {
   final List<Map<String, dynamic>> _religions = [
     {
       'name': 'hinduism',
-      'displayName': 'Hinduism',
+      'displayName': '🕉 Hinduism',
       'icon': Icons.auto_awesome,
-      'color': const Color(0xFFFF6B35),
+      'color': ThemeService.hinduSaffronOrange,
       'description': 'Ancient Indian religion with diverse traditions',
     },
     {
       'name': 'islam',
-      'displayName': 'Islam',
+      'displayName': '🌙 Islam',
       'icon': Icons.star,
-      'color': const Color(0xFF2E8B57),
+      'color': ThemeService.islamDarkGreen,
       'description': 'Monotheistic Abrahamic religion',
     },
     {
       'name': 'christianity',
-      'displayName': 'Christianity',
+      'displayName': '✝ Christianity',
       'icon': Icons.add,
-      'color': const Color(0xFF4169E1),
+      'color': ThemeService.christianDeepBlue,
       'description': 'Abrahamic religion based on Jesus Christ',
     },
     {
-      'name': 'sikhism',
-      'displayName': 'Sikhism',
-      'icon': Icons.circle,
-      'color': const Color(0xFFFFD700),
-      'description': 'Monotheistic religion from Punjab',
+      'name': 'jainism',
+      'displayName': '🕊 Jainism',
+      'icon': Icons.eco,
+      'color': ThemeService.jainDeepRed,
+      'description': 'Ancient Indian religion emphasizing non-violence',
     },
     {
       'name': 'buddhism',
-      'displayName': 'Buddhism',
+      'displayName': '☸ Buddhism',
       'icon': Icons.self_improvement,
-      'color': const Color(0xFF8B4513),
+      'color': ThemeService.buddhistMonkOrange,
       'description': 'Path to enlightenment and inner peace',
+    },
+    {
+      'name': 'sikhism',
+      'displayName': '⚔ Sikhism',
+      'icon': Icons.flag,
+      'color': ThemeService.sikhSaffron,
+      'description': 'Monotheistic religion from Punjab',
+    },
+    {
+      'name': 'judaism',
+      'displayName': '✡ Judaism',
+      'icon': Icons.star_border,
+      'color': ThemeService.jewishDeepBlue,
+      'description': 'Ancient monotheistic Abrahamic religion',
+    },
+    {
+      'name': 'bahai',
+      'displayName': '🌈 Bahá\'í',
+      'icon': Icons.color_lens,
+      'color': ThemeService.bahaiWarmOrange,
+      'description': 'Universal religion emphasizing unity of humanity',
+    },
+    {
+      'name': 'taoism',
+      'displayName': '☯ Taoism/Daoism',
+      'icon': Icons.auto_awesome,
+      'color': ThemeService.taoBlack,
+      'description': 'Chinese philosophy and religion',
+    },
+    {
+      'name': 'indigenous',
+      'displayName': '🌍 Indigenous/Earth Spiritual',
+      'icon': Icons.nature,
+      'color': ThemeService.indigenousEarthBrown,
+      'description': 'Earth-centered spiritual traditions',
     },
     {
       'name': 'other',
@@ -84,6 +120,10 @@ class _ReligionSelectionScreenState extends State<ReligionSelectionScreen> {
       // Update the user data with selected religion
       final updatedUserData = Map<String, dynamic>.from(widget.googleUserData);
       updatedUserData['religion'] = _selectedReligion;
+
+      // Update theme based on selected religion
+      final themeService = Provider.of<ThemeService>(context, listen: false);
+      await themeService.setUserReligion(_selectedReligion!);
 
       // Complete the registration with the auth provider using the real token
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -131,6 +171,96 @@ class _ReligionSelectionScreenState extends State<ReligionSelectionScreen> {
     }
   }
 
+  LinearGradient _getThemePreviewGradient(String religion) {
+    switch (religion.toLowerCase()) {
+      case 'hinduism':
+      case 'hindu':
+        return LinearGradient(
+          colors: [ThemeService.hinduSaffronOrange, ThemeService.hinduWarmOrange],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+      case 'islam':
+      case 'muslim':
+        return LinearGradient(
+          colors: [ThemeService.islamDarkGreen, ThemeService.islamFreshGreen],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+      case 'christianity':
+      case 'christian':
+        return LinearGradient(
+          colors: [ThemeService.christianDeepBlue, ThemeService.christianLightBlue],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+      case 'jainism':
+      case 'jain':
+        return LinearGradient(
+          colors: [ThemeService.jainDeepRed, ThemeService.jainSaffron],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+      case 'buddhism':
+      case 'buddhist':
+        return LinearGradient(
+          colors: [ThemeService.buddhistMonkOrange, ThemeService.buddhistGoldenYellow],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+      default:
+        return LinearGradient(
+          colors: [const Color(0xFF8B4513), const Color(0xFFD2691E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+    }
+  }
+
+  String _getReligionDisplayName(String religion) {
+    switch (religion.toLowerCase()) {
+      case 'hinduism':
+      case 'hindu':
+        return 'Hindu';
+      case 'islam':
+      case 'muslim':
+        return 'Islamic';
+      case 'christianity':
+      case 'christian':
+        return 'Christian';
+      case 'jainism':
+      case 'jain':
+        return 'Jain';
+      case 'buddhism':
+      case 'buddhist':
+        return 'Buddhist';
+      default:
+        return 'Default';
+    }
+  }
+
+  String _getThemePreviewDescription(String religion) {
+    switch (religion.toLowerCase()) {
+      case 'hinduism':
+      case 'hindu':
+        return 'Red (#d10132), Gold (#f7b239), White (#ffffff)';
+      case 'islam':
+      case 'muslim':
+        return 'Green (#1c641b), Light Green (#719c2e), White (#ffffff)';
+      case 'christianity':
+      case 'christian':
+        return 'Blue (#4169E1), Gold (#fbdf7a), White (#ffffff)';
+      case 'jainism':
+      case 'jain':
+        return 'Red (#d10132), Yellow (#ffd700), White (#ffffff)';
+      case 'buddhism':
+      case 'buddhist':
+        return 'Gold (#b59341), Light Gold (#fdefbb), White (#ffffff)';
+      default:
+        return 'Beige (#8B4513), Brown (#D2691E), Cream (#F5DEB3)';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,6 +304,52 @@ class _ReligionSelectionScreenState extends State<ReligionSelectionScreen> {
                 ),
                 const SizedBox(height: 40),
 
+                    // Theme Preview
+                    if (_selectedReligion != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: _getThemePreviewGradient(_selectedReligion!),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.palette,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${_getReligionDisplayName(_selectedReligion!)} Theme Preview',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                  Text(
+                                    _getThemePreviewDescription(_selectedReligion!),
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 12,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                 // Religion Grid
                 Expanded(
                   child: GridView.builder(
@@ -194,6 +370,10 @@ class _ReligionSelectionScreenState extends State<ReligionSelectionScreen> {
                             _selectedReligion = religion['name'];
                             _error = null;
                           });
+                          
+                          // Update theme based on religion selection
+                          final themeService = Provider.of<ThemeService>(context, listen: false);
+                          themeService.setUserReligion(religion['name']);
                         },
                         child: Container(
                           decoration: BoxDecoration(

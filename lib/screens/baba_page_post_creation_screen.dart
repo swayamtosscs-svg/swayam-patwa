@@ -97,7 +97,8 @@ class _BabaPagePostCreationScreenState extends State<BabaPagePostCreationScreen>
   }
 
   Future<void> _createPost() async {
-    print('BabaPagePostCreationScreen: Creating post for Baba Ji page: ${widget.babaPage.id}');
+    print('BabaPagePostCreationScreen: Creating post for Baba Ji page: ${widget.babaPage.name} (ID: ${widget.babaPage.id})');
+    print('BabaPagePostCreationScreen: Page details - Name: ${widget.babaPage.name}, Religion: ${widget.babaPage.religion}');
     if (!_formKey.currentState!.validate()) {
       print('BabaPagePostCreationScreen: Form validation failed');
       return;

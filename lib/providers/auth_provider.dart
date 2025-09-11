@@ -7,7 +7,6 @@ import '../services/auth_service.dart';
 import '../services/google_auth_service.dart';
 import '../models/post_model.dart'; // Fixed import path
 import '../models/message_model.dart';
-import '../services/profile_picture_service.dart';
 import 'dart:io';
 
 class AuthProvider extends ChangeNotifier {
@@ -103,7 +102,7 @@ class AuthProvider extends ChangeNotifier {
 
   /// Handle successful login
   Future<void> handleSuccessfulLogin(String token, Map<String, dynamic> userData) async {
-    print('AuthProvider: handleSuccessfulLogin called with token: ${token.substring(0, 20)}... and userData: $userData');
+    print('AuthProvider: handleSuccessfulLogin called with token: ${token.length > 20 ? token.substring(0, 20) + '...' : token} and userData: $userData');
     
     await _saveAuthToken(token);
     print('AuthProvider: Token saved successfully');
@@ -1008,53 +1007,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Like a post using R-Gram API
-  Future<bool> likePost(String postId) async {
-    if (_authToken == null || _userProfile == null) return false;
-
-    try {
-      final response = await ApiService.likePost(
-        _userProfile!.id,
-        postId,
-        _authToken!,
-      );
-
-      if (response['success'] == true) {
-        // Refresh liked posts
-        await _loadLikedPosts();
-        notifyListeners();
-        return true;
-      } else {
-        _error = response['message'] ?? 'Failed to like post';
-        return false;
-      }
-    } catch (e) {
-      _error = 'Network error: $e';
-      return false;
-    }
-  }
-
-  /// Get liked posts for the current user
-  Future<List<Post>> getLikedPosts() async {
-    if (_authToken == null) return [];
-
-    try {
-      final response = await ApiService.getLikedPosts(
-        token: _authToken!,
-      );
-
-      if (response['success'] == true && response['data'] != null) {
-        final postsData = response['data']['posts'] ?? [];
-        return postsData.map((postData) => _createPostFromData(postData)).toList();
-      } else {
-        print('Failed to load liked posts: ${response['message']}');
-        return [];
-      }
-    } catch (e) {
-      print('Error loading liked posts: $e');
-      return [];
-    }
-  }
 
   /// Create a Post object from API response data
   Post _createPostFromData(Map<String, dynamic> postData) {
@@ -1091,107 +1043,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Load liked posts from API
-  Future<void> _loadLikedPosts() async {
-    // This method is called internally by likePost
-    // The actual loading is done by getLikedPosts()
-  }
 
-  // Profile Picture Management Methods
-
-  /// Upload profile picture
-  Future<Map<String, dynamic>> uploadProfilePicture(File imageFile) async {
-    if (_authToken == null || _userProfile == null) {
-      return {
-        'success': false,
-        'message': 'Authentication required',
-      };
-    }
-
-    try {
-      final response = await ProfilePictureService.uploadProfilePicture(
-        imageFile: imageFile,
-        userId: _userProfile!.id,
-        token: _authToken!,
-      );
-
-      if (response['success'] == true) {
-        // Update local user profile with new image URL
-        final data = response['data'];
-        if (data != null && data['avatar'] != null) {
-          final updatedUser = _userProfile!.copyWith(
-            profileImageUrl: data['avatar'],
-          );
-          _userProfile = updatedUser;
-          notifyListeners();
-        }
-      }
-
-      return response;
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error uploading profile picture: $e',
-      };
-    }
-  }
-
-  /// Retrieve profile picture
-  Future<Map<String, dynamic>> retrieveProfilePicture() async {
-    if (_authToken == null || _userProfile == null) {
-      return {
-        'success': false,
-        'message': 'Authentication required',
-      };
-    }
-
-    try {
-      return await ProfilePictureService.retrieveProfilePicture(
-        userId: _userProfile!.id,
-        token: _authToken!,
-      );
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error retrieving profile picture: $e',
-      };
-    }
-  }
-
-  /// Delete profile picture
-  Future<Map<String, dynamic>> deleteProfilePicture(String fileName) async {
-    if (_authToken == null) {
-      return {
-        'success': false,
-        'message': 'Authentication required',
-      };
-    }
-
-    try {
-      final response = await ProfilePictureService.deleteProfilePicture(
-        userId: _userProfile?.id ?? '',
-        fileName: fileName,
-        token: _authToken!,
-      );
-
-      if (response['success'] == true) {
-        // Update local user profile to remove image URL
-        if (_userProfile != null) {
-          final updatedUser = _userProfile!.copyWith(
-            profileImageUrl: null,
-          );
-          _userProfile = updatedUser;
-          notifyListeners();
-        }
-      }
-
-      return response;
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error deleting profile picture: $e',
-      };
-    }
-  }
 
 } 

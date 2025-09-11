@@ -1,0 +1,511 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/dp_service.dart';
+import '../utils/app_theme.dart';
+
+class DPWidget extends StatefulWidget {
+  final String? currentImageUrl;
+  final String userId;
+  final String token;
+  final Function(String) onImageChanged;
+  final double size;
+  final Color borderColor;
+  final bool showEditButton;
+
+  const DPWidget({
+    Key? key,
+    this.currentImageUrl,
+    required this.userId,
+    required this.token,
+    required this.onImageChanged,
+    this.size = 120,
+    this.borderColor = AppTheme.primaryColor,
+    this.showEditButton = true,
+  }) : super(key: key);
+
+  @override
+  State<DPWidget> createState() => _DPWidgetState();
+}
+
+class _DPWidgetState extends State<DPWidget> {
+  String? _localImageUrl;
+  String? _fileName;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _localImageUrl = widget.currentImageUrl;
+    _loadDP();
+  }
+
+  @override
+  void didUpdateWidget(DPWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentImageUrl != widget.currentImageUrl) {
+      _localImageUrl = widget.currentImageUrl;
+    }
+  }
+
+  Future<void> _loadDP() async {
+    if (widget.token.isEmpty) {
+      print('DPWidget: No token available, skipping load');
+      return;
+    }
+
+    print('DPWidget: Loading DP for user ${widget.userId}');
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await DPService.retrieveDP(
+        userId: widget.userId,
+        token: widget.token,
+      );
+
+      print('DPWidget: Load response: $response');
+
+      if (response['success'] == true && mounted) {
+        final data = response['data'];
+        print('DPWidget: DP data: $data');
+        
+        if (data != null && data['dpUrl'] != null && data['dpUrl'].toString().isNotEmpty) {
+          setState(() {
+            _localImageUrl = data['dpUrl'];
+            _fileName = data['fileName'];
+            _isLoading = false;
+          });
+          print('DPWidget: DP loaded: $_localImageUrl');
+          
+          // Notify parent about the change if we got a new image
+          if (widget.currentImageUrl != _localImageUrl) {
+            widget.onImageChanged(_localImageUrl!);
+          }
+        } else {
+          print('DPWidget: No DP data in response');
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      } else {
+        print('DPWidget: Failed to load DP: ${response['message']}');
+        print('DPWidget: Error details: ${response['error']}');
+        setState(() {
+          _isLoading = false;
+        });
+        
+        // Show error message to user
+        if (mounted) {
+          _showSnackBar(
+            response['message'] ?? 'Failed to load display picture',
+            Colors.orange,
+          );
+        }
+      }
+    } catch (e) {
+      print('DPWidget: Error loading DP: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      _showSnackBar('Error loading display picture: $e', Colors.red);
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    if (widget.token.isEmpty) {
+      _showSnackBar('Authentication token not found', Colors.red);
+      return;
+    }
+
+    print('DPWidget: Token available: ${widget.token.isNotEmpty}');
+    print('DPWidget: User ID: ${widget.userId}');
+
+    try {
+      print('DPWidget: Starting image picker');
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        print('DPWidget: Image selected: ${image.path}');
+        print('DPWidget: Image name: ${image.name}');
+        print('DPWidget: Image size: ${await image.length()} bytes');
+        
+        // Handle web platform differently
+        if (kIsWeb) {
+          try {
+            // For web, use the web-compatible upload method
+            final bytes = await image.readAsBytes();
+            print('DPWidget: Web image bytes length: ${bytes.length}');
+            await _uploadImageWeb(bytes, image.name);
+          } catch (e) {
+            print('DPWidget: Error processing web image: $e');
+            _showSnackBar('Error processing selected image. Please try again.', Colors.red);
+          }
+        } else {
+          // For mobile platforms, use File object
+          final imageFile = File(image.path);
+          if (await imageFile.exists()) {
+            print('DPWidget: Image file exists, proceeding with upload');
+            await _uploadImage(imageFile);
+          } else {
+            print('DPWidget: Image file does not exist');
+            _showSnackBar('Selected image file not found', Colors.red);
+          }
+        }
+      } else {
+        print('DPWidget: No image selected');
+      }
+    } catch (e) {
+      print('DPWidget: Error picking image: $e');
+      _showSnackBar('Error picking image: $e', Colors.red);
+    }
+  }
+
+  Future<void> _uploadImage(File imageFile) async {
+    print('DPWidget: Starting image upload');
+    print('DPWidget: User ID: ${widget.userId}');
+    print('DPWidget: Token available: ${widget.token.isNotEmpty}');
+    print('DPWidget: Image file path: ${imageFile.path}');
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('DPWidget: Calling DPService.uploadDP');
+      final response = await DPService.uploadDP(
+        imageFile: imageFile,
+        userId: widget.userId,
+        token: widget.token,
+      );
+
+      print('DPWidget: Upload response: $response');
+
+      if (response['success'] == true && mounted) {
+        final data = response['data'];
+        print('DPWidget: Upload successful, data: $data');
+        
+        setState(() {
+          _localImageUrl = data['dpUrl'];
+          _fileName = data['fileName'];
+          _isLoading = false;
+        });
+
+        // Notify parent about the change
+        widget.onImageChanged(data['dpUrl']);
+
+        _showSnackBar('Display picture uploaded successfully!', Colors.green);
+      } else {
+        print('DPWidget: Upload failed: ${response['message']}');
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar(
+          response['message'] ?? 'Failed to upload display picture',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      print('DPWidget: Error uploading image: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      _showSnackBar('Error uploading image: $e', Colors.red);
+    }
+  }
+
+  Future<void> _uploadImageWeb(List<int> imageBytes, String fileName) async {
+    print('DPWidget: Starting web image upload');
+    print('DPWidget: User ID: ${widget.userId}');
+    print('DPWidget: Token available: ${widget.token.isNotEmpty}');
+    print('DPWidget: Image bytes length: ${imageBytes.length}');
+    print('DPWidget: File name: $fileName');
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Create a temporary file for web upload
+      final tempDir = Directory.systemTemp;
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsBytes(imageBytes);
+      
+      print('DPWidget: Calling DPService.uploadDP');
+      final response = await DPService.uploadDP(
+        imageFile: tempFile,
+        userId: widget.userId,
+        token: widget.token,
+      );
+
+      print('DPWidget: Web upload response: $response');
+
+      if (response['success'] == true && mounted) {
+        final data = response['data'];
+        print('DPWidget: Web upload successful, data: $data');
+        
+        setState(() {
+          _localImageUrl = data['dpUrl'];
+          _fileName = data['fileName'];
+          _isLoading = false;
+        });
+
+        // Notify parent about the change
+        widget.onImageChanged(data['dpUrl']);
+
+        _showSnackBar('Display picture uploaded successfully!', Colors.green);
+      } else {
+        print('DPWidget: Web upload failed: ${response['message']}');
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar(
+          response['message'] ?? 'Failed to upload display picture',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      print('DPWidget: Error uploading web image: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      _showSnackBar('Error uploading image: $e', Colors.red);
+    }
+  }
+
+  Future<void> _deleteDP() async {
+    if (_fileName == null || widget.token.isEmpty) {
+      _showSnackBar('No display picture to delete', Colors.orange);
+      return;
+    }
+
+    // Show confirmation dialog
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Display Picture'),
+        content: const Text(
+          'Are you sure you want to delete your display picture? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('DPWidget: Deleting DP with fileName: $_fileName');
+      final response = await DPService.deleteDP(
+        userId: widget.userId,
+        fileName: _fileName!,
+        token: widget.token,
+      );
+
+      print('DPWidget: Delete response: $response');
+
+      if (response['success'] == true && mounted) {
+        setState(() {
+          _localImageUrl = null;
+          _fileName = null;
+          _isLoading = false;
+        });
+
+        // Notify parent about the change
+        widget.onImageChanged('');
+
+        _showSnackBar('Display picture deleted successfully!', Colors.green);
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar(
+          response['message'] ?? 'Failed to delete display picture',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      print('DPWidget: Error deleting DP: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      _showSnackBar('Error deleting display picture: $e', Colors.red);
+    }
+  }
+
+  void _showSnackBar(String message, Color backgroundColor) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Main DP container
+        GestureDetector(
+          onTap: _isLoading ? null : _pickAndUploadImage,
+          child: Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: widget.borderColor,
+                width: 4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.borderColor.withOpacity(0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipOval(
+            child: _isLoading
+                ? Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          widget.borderColor.withOpacity(0.1),
+                          widget.borderColor.withOpacity(0.3),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.primaryColor,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  )
+                : _localImageUrl != null && _localImageUrl!.isNotEmpty
+                    ? Image.network(
+                        _localImageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          print('DPWidget: Error loading image: $error');
+                          return _buildDefaultAvatar();
+                        },
+                      )
+                    : _buildDefaultAvatar(),
+            ),
+          ),
+        ),
+        
+        // Edit button
+        if (widget.showEditButton)
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _isLoading ? null : _pickAndUploadImage,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          ),
+        
+        // Delete button (only show if DP exists)
+        if (widget.showEditButton && _localImageUrl != null && _localImageUrl!.isNotEmpty)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _isLoading ? null : _deleteDP,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 12,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultAvatar() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            widget.borderColor.withOpacity(0.1),
+            widget.borderColor.withOpacity(0.3),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Icon(
+        Icons.person,
+        size: widget.size * 0.5,
+        color: widget.borderColor,
+      ),
+    );
+  }
+}

@@ -7,6 +7,8 @@ class BabaPagePost {
   final int commentsCount;
   final int sharesCount;
   final bool isActive;
+  final bool isLiked;
+  final List<BabaPagePostLike> likes;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,26 +21,72 @@ class BabaPagePost {
     required this.commentsCount,
     required this.sharesCount,
     required this.isActive,
+    this.isLiked = false,
+    this.likes = const [],
     required this.createdAt,
     required this.updatedAt,
   });
 
   factory BabaPagePost.fromJson(Map<String, dynamic> json) {
-    return BabaPagePost(
-      id: json['_id'] ?? json['id'] ?? '',
-      babaPageId: json['babaPageId'] ?? '',
-      content: json['content'] ?? '',
-      media: (json['media'] as List<dynamic>?)
-              ?.map((mediaJson) => BabaPagePostMedia.fromJson(mediaJson))
-              .toList() ??
-          [],
-      likesCount: json['likesCount'] ?? 0,
-      commentsCount: json['commentsCount'] ?? 0,
-      sharesCount: json['sharesCount'] ?? 0,
-      isActive: json['isActive'] ?? true,
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
-    );
+    try {
+      return BabaPagePost(
+        id: json['_id'] ?? json['id'] ?? '',
+        babaPageId: json['babaPageId'] ?? '',
+        content: json['content'] ?? '',
+        media: (json['media'] as List<dynamic>?)
+                ?.map((mediaJson) {
+                  try {
+                    return BabaPagePostMedia.fromJson(mediaJson);
+                  } catch (e) {
+                    print('BabaPagePost: Error parsing media: $e');
+                    return null;
+                  }
+                })
+                .where((media) => media != null)
+                .cast<BabaPagePostMedia>()
+                .toList() ??
+            [],
+        likesCount: json['likesCount'] ?? 0,
+        commentsCount: json['commentsCount'] ?? 0,
+        sharesCount: json['sharesCount'] ?? 0,
+        isActive: json['isActive'] ?? true,
+        isLiked: json['isLiked'] ?? false,
+        likes: (json['likes'] as List<dynamic>?)
+                ?.map((likeJson) {
+                  try {
+                    return BabaPagePostLike.fromJson(likeJson);
+                  } catch (e) {
+                    print('BabaPagePost: Error parsing like: $e');
+                    return null;
+                  }
+                })
+                .where((like) => like != null)
+                .cast<BabaPagePostLike>()
+                .toList() ??
+            [],
+        createdAt: _parseDateTime(json['createdAt']),
+        updatedAt: _parseDateTime(json['updatedAt']),
+      );
+    } catch (e) {
+      print('BabaPagePost: Error parsing post: $e');
+      print('BabaPagePost: Post data: $json');
+      rethrow;
+    }
+  }
+
+  static DateTime _parseDateTime(dynamic dateValue) {
+    try {
+      if (dateValue == null) {
+        return DateTime.now();
+      }
+      if (dateValue is String) {
+        return DateTime.parse(dateValue);
+      }
+      return DateTime.now();
+    } catch (e) {
+      print('BabaPagePost: Error parsing date: $e');
+      return DateTime.now();
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -51,9 +99,41 @@ class BabaPagePost {
       'commentsCount': commentsCount,
       'sharesCount': sharesCount,
       'isActive': isActive,
+      'isLiked': isLiked,
+      'likes': likes.map((l) => l.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
+  }
+
+  BabaPagePost copyWith({
+    String? id,
+    String? babaPageId,
+    String? content,
+    List<BabaPagePostMedia>? media,
+    int? likesCount,
+    int? commentsCount,
+    int? sharesCount,
+    bool? isActive,
+    bool? isLiked,
+    List<BabaPagePostLike>? likes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return BabaPagePost(
+      id: id ?? this.id,
+      babaPageId: babaPageId ?? this.babaPageId,
+      content: content ?? this.content,
+      media: media ?? this.media,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      sharesCount: sharesCount ?? this.sharesCount,
+      isActive: isActive ?? this.isActive,
+      isLiked: isLiked ?? this.isLiked,
+      likes: likes ?? this.likes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 }
 
@@ -77,15 +157,21 @@ class BabaPagePostMedia {
   });
 
   factory BabaPagePostMedia.fromJson(Map<String, dynamic> json) {
-    return BabaPagePostMedia(
-      id: json['_id'] ?? json['id'] ?? '',
-      type: json['type'] ?? 'image',
-      url: json['url'] ?? '',
-      filename: json['filename'] ?? '',
-      size: json['size'] ?? 0,
-      mimeType: json['mimeType'] ?? 'image/jpeg',
-      publicId: json['publicId'] ?? '',
-    );
+    try {
+      return BabaPagePostMedia(
+        id: json['_id'] ?? json['id'] ?? '',
+        type: json['type'] ?? 'image',
+        url: json['url'] ?? '',
+        filename: json['filename'] ?? '',
+        size: json['size'] ?? 0,
+        mimeType: json['mimeType'] ?? 'image/jpeg',
+        publicId: json['publicId'] ?? '',
+      );
+    } catch (e) {
+      print('BabaPagePostMedia: Error parsing media: $e');
+      print('BabaPagePostMedia: Media data: $json');
+      rethrow;
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -151,17 +237,51 @@ class BabaPagePostListResponse {
   });
 
   factory BabaPagePostListResponse.fromJson(Map<String, dynamic> json) {
-    return BabaPagePostListResponse(
-      success: json['success'] ?? false,
-      message: json['message'] ?? '',
-      posts: (json['data']['posts'] as List<dynamic>?)
-              ?.map((postJson) => BabaPagePost.fromJson(postJson))
-              .toList() ??
-          [],
-      pagination: json['data']['pagination'] != null
-          ? BabaPagePostPagination.fromJson(json['data']['pagination'])
-          : null,
-    );
+    try {
+      // Handle different response structures
+      List<dynamic> postsData = [];
+      Map<String, dynamic>? paginationData;
+      
+      if (json['data'] != null) {
+        if (json['data'] is List) {
+          // If data is directly a list of posts
+          postsData = json['data'];
+        } else if (json['data'] is Map<String, dynamic>) {
+          // If data is an object with posts property
+          postsData = json['data']['posts'] ?? [];
+          paginationData = json['data']['pagination'];
+        }
+      }
+      
+      return BabaPagePostListResponse(
+        success: json['success'] ?? false,
+        message: json['message'] ?? '',
+        posts: postsData
+            .map((postJson) {
+              try {
+                return BabaPagePost.fromJson(postJson);
+              } catch (e) {
+                print('BabaPagePostListResponse: Error parsing post: $e');
+                print('BabaPagePostListResponse: Post data: $postJson');
+                return null;
+              }
+            })
+            .where((post) => post != null)
+            .cast<BabaPagePost>()
+            .toList(),
+        pagination: paginationData != null
+            ? BabaPagePostPagination.fromJson(paginationData)
+            : null,
+      );
+    } catch (e) {
+      print('BabaPagePostListResponse: Error parsing response: $e');
+      print('BabaPagePostListResponse: Response data: $json');
+      return BabaPagePostListResponse(
+        success: false,
+        message: 'Error parsing response: $e',
+        posts: [],
+      );
+    }
   }
 }
 
@@ -185,5 +305,43 @@ class BabaPagePostPagination {
       totalItems: json['totalItems'] ?? 0,
       itemsPerPage: json['itemsPerPage'] ?? 10,
     );
+  }
+}
+
+class BabaPagePostLike {
+  final String id;
+  final String username;
+  final String fullName;
+  final String avatar;
+
+  BabaPagePostLike({
+    required this.id,
+    required this.username,
+    required this.fullName,
+    required this.avatar,
+  });
+
+  factory BabaPagePostLike.fromJson(Map<String, dynamic> json) {
+    try {
+      return BabaPagePostLike(
+        id: json['_id'] ?? json['id'] ?? '',
+        username: json['username'] ?? '',
+        fullName: json['fullName'] ?? '',
+        avatar: json['avatar'] ?? '',
+      );
+    } catch (e) {
+      print('BabaPagePostLike: Error parsing like: $e');
+      print('BabaPagePostLike: Like data: $json');
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'username': username,
+      'fullName': fullName,
+      'avatar': avatar,
+    };
   }
 }

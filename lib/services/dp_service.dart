@@ -2,19 +2,72 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
-class ProfilePictureService {
+class DPService {
   static const String baseUrl = 'http://103.14.120.163:8081/api/local-storage';
 
-  /// Upload profile picture using new local storage API
-  static Future<Map<String, dynamic>> uploadProfilePicture({
+  /// Test API connection
+  static Future<Map<String, dynamic>> testConnection({
+    required String userId,
+    required String token,
+  }) async {
+    try {
+      print('DPService: Testing API connection');
+      print('DPService: User ID: $userId');
+      print('DPService: Token: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+      
+      final url = '$baseUrl/list?userId=$userId';
+      print('DPService: Test URL: $url');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Test request timed out');
+        },
+      );
+
+      print('DPService: Test response status: ${response.statusCode}');
+      print('DPService: Test response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': 'API connection successful',
+          'statusCode': response.statusCode,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': 'API connection failed with status ${response.statusCode}',
+          'statusCode': response.statusCode,
+        };
+      }
+    } catch (e) {
+      print('DPService: Test connection error: $e');
+      return {
+        'success': false,
+        'message': 'API connection test failed: $e',
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Upload Display Picture using local storage API
+  static Future<Map<String, dynamic>> uploadDP({
     required File imageFile,
     required String userId,
     required String token,
   }) async {
     try {
-      print('ProfilePictureService: Starting upload for user $userId');
-      print('ProfilePictureService: Image file path: ${imageFile.path}');
+      print('DPService: Starting DP upload for user $userId');
+      print('DPService: Image file path: ${imageFile.path}');
       
       // Validate token
       if (token.isEmpty) {
@@ -51,46 +104,75 @@ class ProfilePictureService {
       // Validate file extension
       final fileName = imageFile.path.split('/').last;
       final extension = fileName.split('.').last.toLowerCase();
-      if (!['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension)) {
+      print('DPService: File extension detected: $extension');
+      print('DPService: File name: $fileName');
+      
+      // Check if it's a valid image extension
+      final validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      if (!validExtensions.contains(extension)) {
         return {
           'success': false,
           'message': 'Unsupported image format. Please use JPG, PNG, GIF, or WEBP.',
         };
       }
+      
+      // For WebP files, ensure we're sending the correct MIME type
+      String mimeType = 'image/jpeg'; // default
+      switch (extension) {
+        case 'jpg':
+        case 'jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case 'png':
+          mimeType = 'image/png';
+          break;
+        case 'gif':
+          mimeType = 'image/gif';
+          break;
+        case 'webp':
+          mimeType = 'image/webp';
+          break;
+      }
+      print('DPService: MIME type determined: $mimeType');
 
-      print('ProfilePictureService: File validation passed');
-      print('ProfilePictureService: File size: $fileSize bytes');
-      print('ProfilePictureService: File extension: $extension');
+      print('DPService: File validation passed');
+      print('DPService: File size: $fileSize bytes');
+      print('DPService: File extension: $extension');
 
       // Create multipart request
       final url = '$baseUrl/upload?userId=$userId';
-      print('ProfilePictureService: Request URL: $url');
+      print('DPService: Request URL: $url');
+      print('DPService: Base URL: $baseUrl');
+      print('DPService: User ID: $userId');
       
       var request = http.MultipartRequest('POST', Uri.parse(url));
       
       // Add headers
       request.headers['Authorization'] = 'Bearer $token';
-      print('ProfilePictureService: Request headers: ${request.headers}');
+      request.headers['Accept'] = 'application/json';
+      // Don't set Content-Type for multipart requests - let the framework handle it
+      print('DPService: Request headers: ${request.headers}');
+      print('DPService: Token length: ${token.length}');
+      print('DPService: Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
       
-      // Add the image file
+      // Add the image file with correct MIME type
       final multipartFile = await http.MultipartFile.fromPath(
-        'file', // Use 'file' as the field name as per API spec
+        'file',
         imageFile.path,
+        contentType: MediaType('image', extension),
       );
       request.files.add(multipartFile);
       
-      print('ProfilePictureService: Added file: ${multipartFile.field} - ${multipartFile.filename}');
-      print('ProfilePictureService: File field name: ${multipartFile.field}');
-      print('ProfilePictureService: Total files in request: ${request.files.length}');
-      print('ProfilePictureService: File length: ${multipartFile.length}');
-      print('ProfilePictureService: File path: ${imageFile.path}');
-      print('ProfilePictureService: File exists: ${await imageFile.exists()}');
-      print('ProfilePictureService: File size: ${await imageFile.length()}');
-      print('ProfilePictureService: Request fields: ${request.fields}');
-      print('ProfilePictureService: Request files: ${request.files.map((f) => '${f.field}: ${f.filename} (${f.length} bytes)').toList()}');
+      // Add any additional fields if needed
+      request.fields['userId'] = userId;
+      
+      print('DPService: Added file: ${multipartFile.field} - ${multipartFile.filename}');
+      print('DPService: Total files in request: ${request.files.length}');
+      print('DPService: Request fields: ${request.fields}');
+      print('DPService: Request files count: ${request.files.length}');
       
       // Send the request
-      print('ProfilePictureService: Sending request...');
+      print('DPService: Sending request...');
       final streamedResponse = await request.send().timeout(
         const Duration(seconds: 30),
         onTimeout: () {
@@ -99,14 +181,14 @@ class ProfilePictureService {
       );
       
       final response = await http.Response.fromStream(streamedResponse);
-      print('ProfilePictureService: Response status: ${response.statusCode}');
-      print('ProfilePictureService: Response body: ${response.body}');
+      print('DPService: Response status: ${response.statusCode}');
+      print('DPService: Response body: ${response.body}');
 
       Map<String, dynamic> jsonResponse;
       try {
         jsonResponse = jsonDecode(response.body);
       } catch (e) {
-        print('ProfilePictureService: Failed to parse JSON response: $e');
+        print('DPService: Failed to parse JSON response: $e');
         return {
           'success': false,
           'message': 'Invalid response format from server',
@@ -127,22 +209,21 @@ class ProfilePictureService {
             final size = uploadedFile['size'] as int;
             final mimetype = uploadedFile['mimetype'] as String;
             
-            // Construct full avatar URL
-            final avatar = 'http://103.14.120.163:8081$publicUrl';
+            // Construct full DP URL
+            final dpUrl = 'http://103.14.120.163:8081$publicUrl';
             
-            print('ProfilePictureService: Upload successful');
-            print('ProfilePictureService: Avatar URL: $avatar');
-            print('ProfilePictureService: File name: $fileName');
-            print('ProfilePictureService: Original name: $originalName');
-            print('ProfilePictureService: Size: $size bytes');
-            print('ProfilePictureService: MIME type: $mimetype');
+            print('DPService: Upload successful');
+            print('DPService: DP URL: $dpUrl');
+            print('DPService: File name: $fileName');
+            print('DPService: Original name: $originalName');
+            print('DPService: Size: $size bytes');
+            print('DPService: MIME type: $mimetype');
             
             return {
               'success': true,
-              'message': 'Profile picture uploaded successfully',
+              'message': 'Display picture uploaded successfully',
               'data': {
-                'avatar': avatar,
-                'publicId': fileName, // Use fileName as publicId for compatibility
+                'dpUrl': dpUrl,
                 'fileName': fileName,
                 'originalName': originalName,
                 'size': size,
@@ -171,30 +252,30 @@ class ProfilePictureService {
           'error': 'File Too Large',
         };
       } else {
-        print('ProfilePictureService: Upload failed with status ${response.statusCode}');
+        print('DPService: Upload failed with status ${response.statusCode}');
         return {
           'success': false,
-          'message': jsonResponse['message'] ?? 'Failed to upload profile picture',
+          'message': jsonResponse['message'] ?? 'Failed to upload display picture',
           'error': 'Upload Failed',
         };
       }
     } catch (e) {
-      print('ProfilePictureService: Upload error: $e');
+      print('DPService: Upload error: $e');
       return {
         'success': false,
-        'message': 'An error occurred while uploading the profile picture: ${e.toString()}',
+        'message': 'An error occurred while uploading the display picture: ${e.toString()}',
         'error': 'Upload Error',
       };
     }
   }
 
-  /// Retrieve profile picture using new local storage API
-  static Future<Map<String, dynamic>> retrieveProfilePicture({
+  /// Retrieve Display Picture using local storage API
+  static Future<Map<String, dynamic>> retrieveDP({
     required String userId,
     required String token,
   }) async {
     try {
-      print('ProfilePictureService: Retrieving profile picture for user $userId');
+      print('DPService: Retrieving DP for user $userId');
       
       // Validate token
       if (token.isEmpty) {
@@ -213,7 +294,7 @@ class ProfilePictureService {
       }
       
       final url = '$baseUrl/list?userId=$userId';
-      print('ProfilePictureService: Retrieving from URL: $url');
+      print('DPService: Retrieving from URL: $url');
       
       final response = await http.get(
         Uri.parse(url),
@@ -228,15 +309,15 @@ class ProfilePictureService {
         },
       );
 
-      print('ProfilePictureService: Retrieve response status: ${response.statusCode}');
-      print('ProfilePictureService: Retrieve response body: ${response.body}');
+      print('DPService: Retrieve response status: ${response.statusCode}');
+      print('DPService: Retrieve response body: ${response.body}');
 
       if (response.statusCode == 200) {
         Map<String, dynamic> jsonResponse;
         try {
           jsonResponse = jsonDecode(response.body);
         } catch (e) {
-          print('ProfilePictureService: Failed to parse JSON response: $e');
+          print('DPService: Failed to parse JSON response: $e');
           return {
             'success': false,
             'message': 'Invalid response format from server',
@@ -244,12 +325,12 @@ class ProfilePictureService {
           };
         }
         
-        print('ProfilePictureService: Profile picture retrieved successfully');
+        print('DPService: DP retrieved successfully');
         // Transform the response to match the expected format
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
           final files = jsonResponse['data']['files'] as List;
           if (files.isNotEmpty) {
-            // Get the most recent profile picture (first in the list as it's sorted by uploadedAt desc)
+            // Get the most recent DP (first in the list as it's sorted by uploadedAt desc)
             final latestFile = files.first;
             
             // Extract data from the response
@@ -258,21 +339,20 @@ class ProfilePictureService {
             final fileType = latestFile['fileType'] as String;
             final size = latestFile['size'] as int;
             
-            // Construct full avatar URL
-            final avatar = 'http://103.14.120.163:8081$publicUrl';
+            // Construct full DP URL
+            final dpUrl = 'http://103.14.120.163:8081$publicUrl';
             
-            print('ProfilePictureService: Found profile picture');
-            print('ProfilePictureService: Avatar URL: $avatar');
-            print('ProfilePictureService: File name: $fileName');
-            print('ProfilePictureService: File type: $fileType');
-            print('ProfilePictureService: Size: $size bytes');
+            print('DPService: Found DP');
+            print('DPService: DP URL: $dpUrl');
+            print('DPService: File name: $fileName');
+            print('DPService: File type: $fileType');
+            print('DPService: Size: $size bytes');
             
             return {
               'success': true,
-              'message': 'Profile picture retrieved successfully',
+              'message': 'Display picture retrieved successfully',
               'data': {
-                'avatar': avatar,
-                'publicId': fileName, // Use fileName as publicId for compatibility
+                'dpUrl': dpUrl,
                 'fileName': fileName,
                 'fileType': fileType,
                 'size': size,
@@ -282,10 +362,10 @@ class ProfilePictureService {
           }
         }
         
-        // No profile pictures found
+        // No DP found
         return {
           'success': false,
-          'message': 'No profile pictures found for this user.',
+          'message': 'No display picture found for this user.',
           'error': 'Not Found',
         };
       } else if (response.statusCode == 401) {
@@ -295,32 +375,32 @@ class ProfilePictureService {
           'error': 'Unauthorized',
         };
       } else {
-        print('ProfilePictureService: Retrieve failed with status ${response.statusCode}');
+        print('DPService: Retrieve failed with status ${response.statusCode}');
         return {
           'success': false,
-          'message': 'Failed to retrieve profile picture',
+          'message': 'Failed to retrieve display picture',
           'error': 'Retrieve Failed',
         };
       }
     } catch (e) {
-      print('ProfilePictureService: Retrieve error: $e');
+      print('DPService: Retrieve error: $e');
       return {
         'success': false,
-        'message': 'An error occurred while retrieving the profile picture: ${e.toString()}',
+        'message': 'An error occurred while retrieving the display picture: ${e.toString()}',
         'error': 'Retrieve Error',
       };
     }
   }
 
-  /// Delete profile picture using new local storage API
-  static Future<Map<String, dynamic>> deleteProfilePicture({
+  /// Delete Display Picture using local storage API
+  static Future<Map<String, dynamic>> deleteDP({
     required String userId,
     required String fileName,
     required String token,
   }) async {
     try {
-      print('ProfilePictureService: Deleting profile picture for user $userId');
-      print('ProfilePictureService: File name: $fileName');
+      print('DPService: Deleting DP for user $userId');
+      print('DPService: File name: $fileName');
       
       // Validate token
       if (token.isEmpty) {
@@ -339,7 +419,7 @@ class ProfilePictureService {
       }
       
       final url = '$baseUrl/delete?userId=$userId&fileName=$fileName';
-      print('ProfilePictureService: Delete URL: $url');
+      print('DPService: Delete URL: $url');
       
       final response = await http.delete(
         Uri.parse(url),
@@ -354,14 +434,14 @@ class ProfilePictureService {
         },
       );
 
-      print('ProfilePictureService: Delete response status: ${response.statusCode}');
-      print('ProfilePictureService: Delete response body: ${response.body}');
+      print('DPService: Delete response status: ${response.statusCode}');
+      print('DPService: Delete response body: ${response.body}');
 
       Map<String, dynamic> jsonResponse;
       try {
         jsonResponse = jsonDecode(response.body);
       } catch (e) {
-        print('ProfilePictureService: Failed to parse JSON response: $e');
+        print('DPService: Failed to parse JSON response: $e');
         return {
           'success': false,
           'message': 'Invalid response format from server',
@@ -371,15 +451,15 @@ class ProfilePictureService {
 
       if (response.statusCode == 200) {
         if (jsonResponse['success'] == true) {
-          print('ProfilePictureService: Profile picture deleted successfully');
+          print('DPService: DP deleted successfully');
           return {
             'success': true,
-            'message': 'Profile picture deleted successfully',
+            'message': 'Display picture deleted successfully',
           };
         } else {
           return {
             'success': false,
-            'message': jsonResponse['message'] ?? 'Failed to delete profile picture',
+            'message': jsonResponse['message'] ?? 'Failed to delete display picture',
             'error': 'Delete Failed',
           };
         }
@@ -392,22 +472,22 @@ class ProfilePictureService {
       } else if (response.statusCode == 404) {
         return {
           'success': false,
-          'message': 'Profile picture not found',
+          'message': 'Display picture not found',
           'error': 'Not Found',
         };
       } else {
-        print('ProfilePictureService: Delete failed with status ${response.statusCode}');
+        print('DPService: Delete failed with status ${response.statusCode}');
         return {
           'success': false,
-          'message': jsonResponse['message'] ?? 'Failed to delete profile picture',
+          'message': jsonResponse['message'] ?? 'Failed to delete display picture',
           'error': 'Delete Failed',
         };
       }
     } catch (e) {
-      print('ProfilePictureService: Delete error: $e');
+      print('DPService: Delete error: $e');
       return {
         'success': false,
-        'message': 'An error occurred while deleting the profile picture: ${e.toString()}',
+        'message': 'An error occurred while deleting the display picture: ${e.toString()}',
         'error': 'Delete Error',
       };
     }

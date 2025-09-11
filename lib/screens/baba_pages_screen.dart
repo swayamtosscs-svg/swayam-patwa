@@ -4,6 +4,7 @@ import '../models/baba_page_model.dart';
 import '../services/baba_page_service.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
+import '../services/theme_service.dart';
 import 'baba_page_detail_screen.dart';
 import 'baba_page_creation_screen.dart';
 import 'baba_page_edit_screen.dart';
@@ -313,18 +314,21 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        title: const Text(
-          'Baba Ji Pages',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.backgroundColor,
+          appBar: AppBar(
+            title: Text(
+              'Baba Ji Pages',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+                color: themeService.onPrimaryColor,
+              ),
+            ),
+            backgroundColor: themeService.primaryColor,
+            foregroundColor: themeService.onPrimaryColor,
         elevation: 0,
         leading: Container(
           margin: const EdgeInsets.all(8.0),
@@ -382,7 +386,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
           if (_searchQuery != null || _selectedReligion != 'All')
             Container(
               padding: const EdgeInsets.all(16),
-              color: AppTheme.primaryColor.withOpacity(0.1),
+              color: themeService.primaryColor.withOpacity(0.1),
               child: Row(
                 children: [
                   Expanded(
@@ -392,24 +396,29 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                         if (_searchQuery != null)
                           Text(
                             'Search: "$_searchQuery"',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.primaryColor,
+                              color: themeService.primaryColor,
+                              fontFamily: 'Poppins',
                             ),
                           ),
                         if (_selectedReligion != 'All')
                           Text(
                             'Religion: $_selectedReligion',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.primaryColor,
+                              color: themeService.primaryColor,
+                              fontFamily: 'Poppins',
                             ),
                           ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.clear),
+                    icon: Icon(
+                      Icons.clear,
+                      color: themeService.primaryColor,
+                    ),
                     onPressed: _clearSearch,
                     tooltip: 'Clear filters',
                   ),
@@ -425,17 +434,21 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
           ),
         ],
       ),
+        );
+      },
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading && _babaPages.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-        ),
-      );
-    }
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        if (_isLoading && _babaPages.isEmpty) {
+          return Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(themeService.primaryColor),
+            ),
+          );
+        }
 
     if (_errorMessage != null && _babaPages.isEmpty) {
       return Center(
@@ -445,14 +458,14 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
             Icon(
               Icons.error_outline,
               size: 64,
-              color: Colors.grey[400],
+              color: themeService.onSurfaceColor.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: themeService.onSurfaceColor,
                 fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
@@ -460,6 +473,10 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () => _loadBabaPages(refresh: true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: themeService.primaryColor,
+                foregroundColor: themeService.onPrimaryColor,
+              ),
               child: const Text('Retry'),
             ),
           ],
@@ -475,7 +492,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
             Icon(
               Icons.self_improvement,
               size: 64,
-              color: Colors.grey[400],
+              color: themeService.onSurfaceColor.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -483,7 +500,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
+                color: themeService.onSurfaceColor,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -492,7 +509,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
               'Be the first to create a spiritual page',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey[500],
+                color: themeService.onSurfaceColor.withOpacity(0.7),
                 fontFamily: 'Poppins',
               ),
             ),
@@ -511,8 +528,8 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Create Baba Ji Page'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
+                backgroundColor: themeService.primaryColor,
+                foregroundColor: themeService.onPrimaryColor,
               ),
             ),
           ],
@@ -526,11 +543,11 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
       itemCount: _babaPages.length + (_isLoading ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == _babaPages.length) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                valueColor: AlwaysStoppedAnimation<Color>(themeService.primaryColor),
               ),
             ),
           );
@@ -540,227 +557,267 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
         return _buildBabaPageCard(babaPage);
       },
     );
+      },
+    );
   }
 
   Widget _buildBabaPageCard(BabaPage babaPage) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => BabaPageDetailScreen(babaPage: babaPage),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          elevation: 2,
+          color: themeService.surfaceColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BabaPageDetailScreen(babaPage: babaPage),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
-                    child: babaPage.avatar.isNotEmpty
-                        ? ClipOval(
-                            child: Image.network(
-                              babaPage.avatar,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Icon(
+                  Row(
+                    children: [
+                      // Avatar
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundColor: themeService.primaryColor.withOpacity(0.1),
+                        child: babaPage.avatar.isNotEmpty
+                            ? ClipOval(
+                                child: Image.network(
+                                  babaPage.avatar,
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => Icon(
+                                    Icons.self_improvement,
+                                    size: 30,
+                                    color: themeService.primaryColor,
+                                  ),
+                                ),
+                              )
+                            : Icon(
                                 Icons.self_improvement,
                                 size: 30,
-                                color: AppTheme.primaryColor,
+                                color: themeService.primaryColor,
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Name and Location
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              babaPage.name,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: themeService.onSurfaceColor,
+                                fontFamily: 'Poppins',
                               ),
                             ),
-                          )
-                        : Icon(
-                            Icons.self_improvement,
-                            size: 30,
-                            color: AppTheme.primaryColor,
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Name and Location
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          babaPage.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on,
-                              size: 16,
-                              color: Colors.grey[600],
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: themeService.onSurfaceColor.withOpacity(0.6),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    babaPage.location,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: themeService.onSurfaceColor.withOpacity(0.6),
+                                      fontFamily: 'Poppins',
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              babaPage.location,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontFamily: 'Poppins',
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _getReligionColor(babaPage.religion, themeService).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                babaPage.religion,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _getReligionColor(babaPage.religion, themeService),
+                                  fontFamily: 'Poppins',
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                      ),
+                      // Follow Button
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // TODO: Implement follow functionality
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: themeService.primaryColor,
+                            foregroundColor: themeService.onPrimaryColor,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            minimumSize: const Size(80, 32),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
                           ),
-                          decoration: BoxDecoration(
-                            color: _getReligionColor(babaPage.religion).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            babaPage.religion,
+                          child: const Text(
+                            'Follow',
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: _getReligionColor(babaPage.religion),
+                              fontWeight: FontWeight.w600,
                               fontFamily: 'Poppins',
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  // Menu button
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'edit':
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => BabaPageEditScreen(babaPage: babaPage),
-                            ),
-                          ).then((_) {
-                            // Refresh the list when returning from edit screen
-                            _loadBabaPages(refresh: true);
-                          });
-                          break;
-                        case 'delete':
-                          _showDeleteConfirmation(babaPage);
-                          break;
-                      }
-                    },
-                    itemBuilder: (BuildContext context) => [
-                      const PopupMenuItem<String>(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, size: 20),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
-                        ),
                       ),
-                      const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 20, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: Colors.red)),
-                          ],
+                      // Menu button
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'edit':
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BabaPageEditScreen(babaPage: babaPage),
+                                ),
+                              ).then((_) {
+                                // Refresh the list when returning from edit screen
+                                _loadBabaPages(refresh: true);
+                              });
+                              break;
+                            case 'delete':
+                              _showDeleteConfirmation(babaPage);
+                              break;
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => [
+                          const PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 20),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 20, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        child: Icon(
+                          Icons.more_vert,
+                          color: themeService.onSurfaceColor.withOpacity(0.6),
                         ),
                       ),
                     ],
-                    child: Icon(
-                      Icons.more_vert,
-                      color: Colors.grey[600],
+                  ),
+                  const SizedBox(height: 12),
+                  // Description
+                  Text(
+                    babaPage.description,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: themeService.onSurfaceColor.withOpacity(0.8),
+                      fontFamily: 'Poppins',
+                      height: 1.4,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  // Stats
+                  Row(
+                    children: [
+                      _buildStatItem(
+                        Icons.people,
+                        '${babaPage.followersCount}',
+                        'Followers',
+                        themeService,
+                      ),
+                      const SizedBox(width: 16),
+                      _buildStatItem(
+                        Icons.grid_on,
+                        '${babaPage.postsCount}',
+                        'Posts',
+                        themeService,
+                      ),
+                      const SizedBox(width: 16),
+                      _buildStatItem(
+                        Icons.play_circle_outline,
+                        '${babaPage.videosCount}',
+                        'Videos',
+                        themeService,
+                      ),
+                      const SizedBox(width: 16),
+                      _buildStatItem(
+                        Icons.auto_stories,
+                        '${babaPage.storiesCount}',
+                        'Stories',
+                        themeService,
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              // Description
-              Text(
-                babaPage.description,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                  fontFamily: 'Poppins',
-                  height: 1.4,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              // Stats
-              Row(
-                children: [
-                  _buildStatItem(
-                    Icons.people,
-                    '${babaPage.followersCount}',
-                    'Followers',
-                  ),
-                  const SizedBox(width: 16),
-                  _buildStatItem(
-                    Icons.grid_on,
-                    '${babaPage.postsCount}',
-                    'Posts',
-                  ),
-                  const SizedBox(width: 16),
-                  _buildStatItem(
-                    Icons.play_circle_outline,
-                    '${babaPage.videosCount}',
-                    'Videos',
-                  ),
-                  const SizedBox(width: 16),
-                  _buildStatItem(
-                    Icons.auto_stories,
-                    '${babaPage.storiesCount}',
-                    'Stories',
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildStatItem(IconData icon, String count, String label) {
+  Widget _buildStatItem(IconData icon, String count, String label, ThemeService themeService) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
           size: 16,
-          color: Colors.grey[600],
+          color: themeService.onSurfaceColor.withOpacity(0.6),
         ),
         const SizedBox(width: 4),
         Text(
           count,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
+            color: themeService.onSurfaceColor,
             fontFamily: 'Poppins',
           ),
         ),
@@ -769,7 +826,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: Colors.grey[600],
+            color: themeService.onSurfaceColor.withOpacity(0.6),
             fontFamily: 'Poppins',
           ),
         ),
@@ -777,22 +834,30 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
     );
   }
 
-  Color _getReligionColor(String religion) {
+  Color _getReligionColor(String religion, ThemeService themeService) {
     switch (religion.toLowerCase()) {
       case 'hinduism':
-        return Colors.orange;
+        return ThemeService.hinduSaffronOrange;
       case 'islam':
-        return Colors.green;
+        return ThemeService.islamDarkGreen;
       case 'christianity':
-        return Colors.blue;
+        return ThemeService.christianDeepBlue;
       case 'sikhism':
-        return Colors.amber;
+        return ThemeService.sikhSaffron;
       case 'buddhism':
-        return Colors.purple;
+        return ThemeService.buddhistMonkOrange;
       case 'jainism':
-        return Colors.red;
+        return ThemeService.jainDeepRed;
+      case 'judaism':
+        return ThemeService.jewishDeepBlue;
+      case 'bahai':
+        return ThemeService.bahaiWarmOrange;
+      case 'taoism':
+        return ThemeService.taoBlack;
+      case 'indigenous':
+        return ThemeService.indigenousEarthBrown;
       default:
-        return AppTheme.primaryColor;
+        return themeService.primaryColor;
     }
   }
 }

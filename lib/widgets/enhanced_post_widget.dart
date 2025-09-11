@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import '../services/baba_like_service.dart';
+import '../services/baba_comment_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
+import 'baba_comment_dialog.dart';
 
 class EnhancedPostWidget extends StatefulWidget {
   final Post post;
-  final VoidCallback onLike;
+  final VoidCallback? onLike; // Optional - only for Baba Ji posts
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onUserTap;
@@ -17,7 +20,7 @@ class EnhancedPostWidget extends StatefulWidget {
   const EnhancedPostWidget({
     super.key,
     required this.post,
-    required this.onLike,
+    this.onLike, // Optional - only for Baba Ji posts
     required this.onComment,
     required this.onShare,
     required this.onUserTap,
@@ -33,6 +36,53 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   bool _isLiked = false;
   bool _isSaved = false;
   bool _isFavourite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.post.isBabaJiPost) {
+      _loadLikeStatus();
+    }
+  }
+
+  Future<void> _loadLikeStatus() async {
+    if (!widget.post.isBabaJiPost) return;
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      
+      if (userId == null) return;
+
+      Map<String, dynamic>? response;
+
+      if (widget.post.isReel) {
+        // This is a Baba Ji reel
+        final reelId = widget.post.id.replaceFirst('baba_reel_', '');
+        response = await BabaLikeService.getBabaReelLikeStatus(
+          userId: userId,
+          reelId: reelId,
+          babaPageId: widget.post.babaPageId ?? '',
+        );
+      } else {
+        // This is a Baba Ji post
+        final postId = widget.post.id.replaceFirst('baba_', '');
+        response = await BabaLikeService.getBabaPostLikeStatus(
+          userId: userId,
+          postId: postId,
+          babaPageId: widget.post.babaPageId ?? '',
+        );
+      }
+
+      if (response != null && response['success'] == true && mounted) {
+        setState(() {
+          _isLiked = response?['data']?['isLiked'] ?? false;
+        });
+      }
+    } catch (e) {
+      print('Error loading like status: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -408,35 +458,36 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          // Like Button
-          GestureDetector(
-            onTap: _handleLike,
-            child: Row(
-              children: [
-                Icon(
-                  _isLiked ? Icons.favorite : Icons.favorite_border,
-                  color: _isLiked ? Colors.red : const Color(0xFF666666),
-                  size: 28,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Like',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+          // Like Button - Only for Baba Ji posts
+          if (widget.post.isBabaJiPost && widget.onLike != null) ...[
+            GestureDetector(
+              onTap: _handleLike,
+              child: Row(
+                children: [
+                  Icon(
+                    _isLiked ? Icons.favorite : Icons.favorite_border,
                     color: _isLiked ? Colors.red : const Color(0xFF666666),
-                    fontFamily: 'Poppins',
+                    size: 28,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    'Like',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: _isLiked ? Colors.red : const Color(0xFF666666),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          
-          const SizedBox(width: 24),
+            const SizedBox(width: 24),
+          ],
           
           // Comment Button
           GestureDetector(
-            onTap: widget.onComment,
+            onTap: _handleComment,
             child: Row(
               children: [
                 const Icon(
@@ -488,59 +539,120 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
     );
   }
 
+
   Future<void> _handleLike() async {
+    if (!widget.post.isBabaJiPost || widget.onLike == null) return;
+    
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.authToken;
+      final userId = authProvider.userProfile?.id;
       
-      if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please login to like posts'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to like posts'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
         return;
       }
 
-      // Call the like API
-      final response = await ApiService.likePost(
-        authProvider.userProfile?.id ?? '',
-        widget.post.id,
-        token,
-      );
+      Map<String, dynamic>? response;
 
-      if (response['success'] == true) {
-        setState(() {
-          _isLiked = !_isLiked;
-          // Note: We can't modify widget.post.likes directly since it's final
-          // The like count will be updated when the parent refreshes the post data
-        });
+      if (widget.post.isReel) {
+        // This is a Baba Ji reel
+        final reelId = widget.post.id.replaceFirst('baba_reel_', '');
+        if (_isLiked) {
+          response = await BabaLikeService.unlikeBabaReel(
+            userId: userId,
+            reelId: reelId,
+            babaPageId: widget.post.babaPageId ?? '',
+          );
+        } else {
+          response = await BabaLikeService.likeBabaReel(
+            userId: userId,
+            reelId: reelId,
+            babaPageId: widget.post.babaPageId ?? '',
+          );
+        }
+      } else {
+        // This is a Baba Ji post
+        final postId = widget.post.id.replaceFirst('baba_', '');
+        if (_isLiked) {
+          response = await BabaLikeService.unlikeBabaPost(
+            userId: userId,
+            postId: postId,
+            babaPageId: widget.post.babaPageId ?? '',
+          );
+        } else {
+          response = await BabaLikeService.likeBabaPost(
+            userId: userId,
+            postId: postId,
+            babaPageId: widget.post.babaPageId ?? '',
+          );
+        }
+      }
+
+      if (response != null && response['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _isLiked = !_isLiked;
+          });
+        }
         
         // Call the callback to notify parent
-        widget.onLike();
+        widget.onLike!();
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response?['message'] ?? 'Failed to like post'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['message'] ?? 'Failed to like post'),
+            content: Text('Error liking post: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error liking post: $e'),
-          backgroundColor: Colors.red,
+    }
+  }
+
+  void _handleComment() {
+    if (widget.post.isBabaJiPost) {
+      // Show comment dialog for Baba Ji posts
+      showDialog(
+        context: context,
+        builder: (context) => BabaCommentDialog(
+          postId: widget.post.id.replaceFirst(widget.post.isReel ? 'baba_reel_' : 'baba_', ''),
+          babaPageId: widget.post.babaPageId ?? '',
+          isReel: widget.post.isReel,
+          onCommentAdded: () {
+            // Call the callback to notify parent
+            widget.onComment();
+          },
         ),
       );
+    } else {
+      // For regular posts, just call the callback
+      widget.onComment();
     }
   }
 

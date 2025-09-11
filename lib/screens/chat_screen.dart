@@ -8,6 +8,7 @@ import '../services/chat_service.dart';
 import '../models/chat_response_model.dart';
 import '../widgets/app_loader.dart';
 import '../utils/app_theme.dart';
+import '../services/theme_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String recipientUserId;
@@ -98,6 +99,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // If we have a real thread ID (not temp), load messages from that thread
       if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
         print('ChatScreen: Loading messages for real thread: $_currentThreadId');
+        print('ChatScreen: Current messages count before loading: ${_messages.length}');
+        
         final messages = await ChatService.getMessagesByThreadId(
           threadId: _currentThreadId!,
           token: authProvider.authToken!,
@@ -105,12 +108,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         
         if (mounted) {
           setState(() {
-            _messages = messages;
+            // Store existing messages to preserve them
+            final existingMessages = List<Message>.from(_messages);
+            
+            // Merge new messages with existing ones, avoiding duplicates
+            final existingMessageIds = existingMessages.map((m) => m.id).toSet();
+            final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
+            
+            // Start with existing messages and add new ones
+            _messages = existingMessages;
+            _messages.addAll(newMessages);
+            
+            // Sort messages by creation time to maintain chronological order
+            _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+            
             _isLoading = false;
           });
           _scrollToBottom();
           _lastRefreshTime = DateTime.now();
-          print('ChatScreen: Loaded ${messages.length} messages from API');
+          print('ChatScreen: Loaded ${messages.length} messages from API, total messages: ${_messages.length}');
         }
       } else if (_currentThreadId != null && _currentThreadId!.startsWith('temp_')) {
         // We have a temporary thread ID, just show the local messages
@@ -155,7 +171,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           
           if (mounted) {
             setState(() {
-              _messages = messages;
+              // Merge new messages with existing ones, avoiding duplicates
+              final existingMessageIds = _messages.map((m) => m.id).toSet();
+              final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
+              
+              // Add new messages to the existing list
+              _messages.addAll(newMessages);
+              
+              // Sort messages by creation time to maintain chronological order
+              _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+              
               _isLoading = false;
             });
             _scrollToBottom();
@@ -508,7 +533,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted && _currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
             print('ChatScreen: Reloading messages after delay with real thread ID: $_currentThreadId');
-            _loadMessages();
+            _loadMessages(); // This now uses merging logic
           }
         });
         
@@ -617,15 +642,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final authProvider = Provider.of<AuthProvider>(context);
     final currentUser = authProvider.userProfile;
 
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          backgroundColor: themeService.backgroundColor,
+          appBar: AppBar(
+        backgroundColor: themeService.surfaceColor,
+        foregroundColor: themeService.onSurfaceColor,
         title: Row(
           children: [
             // Recipient Avatar
             CircleAvatar(
               radius: 18,
-              backgroundColor: AppTheme.primaryColor,
+              backgroundColor: themeService.primaryColor,
               child: widget.recipientAvatar != null && widget.recipientAvatar!.isNotEmpty
                   ? ClipOval(
                       child: Image.network(
@@ -656,17 +685,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               children: [
                 Text(
                   widget.recipientFullName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     fontFamily: 'Poppins',
+                    color: themeService.onSurfaceColor,
                   ),
                 ),
                 Text(
                   '@${widget.recipientUsername}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey,
+                    color: themeService.onSurfaceColor.withOpacity(0.6),
                     fontFamily: 'Poppins',
                   ),
                 ),
@@ -674,9 +704,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: const Color(0xFF1A1A1A),
         actions: [
           IconButton(
             onPressed: _loadMessages,
@@ -689,7 +716,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           // Messages List
           Expanded(
             child: _isLoading
-                ? const AppLoader(message: 'Loading messages...')
+                ? const Center(child: CircularProgressIndicator())
                 : _messages.isEmpty
                     ? _buildEmptyState()
                     : _buildMessagesList(authProvider.userProfile),
@@ -699,6 +726,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _buildMessageInput(),
         ],
       ),
+        );
+      },
     );
   }
 
@@ -948,10 +977,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: AppLoader(
-                        size: 16.0,
+                      child: CircularProgressIndicator(
                         color: Colors.white,
-                        showMessage: false,
+                        strokeWidth: 2,
                       ),
                     )
                   : const Icon(

@@ -231,9 +231,6 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
         final post = _getMockTrendingPost(index);
         return PostWidget(
           post: post,
-          onLike: () {
-            // Handle like
-          },
           onComment: () {
             // Handle comment
           },
@@ -256,9 +253,6 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
         final post = _getMockRecentPost(index);
         return PostWidget(
           post: post,
-          onLike: () {
-            // Handle like
-          },
           onComment: () {
             // Handle comment
           },
@@ -281,9 +275,6 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
         final post = _getMockPopularPost(index);
         return PostWidget(
           post: post,
-          onLike: () {
-            // Handle like
-          },
           onComment: () {
             // Handle comment
           },

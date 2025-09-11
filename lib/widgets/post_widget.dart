@@ -8,7 +8,6 @@ import '../utils/app_theme.dart';
 
 class PostWidget extends StatefulWidget {
   final Post post;
-  final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onUserTap;
@@ -17,7 +16,6 @@ class PostWidget extends StatefulWidget {
   const PostWidget({
     super.key,
     required this.post,
-    required this.onLike,
     required this.onComment,
     required this.onShare,
     required this.onUserTap,
@@ -387,15 +385,6 @@ class _PostWidgetState extends State<PostWidget> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced horizontal padding
       child: Row(
         children: [
-          // Like Button
-          _buildActionButton(
-            icon: widget.post.isLiked ? Icons.favorite : Icons.favorite_border,
-            label: '${widget.post.likes}',
-            color: widget.post.isLiked ? Colors.red : Colors.white,
-            onTap: widget.onLike,
-          ),
-          
-          const SizedBox(width: 24),
           
           // Comment Button
           _buildActionButton(

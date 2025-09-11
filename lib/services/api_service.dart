@@ -587,43 +587,6 @@ class ApiService {
     }
   }
 
-  // Like/Unlike APIs
-  static Future<Map<String, dynamic>> likePost(String userId, String postId, String? token) async {
-    try {
-      // Use the correct R-Gram API endpoint for liking posts
-      final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/feed/like/$postId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token ?? '', // Use token directly as per API requirements
-        },
-        // No body needed for this API endpoint
-      );
-
-      print('Like API Response: ${response.statusCode} - ${response.body}');
-      return jsonDecode(response.body);
-    } catch (e) {
-      print('Like API Error: $e');
-      return {'success': false, 'message': 'Network error: $e'};
-    }
-  }
-
-  static Future<Map<String, dynamic>> unlikePost(String userId, String postId, String? token) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/unlike-post.php'),
-        headers: _authHeaders(token),
-        body: jsonEncode({
-          'user_id': userId,
-          'post_id': postId,
-        }),
-      );
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
-    }
-  }
 
   // Comment APIs
   static Future<Map<String, dynamic>> addComment(String userId, String postId, String comment, String? token) async {
@@ -681,26 +644,6 @@ class ApiService {
     }
   }
 
-  // New R-Gram Get Liked Posts API
-  static Future<Map<String, dynamic>> getLikedPosts({
-    required String token,
-    int page = 1,
-    int limit = 20,
-  }) async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/user/liked-posts?page=$page&limit=$limit'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': token, // Note: This API uses token directly, not Bearer
-        },
-      );
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
-    }
-  }
 
   // New R-Gram Logout API
   static Future<Map<String, dynamic>> logoutRGram({

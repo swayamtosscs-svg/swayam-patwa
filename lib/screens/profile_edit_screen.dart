@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
-import '../widgets/profile_picture_widget.dart';
+import '../widgets/dp_widget.dart';
+import '../services/theme_service.dart';
 
 class ProfileEditScreen extends StatefulWidget {
   final UserModel user;
@@ -189,29 +190,29 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     return Center(
       child: Column(
         children: [
-          // Profile Image with upload/delete functionality
-                     ProfilePictureWidget(
-             currentImageUrl: _editingUser.profileImageUrl,
-             userId: _editingUser.id,
+          // Display Picture Widget
+          DPWidget(
+            currentImageUrl: _editingUser.profileImageUrl,
+            userId: _editingUser.id,
             token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
-                         onImageChanged: (String newImageUrl) async {
-               // Update the user profile with new image URL
-               setState(() {
-                 // Create a new user object with updated profile image
-                 _editingUser = _editingUser.copyWith(
-                   profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
-                 );
-               });
-               
-               // Also update the auth provider for consistency
-               final authProvider = Provider.of<AuthProvider>(context, listen: false);
-               if (authProvider.userProfile != null) {
-                 final updatedAuthUser = authProvider.userProfile!.copyWith(
-                   profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
-                 );
-                 authProvider.updateLocalUserProfile(updatedAuthUser);
-               }
-             },
+            onImageChanged: (String newImageUrl) async {
+              // Update the user profile with new image URL
+              setState(() {
+                // Create a new user object with updated profile image
+                _editingUser = _editingUser.copyWith(
+                  profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                );
+              });
+              
+              // Also update the auth provider for consistency
+              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              if (authProvider.userProfile != null) {
+                final updatedAuthUser = authProvider.userProfile!.copyWith(
+                  profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                );
+                authProvider.updateLocalUserProfile(updatedAuthUser);
+              }
+            },
             size: 100,
             borderColor: _getReligionColor(_selectedReligion),
             showEditButton: true,
@@ -378,6 +379,12 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               setState(() {
                 _selectedReligion = newValue;
               });
+              
+              // Update theme immediately when religion changes
+              if (newValue != null) {
+                final themeService = Provider.of<ThemeService>(context, listen: false);
+                themeService.setUserReligion(newValue.toString().split('.').last);
+              }
             },
             validator: (value) {
               if (value == null) {
@@ -412,10 +419,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       );
 
       if (success) {
+        // Update theme if religion was changed
+        if (_selectedReligion != null && _selectedReligion != _originalReligion) {
+          final themeService = Provider.of<ThemeService>(context, listen: false);
+          themeService.setUserReligion(_selectedReligion.toString().split('.').last);
+        }
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Profile updated successfully!'),
+              content: Text('Profile updated successfully! Theme updated based on your religion selection.'),
               backgroundColor: Colors.green,
             ),
           );
@@ -452,21 +465,21 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   Color _getReligionColor(Religion? religion) {
     switch (religion) {
       case Religion.hinduism:
-        return Colors.orange;
+        return ThemeService.hinduSaffronOrange;
       case Religion.islam:
-        return Colors.green;
+        return ThemeService.islamDarkGreen;
       case Religion.christianity:
-        return Colors.blue;
+        return ThemeService.christianDeepBlue;
       case Religion.buddhism:
-        return Colors.purple;
+        return ThemeService.buddhistMonkOrange;
       case Religion.sikhism:
-        return Colors.amber;
+        return const Color(0xFFFFD700);
       case Religion.judaism:
         return Colors.indigo;
       case Religion.other:
-        return Colors.grey;
+        return const Color(0xFF9370DB);
       default:
-        return Colors.grey;
+        return ThemeService.defaultPrimary;
     }
   }
 

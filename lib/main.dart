@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
-import 'utils/app_theme.dart';
+import 'services/theme_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -15,6 +15,7 @@ import 'screens/demo_media_screen.dart';
 import 'screens/google_signin_screen.dart';
 import 'screens/religion_selection_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/otp_verification_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -35,35 +36,51 @@ class DivineConnectApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => AuthProvider(),
-      child: MaterialApp(
-        title: 'RGRAM - Spiritual Connection Platform',
-        theme: AppTheme.theme,
-        home: const AuthWrapper(), // Use AuthWrapper as home instead of routes
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/signup': (context) => const SignupScreen(),
-          '/interests': (context) => const InterestSelectionScreen(),
-          '/onboarding': (context) => const OnboardingScreen(),
-          '/home': (context) => const HomeScreen(),
-          '/dashboard': (context) => const HomeScreen(),
-          '/video-feed': (context) {
-            final args = ModalRoute.of(context)!.settings.arguments as String?;
-            return VideoFeedScreen(selectedReligion: args ?? 'Spiritual');
-          },
-          '/instagram-feed': (context) => const InstagramFeedScreen(),
-          '/reel-upload': (context) => const ReelUploadScreen(),
-          '/demo-media': (context) => const DemoMediaScreen(),
-          '/google-signin': (context) => const GoogleSignInScreen(),
-          '/religion-selection': (context) {
-            final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-            return ReligionSelectionScreen(
-              googleUserData: args?['googleUserData'] ?? {},
-              authToken: args?['authToken'] ?? '',
-            );
-          },
-          '/notifications': (context) => const NotificationsScreen(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => AuthProvider()),
+        ChangeNotifierProvider(create: (context) => ThemeService()),
+      ],
+      child: Consumer<ThemeService>(
+        builder: (context, themeService, child) {
+          return MaterialApp(
+            title: 'RGRAM - Spiritual Connection Platform',
+            theme: themeService.currentTheme,
+            debugShowCheckedModeBanner: false,
+            home: const AuthWrapper(), // Use AuthWrapper as home instead of routes
+            routes: {
+              '/login': (context) => const LoginScreen(),
+              '/signup': (context) => const SignupScreen(),
+              '/interests': (context) => const InterestSelectionScreen(),
+              '/onboarding': (context) => const OnboardingScreen(),
+              '/home': (context) => const HomeScreen(),
+              '/dashboard': (context) => const HomeScreen(),
+              '/video-feed': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments as String?;
+                return VideoFeedScreen(selectedReligion: args ?? 'Spiritual');
+              },
+              '/instagram-feed': (context) => const InstagramFeedScreen(),
+              '/reel-upload': (context) => const ReelUploadScreen(),
+              '/demo-media': (context) => const DemoMediaScreen(),
+              '/google-signin': (context) => const GoogleSignInScreen(),
+              '/religion-selection': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+                return ReligionSelectionScreen(
+                  googleUserData: args?['googleUserData'] ?? {},
+                  authToken: args?['authToken'] ?? '',
+                );
+              },
+              '/otp-verification': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+                return OtpVerificationScreen(
+                  email: args?['email'] ?? '',
+                  purpose: args?['purpose'] ?? 'signup',
+                  userData: args?['userData'] ?? {},
+                );
+              },
+              '/notifications': (context) => const NotificationsScreen(),
+            },
+          );
         },
       ),
     );

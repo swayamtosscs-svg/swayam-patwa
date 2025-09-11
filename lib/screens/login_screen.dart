@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
+// import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
-import '../widgets/app_loader.dart';
 import '../screens/home_screen.dart';
-import 'religion_selection_screen.dart';
+import '../services/auth_forgot_password_service.dart';
+import '../services/theme_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,7 +22,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+  bool _isForgotPasswordLoading = false;
   String? _error;
+  bool _isUsernameLogin = false;
 
 
   Future<void> _login() async {
@@ -37,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // Debug: Log the request data
       final requestData = {
-        'email': _emailController.text,
+        if (_isUsernameLogin) 'username': _emailController.text else 'email': _emailController.text,
         'password': _passwordController.text,
       };
       print('Login request data: $requestData');
@@ -126,6 +128,57 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _forgotPassword() async {
+    if (_emailController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email address first'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isForgotPasswordLoading = true;
+    });
+
+    try {
+      final response = await AuthForgotPasswordService.sendForgotPasswordRequest(
+        email: _emailController.text.trim(),
+      );
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Password reset link sent successfully'),
+            backgroundColor: AppTheme.successColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Failed to send password reset link'),
+            backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isForgotPasswordLoading = false;
+      });
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() {
       _isGoogleLoading = true;
@@ -154,26 +207,26 @@ class _LoginScreenState extends State<LoginScreen> {
           // Launch the Google OAuth URL - handle mobile differently
           bool launched = false;
           
-          try {
-            // For mobile, try to launch in the same app first
-            launched = await launchUrl(
-              Uri.parse(authUrl),
-              mode: LaunchMode.inAppWebView,
-            );
-          } catch (e) {
-            print('ChatService: InAppWebView failed, trying external: $e');
-            // Fallback to external browser
-            try {
-              launched = await launchUrl(
-                Uri.parse(authUrl),
-                mode: LaunchMode.externalApplication,
-              );
-            } catch (e2) {
-              print('ChatService: External launch also failed: $e2');
-              // Try without specifying mode
-              launched = await launchUrl(Uri.parse(authUrl));
-            }
-          }
+          // try {
+          //   // For mobile, try to launch in the same app first
+          //   launched = await launchUrl(
+          //     Uri.parse(authUrl),
+          //     mode: LaunchMode.inAppWebView,
+          //   );
+          // } catch (e) {
+          //   print('ChatService: InAppWebView failed, trying external: $e');
+          //   // Fallback to external browser
+          //   try {
+          //     launched = await launchUrl(
+          //       Uri.parse(authUrl),
+          //       mode: LaunchMode.externalApplication,
+          //     );
+          //   } catch (e2) {
+          //     print('ChatService: External launch also failed: $e2');
+          //     // Try without specifying mode
+          //     launched = await launchUrl(Uri.parse(authUrl));
+          //   }
+          // }
           
           if (launched) {
             // Wait a bit for the OAuth flow to complete
@@ -303,15 +356,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: AppTheme.backgroundGradient,
-          ),
-        ),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  themeService.backgroundColor,
+                  themeService.surfaceColor,
+                  themeService.backgroundColor,
+                ],
+              ),
+            ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -348,19 +407,101 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    // Email Field
+                    
+                    // Login Type Toggle
+                    Container(
+                      decoration: BoxDecoration(
+                        color: themeService.surfaceColor.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isUsernameLogin = false;
+                                  _error = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: !_isUsernameLogin 
+                                      ? AppTheme.primaryColor 
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'Email',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: !_isUsernameLogin 
+                                        ? Colors.white 
+                                        : AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isUsernameLogin = true;
+                                  _error = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _isUsernameLogin 
+                                      ? AppTheme.primaryColor 
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'Username',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: _isUsernameLogin 
+                                        ? Colors.white 
+                                        : AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Email/Username Field
                     TextFormField(
                       controller: _emailController,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
+                          return _isUsernameLogin 
+                              ? 'Please enter your username' 
+                              : 'Please enter your email';
                         }
-                        if (!value.contains('@')) {
+                        if (!_isUsernameLogin && !value.contains('@')) {
                           return 'Enter a valid email';
+                        }
+                        if (_isUsernameLogin && value.length < 3) {
+                          return 'Username must be at least 3 characters';
                         }
                         return null;
                       },
-                      decoration: AppTheme.inputDecoration('Email address'),
+                      decoration: AppTheme.inputDecoration(
+                        _isUsernameLogin ? 'Username' : 'Email address'
+                      ),
                     ),
                     const SizedBox(height: 16),
                     // Password Field
@@ -374,6 +515,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                       decoration: AppTheme.inputDecoration('Password'),
+                    ),
+                    const SizedBox(height: 8),
+                    // Forgot Password Button
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _isForgotPasswordLoading ? null : _forgotPassword,
+                        child: _isForgotPasswordLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                                ),
+                              )
+                            : const Text(
+                                'Forgot Password?',
+                                style: TextStyle(
+                                  color: AppTheme.primaryColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                      ),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
@@ -395,10 +561,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         onPressed: _isLoading ? null : _login,
                         child: _isLoading
-                            ? const AppLoader(
-                                size: 20.0,
-                                color: Colors.white,
-                                showMessage: false,
+                            ? const SizedBox(
+                                width: 20.0,
+                                height: 20.0,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 3,
+                                ),
                               )
                             : const Text(
                                 'Continue',
@@ -433,9 +602,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? const SizedBox(
                                 width: 24,
                                 height: 24,
-                                child: AppLoader(
-                                  size: 20.0,
-                                  showMessage: false,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
                                 ),
                               )
                             : Image.asset(
@@ -477,6 +645,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+        );
+      },
     );
   }
 

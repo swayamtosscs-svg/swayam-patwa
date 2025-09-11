@@ -516,10 +516,24 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     if (!_isInitialized) {
       return Container(
         color: Colors.black,
-        child: const AppLoader(
-          message: 'Loading video...',
-          color: Colors.white,
-          size: 24.0,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 3,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Loading video...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }

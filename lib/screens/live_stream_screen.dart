@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
-import 'package:permission_handler/permission_handler.dart';
+// import 'package:permission_handler/permission_handler.dart';
 import '../providers/auth_provider.dart';
 import '../models/live_stream_model.dart';
 import '../services/live_stream_service.dart';
@@ -47,16 +47,30 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
 
   Future<void> _initializeCamera() async {
     try {
+      print('LiveStreamScreen: Initializing camera...');
+      
       // Request camera permission
-      final status = await Permission.camera.request();
-      if (status != PermissionStatus.granted) {
-        _showErrorSnackBar('Camera permission is required for live streaming');
+      // final status = await Permission.camera.request();
+      // if (status != PermissionStatus.granted) {
+      //   print('LiveStreamScreen: Camera permission denied');
+      //   _showErrorSnackBar('Camera permission is required for live streaming');
+      //   return;
+      // }
+
+      print('LiveStreamScreen: Camera permission granted');
+
+      // Get available cameras
+      try {
+        cameras = await availableCameras();
+        print('LiveStreamScreen: Found ${cameras?.length ?? 0} cameras');
+      } catch (e) {
+        print('LiveStreamScreen: Error getting cameras: $e');
+        _showErrorSnackBar('Error accessing cameras: $e');
         return;
       }
 
-      // Get available cameras
-      cameras = await availableCameras();
       if (cameras == null || cameras!.isEmpty) {
+        print('LiveStreamScreen: No cameras found');
         _showErrorSnackBar('No cameras found on this device');
         return;
       }
@@ -68,7 +82,10 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         enableAudio: true,
       );
 
+      print('LiveStreamScreen: Initializing camera controller...');
       await _cameraController!.initialize();
+      
+      print('LiveStreamScreen: Camera initialized successfully');
       
       if (mounted) {
         setState(() {
@@ -76,7 +93,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         });
       }
     } catch (e) {
-      print('Error initializing camera: $e');
+      print('LiveStreamScreen: Error initializing camera: $e');
       _showErrorSnackBar('Error initializing camera: $e');
     }
   }
@@ -196,27 +213,19 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.userProfile?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
 
-      // Start live stream
-      final roomResponse = await LiveStreamService.startLiveStream(room: _currentRoom);
+      // Start live stream with integrated role assignment
+      final roomResponse = await LiveStreamService.startLiveStream(
+        room: _currentRoom,
+        userId: userId,
+      );
       
       if (roomResponse.success) {
-        // Assign broadcaster role
-        final roleResponse = await LiveStreamService.assignRole(
-          userId: userId,
-          role: 'broadcaster',
-          room: _currentRoom,
-        );
-
-        if (roleResponse.success) {
-          setState(() {
-            _isStreaming = true;
-            _userRole = 'broadcaster';
-          });
-          _showSuccessSnackBar('Live stream started successfully!');
-          await _getStreamStatus();
-        } else {
-          _showErrorSnackBar('Failed to assign broadcaster role');
-        }
+        setState(() {
+          _isStreaming = true;
+          _userRole = 'broadcaster';
+        });
+        _showSuccessSnackBar('Live stream started successfully!');
+        await _getStreamStatus();
       } else {
         _showErrorSnackBar('Failed to start live stream');
       }
@@ -265,14 +274,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.userProfile?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
 
-      // Assign viewer role
-      final roleResponse = await LiveStreamService.assignRole(
-        userId: userId,
-        role: 'viewer',
+      // Join live stream with integrated viewer role assignment
+      final roomResponse = await LiveStreamService.joinLiveStream(
         room: _currentRoom,
+        userId: userId,
       );
 
-      if (roleResponse.success) {
+      if (roomResponse.success) {
         setState(() {
           _userRole = 'viewer';
         });
@@ -345,9 +353,22 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         ),
       ),
       body: _isLoading
-          ? const AppLoader(
-              message: 'Initializing Live Darshan...',
-              size: 32.0,
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    strokeWidth: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Initializing Live Darshan...',
+                    style: TextStyle(
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
             )
           : Column(
               children: [

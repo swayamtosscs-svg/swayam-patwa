@@ -12,6 +12,7 @@ class BabaPage {
   final int videosCount;
   final int storiesCount;
   final bool isActive;
+  final bool isFollowing;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -29,6 +30,7 @@ class BabaPage {
     required this.videosCount,
     required this.storiesCount,
     required this.isActive,
+    required this.isFollowing,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -48,6 +50,7 @@ class BabaPage {
       videosCount: json['videosCount'] ?? 0,
       storiesCount: json['storiesCount'] ?? 0,
       isActive: json['isActive'] ?? true,
+      isFollowing: json['isFollowing'] ?? false,
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
     );
@@ -68,6 +71,7 @@ class BabaPage {
       'videosCount': videosCount,
       'storiesCount': storiesCount,
       'isActive': isActive,
+      'isFollowing': isFollowing,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -87,6 +91,7 @@ class BabaPage {
     int? videosCount,
     int? storiesCount,
     bool? isActive,
+    bool? isFollowing,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -104,6 +109,7 @@ class BabaPage {
       videosCount: videosCount ?? this.videosCount,
       storiesCount: storiesCount ?? this.storiesCount,
       isActive: isActive ?? this.isActive,
+      isFollowing: isFollowing ?? this.isFollowing,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -209,6 +215,46 @@ class PaginationInfo {
       totalPages: json['totalPages'] ?? 1,
       totalItems: json['totalItems'] ?? 0,
       itemsPerPage: json['itemsPerPage'] ?? 10,
+    );
+  }
+}
+
+class BabaPageFollowResponse {
+  final bool success;
+  final String message;
+  final BabaPageFollowData? data;
+
+  BabaPageFollowResponse({
+    required this.success,
+    required this.message,
+    this.data,
+  });
+
+  factory BabaPageFollowResponse.fromJson(Map<String, dynamic> json) {
+    return BabaPageFollowResponse(
+      success: json['success'] ?? false,
+      message: json['message'] ?? '',
+      data: json['data'] != null ? BabaPageFollowData.fromJson(json['data']) : null,
+    );
+  }
+}
+
+class BabaPageFollowData {
+  final String followId;
+  final String pageId;
+  final String followerId;
+
+  BabaPageFollowData({
+    required this.followId,
+    required this.pageId,
+    required this.followerId,
+  });
+
+  factory BabaPageFollowData.fromJson(Map<String, dynamic> json) {
+    return BabaPageFollowData(
+      followId: json['followId'] ?? '',
+      pageId: json['pageId'] ?? '',
+      followerId: json['followerId'] ?? '',
     );
   }
 }
