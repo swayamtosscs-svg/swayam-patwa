@@ -5,7 +5,7 @@ import '../models/message_model.dart';
 import '../models/chat_thread_model.dart';
 
 class ChatService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api/chat';
+  static const String baseUrl = 'http://103.14.120.163:8081/api/chat';
 
   /// Get chat threads/conversations for the current user
   static Future<List<ChatThread>> getChatThreads({

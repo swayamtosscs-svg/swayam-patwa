@@ -7,7 +7,7 @@ import 'baba_page_post_service.dart';
 import 'baba_page_reel_service.dart';
 
 class FeedService {
-  static const String _baseUrl = 'https://api-rgram1.vercel.app/api';
+  static const String _baseUrl = 'http://103.14.120.163:8081/api';
 
   /// Get feed posts from followed users using the working Home Feed API
   static Future<List<Post>> getFeedPosts({
@@ -21,7 +21,7 @@ class FeedService {
       
       // Try the Home Feed API first
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/feed/home?page=$page&limit=$limit'),
+        Uri.parse('http://103.14.120.163:8081/api/feed/home?page=$page&limit=$limit'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Token with Bearer prefix
@@ -113,7 +113,7 @@ class FeedService {
       
       // First, get the list of users that the current user is following
       final followingResponse = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/following/$currentUserId'),
+        Uri.parse('http://103.14.120.163:8081/api/following/$currentUserId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -185,7 +185,7 @@ class FeedService {
   static Future<List<Post>> _getUserPostsFromMediaAPI(String userId, String token) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/media/upload?userId=$userId'),
+        Uri.parse('http://103.14.120.163:8081/api/media/upload?userId=$userId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -209,8 +209,8 @@ class FeedService {
                   username: media['uploadedBy']?['username'] ?? media['username'] ?? 'Unknown User',
                   userAvatar: media['uploadedBy']?['avatar'] ?? media['userAvatar'] ?? '',
                   caption: media['title'] ?? media['caption'] ?? 'A post by ${media['uploadedBy']?['username'] ?? 'Unknown User'}',
-                  imageUrl: media['resourceType'] == 'video' ? null : (media['secureUrl'] ?? media['imageUrl']),
-                  videoUrl: media['resourceType'] == 'video' ? (media['secureUrl'] ?? media['videoUrl']) : null,
+                  imageUrl: media['resourceType'] == 'video' ? null : (media['secureUrl'] ?? media['imageUrl'] ?? (media['publicUrl'] != null ? 'http://103.14.120.163:8081${media['publicUrl']}' : null)),
+                  videoUrl: media['resourceType'] == 'video' ? (media['secureUrl'] ?? media['videoUrl'] ?? (media['publicUrl'] != null ? 'http://103.14.120.163:8081${media['publicUrl']}' : null)) : null,
                   type: _parsePostType(media['resourceType'] ?? 'image'),
                   likes: media['likes'] ?? 0,
                   comments: media['comments'] ?? 0,
@@ -220,7 +220,7 @@ class FeedService {
                       ? DateTime.parse(media['createdAt']) 
                       : DateTime.now(),
                   hashtags: List<String>.from(media['tags'] ?? []),
-                  thumbnailUrl: media['resourceType'] == 'video' ? (media['thumbnailUrl'] ?? media['secureUrl']) : null,
+                  thumbnailUrl: media['resourceType'] == 'video' ? (media['thumbnailUrl'] ?? media['secureUrl'] ?? (media['publicUrl'] != null ? 'http://103.14.120.163:8081${media['publicUrl']}' : null)) : null,
                 );
                 posts.add(post);
               } catch (e) {
@@ -267,7 +267,7 @@ class FeedService {
       
       // Get all Baba Ji pages first
       final babaPagesResponse = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/baba-pages?page=1&limit=50'),
+        Uri.parse('http://103.14.120.163:8081/api/baba-pages?page=1&limit=50'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

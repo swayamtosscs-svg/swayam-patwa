@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 class BabaPageDPService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api/baba-pages';
+  static const String baseUrl = 'http://103.14.120.163:8081/api/baba-pages';
 
   /// Upload Display Picture for Baba Ji page
   static Future<Map<String, dynamic>> uploadBabaPageDP({

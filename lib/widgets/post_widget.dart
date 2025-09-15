@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 import '../models/post_model.dart';
 import '../services/api_service.dart';
@@ -27,6 +28,119 @@ class PostWidget extends StatefulWidget {
 }
 
 class _PostWidgetState extends State<PostWidget> {
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+  bool _isPlaying = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.post.type == PostType.reel || widget.post.isReel) {
+      _initializeVideo();
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeVideo() async {
+    if (widget.post.videoUrl == null) return;
+    
+    try {
+      print('PostWidget: Initializing reel video: ${widget.post.videoUrl}');
+      
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.post.videoUrl!),
+      );
+      
+      // Set video player configuration
+      _videoController!.setVolume(1.0);
+      _videoController!.setLooping(true);
+      
+      await _videoController!.initialize();
+      
+      if (mounted) {
+        setState(() {
+          _isVideoInitialized = true;
+        });
+        
+        // Add listener for video state changes
+        _videoController!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _videoController!.value.isPlaying;
+            });
+          }
+        });
+        
+        // Auto-play reels
+        print('PostWidget: Starting reel autoplay...');
+        await _startAutoplayWithRetry();
+      }
+    } catch (e) {
+      print('PostWidget: Error initializing reel video: $e');
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isVideoInitialized = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _startAutoplayWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && mounted && !_isPlaying) {
+      try {
+        await _videoController!.play();
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+          });
+        }
+        print('PostWidget: Reel autoplay started successfully (attempt ${retryCount + 1})');
+        break;
+      } catch (playError) {
+        retryCount++;
+        print('PostWidget: Reel autoplay attempt $retryCount failed: $playError');
+        
+        if (retryCount < maxRetries) {
+          // Wait before retrying, with increasing delay
+          await Future.delayed(Duration(milliseconds: 300 * retryCount));
+        } else {
+          print('PostWidget: All reel autoplay attempts failed');
+        }
+      }
+    }
+  }
+
+  void _togglePlayPause() async {
+    if (_hasError) return;
+    
+    // If video is not initialized yet, try to initialize it
+    if (!_isVideoInitialized && widget.post.videoUrl != null) {
+      await _initializeVideo();
+      return;
+    }
+    
+    if (_videoController != null && _isVideoInitialized) {
+      if (_isPlaying) {
+        await _videoController!.pause();
+      } else {
+        await _videoController!.play();
+      }
+      setState(() {
+        _isPlaying = !_isPlaying;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -311,12 +425,13 @@ class _PostWidgetState extends State<PostWidget> {
           );
         },
       );
-    } else if (widget.post.type == PostType.video && widget.post.videoUrl != null) {
+    } else if ((widget.post.type == PostType.video || widget.post.type == PostType.reel || widget.post.isReel) && widget.post.videoUrl != null) {
       return LayoutBuilder(
         builder: (context, constraints) {
           final maxWidth = constraints.maxWidth;
-          final aspectRatio = 4 / 3; // 4:3 aspect ratio
-          final height = (maxWidth / aspectRatio).clamp(200.0, 300.0); // Min 200, Max 300
+          // Use different aspect ratios for reels vs regular videos
+          final aspectRatio = (widget.post.type == PostType.reel || widget.post.isReel) ? 9 / 16 : 4 / 3;
+          final height = (maxWidth / aspectRatio).clamp(200.0, 400.0); // Min 200, Max 400
           
           return Container(
             height: height,
@@ -329,46 +444,56 @@ class _PostWidgetState extends State<PostWidget> {
               borderRadius: BorderRadius.circular(12),
               child: Stack(
                 children: [
-                  Image.network(
-                    widget.post.thumbnailUrl ?? widget.post.imageUrl ?? '',
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
+                  // Video Player or Thumbnail
+                  if (_isVideoInitialized && _videoController != null && !_hasError)
+                    VideoPlayer(_videoController!)
+                  else
+                    Image.network(
+                      widget.post.thumbnailUrl ?? widget.post.imageUrl ?? '',
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Colors.grey.withOpacity(0.1),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Container(
                         color: Colors.grey.withOpacity(0.1),
                         child: const Center(
-                          child: CircularProgressIndicator(
-                            color: AppTheme.primaryColor,
+                          child: Icon(
+                            Icons.video_library,
+                            color: Color(0xFF666666),
+                            size: 48,
                           ),
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey.withOpacity(0.1),
-                      child: const Center(
-                        child: Icon(
-                          Icons.video_library,
-                          color: Color(0xFF666666),
-                          size: 48,
+                      ),
+                    ),
+                  
+                  // Play/Pause Overlay - always show when video is not playing
+                  if (!_isPlaying || _hasError)
+                    Center(
+                      child: GestureDetector(
+                        onTap: _hasError ? null : _togglePlayPause,
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _hasError ? Icons.error : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 30,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Center(
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Color(0xFF666666),
-                        size: 30,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -521,6 +646,8 @@ class _PostWidgetState extends State<PostWidget> {
         return Colors.blue;
       case PostType.video:
         return Colors.purple;
+      case PostType.reel:
+        return Colors.orange;
       default:
         return Colors.grey;
     }

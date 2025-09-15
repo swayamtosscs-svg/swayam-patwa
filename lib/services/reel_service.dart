@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/reel_model.dart';
 
 class ReelService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api';
+  static const String baseUrl = 'http://103.14.120.163:8081/api';
 
   /// Upload a new reel
   static Future<ReelUploadResponse> uploadReel({

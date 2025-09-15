@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/notification_model.dart';
 
 class NotificationService {
-  static const String _baseUrl = 'https://api-rgram1.vercel.app/api';
+  static const String _baseUrl = 'http://103.14.120.163:8081/api';
 
   /// Get all notifications for the current user
   static Future<List<NotificationModel>> getNotifications({

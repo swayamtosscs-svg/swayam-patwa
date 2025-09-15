@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       
       // Real API call to login endpoint
       final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/auth/login'),
+        Uri.parse('http://103.14.120.163:8081/api/auth/login'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // Call the Google OAuth initialization API
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/auth/google/init'),
+        Uri.parse('http://103.14.120.163:8081/api/auth/google/init'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -234,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
             
             // Now call the callback API to get the user data and token
             final callbackResponse = await http.get(
-              Uri.parse('https://api-rgram1.vercel.app/api/auth/google/callback?test=true&format=json'),
+              Uri.parse('http://103.14.120.163:8081/api/auth/google/callback?test=true&format=json'),
               headers: {
                 'Content-Type': 'application/json',
               },
@@ -658,7 +658,7 @@ class _LoginScreenState extends State<LoginScreen> {
       
       // Call the callback API to get the user data and token
       final callbackResponse = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/auth/google/callback?test=true&format=json'),
+        Uri.parse('http://103.14.120.163:8081/api/auth/google/callback?test=true&format=json'),
         headers: {
           'Content-Type': 'application/json',
         },

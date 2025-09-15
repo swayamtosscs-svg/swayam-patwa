@@ -13,7 +13,7 @@ class VideoReelWidget extends StatefulWidget {
   const VideoReelWidget({
     Key? key,
     required this.reel,
-    this.autoplay = false,
+    this.autoplay = true, // Enable autoplay by default
     this.showFullDetails = true,
     this.onTap,
   }) : super(key: key);
@@ -43,10 +43,15 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
   Future<void> _initializeVideo() async {
     try {
       print('VideoReelWidget: Initializing video: ${widget.reel.video.url}');
+      print('VideoReelWidget: Autoplay enabled: ${widget.autoplay}');
       
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(widget.reel.video.url),
       );
+      
+      // Set video player configuration
+      _videoController!.setVolume(1.0);
+      _videoController!.setLooping(true);
       
       await _videoController!.initialize();
       
@@ -55,12 +60,19 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
           _isVideoInitialized = true;
         });
         
-        // Auto-play if enabled
+        // Add listener for video state changes
+        _videoController!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _videoController!.value.isPlaying;
+            });
+          }
+        });
+        
+        // Auto-play if enabled - with multiple retry attempts
         if (widget.autoplay) {
-          _videoController!.play();
-          setState(() {
-            _isPlaying = true;
-          });
+          print('VideoReelWidget: Starting autoplay...');
+          await _startAutoplayWithRetry();
         }
       }
     } catch (e) {
@@ -70,6 +82,34 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
           _hasError = true;
           _isVideoInitialized = false;
         });
+      }
+    }
+  }
+
+  Future<void> _startAutoplayWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && mounted && !_isPlaying) {
+      try {
+        await _videoController!.play();
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+          });
+        }
+        print('VideoReelWidget: Autoplay started successfully (attempt ${retryCount + 1})');
+        break;
+      } catch (playError) {
+        retryCount++;
+        print('VideoReelWidget: Autoplay attempt $retryCount failed: $playError');
+        
+        if (retryCount < maxRetries) {
+          // Wait before retrying, with increasing delay
+          await Future.delayed(Duration(milliseconds: 300 * retryCount));
+        } else {
+          print('VideoReelWidget: All autoplay attempts failed');
+        }
       }
     }
   }

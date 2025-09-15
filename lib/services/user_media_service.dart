@@ -11,7 +11,7 @@ class UserMediaService {
   }) async {
     try {
       print('UserMediaService: Fetching media for userId: $userId');
-      print('UserMediaService: API URL will be: https://api-rgram1.vercel.app/api/media/upload?userId=$userId');
+      print('UserMediaService: API URL will be: http://103.14.120.163:8081/api/media/upload?userId=$userId');
       
       // Try to get media from API first
       print('UserMediaService: Calling retrieveMediaByUserId for userId: $userId');

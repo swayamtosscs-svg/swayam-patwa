@@ -161,7 +161,7 @@ class BabaPagePostMedia {
       return BabaPagePostMedia(
         id: json['_id'] ?? json['id'] ?? '',
         type: json['type'] ?? 'image',
-        url: json['url'] ?? '',
+        url: _constructFullUrl(json['url'] ?? ''),
         filename: json['filename'] ?? '',
         size: json['size'] ?? 0,
         mimeType: json['mimeType'] ?? 'image/jpeg',
@@ -184,6 +184,28 @@ class BabaPagePostMedia {
       'mimeType': mimeType,
       'publicId': publicId,
     };
+  }
+
+  // Helper method to construct full URL from relative path
+  static String _constructFullUrl(String url) {
+    if (url.isEmpty) return url;
+    
+    // If it's already a full URL, return as is
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // If it's a relative path starting with /uploads, construct full URL
+    if (url.startsWith('/uploads/')) {
+      return 'http://103.14.120.163:8081$url';
+    }
+    
+    // If it's a relative path without leading slash, add it
+    if (url.startsWith('uploads/')) {
+      return 'http://103.14.120.163:8081/$url';
+    }
+    
+    return url;
   }
 }
 

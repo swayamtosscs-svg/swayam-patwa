@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../utils/app_theme.dart';
 import '../services/theme_service.dart';
-import '../services/otp_service.dart';
 import 'package:provider/provider.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -69,46 +70,66 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
-      // First, send OTP for email verification
-      final otpResponse = await OtpService.sendOtp(
-        email: _emailController.text.trim(),
-        purpose: 'signup',
+      // Call the R-Gram signup API directly
+      final response = await http.post(
+        Uri.parse('http://103.14.120.163:8081/api/auth/signup'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
+          'fullName': _nameController.text.trim(),
+          'username': _usernameController.text.trim(),
+          'religion': _selectedReligion!,
+          'isPrivate': _isPrivate,
+        }),
       );
 
-      if (otpResponse.success) {
-        // OTP sent successfully, navigate to verification screen
-        if (mounted) {
-          final userData = {
-            'name': _nameController.text.trim(),
-            'email': _emailController.text.trim(),
-            'username': _usernameController.text.trim(),
-            'password': _passwordController.text,
-            'bio': _bioController.text.trim(),
-            'religion': _selectedReligion!,
-            'isPrivate': _isPrivate,
-          };
+      print('Signup response status: ${response.statusCode}');
+      print('Signup response body: ${response.body}');
 
-          Navigator.pushNamed(
-            context,
-            '/otp-verification',
-            arguments: {
-              'email': _emailController.text.trim(),
-              'purpose': 'signup',
-              'userData': userData,
-            },
-          );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data['success'] == true) {
+          // Account created successfully, show success message and redirect to login
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('User successfully registered'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            
+            // Wait a moment to show success message, then redirect
+            await Future.delayed(const Duration(seconds: 2));
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        } else {
+          setState(() {
+            _error = data['message'] ?? 'Failed to create account';
+            _isLoading = false;
+          });
         }
       } else {
-        setState(() {
-          _error = otpResponse.message;
-        });
+        try {
+          final errorData = jsonDecode(response.body);
+          setState(() {
+            _error = errorData['message'] ?? 'Failed to create account: ${response.statusCode}';
+            _isLoading = false;
+          });
+        } catch (e) {
+          setState(() {
+            _error = 'Failed to create account: HTTP ${response.statusCode}';
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
       setState(() {
-        _error = 'Error sending verification code: $e';
-      });
-    } finally {
-      setState(() {
+        _error = 'Error creating account: $e';
         _isLoading = false;
       });
     }

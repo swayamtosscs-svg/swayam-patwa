@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../services/baba_like_service.dart';
@@ -36,12 +37,140 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   bool _isLiked = false;
   bool _isSaved = false;
   bool _isFavourite = false;
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+  bool _isPlaying = false;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
+    print('EnhancedPostWidget: Initializing post widget for post: ${widget.post.id}');
+    print('EnhancedPostWidget: Post type: ${widget.post.type}, isReel: ${widget.post.isReel}, videoUrl: ${widget.post.videoUrl}');
+    
     if (widget.post.isBabaJiPost) {
       _loadLikeStatus();
+    }
+    if (widget.post.type == PostType.reel || widget.post.isReel) {
+      print('EnhancedPostWidget: This is a reel, initializing video...');
+      _initializeVideo();
+    } else {
+      print('EnhancedPostWidget: This is not a reel, skipping video initialization');
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeVideo() async {
+    if (widget.post.videoUrl == null) {
+      print('EnhancedPostWidget: No video URL available for post: ${widget.post.id}');
+      return;
+    }
+    
+    try {
+      print('EnhancedPostWidget: Initializing reel video: ${widget.post.videoUrl}');
+      print('EnhancedPostWidget: Post type: ${widget.post.type}, isReel: ${widget.post.isReel}');
+      
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.post.videoUrl!),
+      );
+      
+      // Set video player configuration
+      _videoController!.setVolume(1.0);
+      _videoController!.setLooping(true);
+      
+      print('EnhancedPostWidget: Video controller created, initializing...');
+      await _videoController!.initialize();
+      print('EnhancedPostWidget: Video controller initialized successfully');
+      
+      if (mounted) {
+        setState(() {
+          _isVideoInitialized = true;
+        });
+        
+        // Add listener for video state changes
+        _videoController!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _videoController!.value.isPlaying;
+            });
+          }
+        });
+        
+        // Auto-play reels
+        print('EnhancedPostWidget: Starting reel autoplay...');
+        await _startAutoplayWithRetry();
+      }
+    } catch (e) {
+      print('EnhancedPostWidget: Error initializing reel video: $e');
+      print('EnhancedPostWidget: Video URL was: ${widget.post.videoUrl}');
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _isVideoInitialized = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _startAutoplayWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && mounted && !_isPlaying) {
+      try {
+        await _videoController!.play();
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+          });
+        }
+        print('EnhancedPostWidget: Reel autoplay started successfully (attempt ${retryCount + 1})');
+        break;
+      } catch (playError) {
+        retryCount++;
+        print('EnhancedPostWidget: Reel autoplay attempt $retryCount failed: $playError');
+        
+        if (retryCount < maxRetries) {
+          // Wait before retrying, with increasing delay
+          await Future.delayed(Duration(milliseconds: 300 * retryCount));
+        } else {
+          print('EnhancedPostWidget: All reel autoplay attempts failed');
+        }
+      }
+    }
+  }
+
+  void _togglePlayPause() async {
+    print('EnhancedPostWidget: Toggle play/pause called');
+    print('EnhancedPostWidget: _hasError: $_hasError, _isVideoInitialized: $_isVideoInitialized, _isPlaying: $_isPlaying');
+    
+    if (_hasError) return;
+    
+    // If video is not initialized yet, try to initialize it
+    if (!_isVideoInitialized && widget.post.videoUrl != null) {
+      print('EnhancedPostWidget: Video not initialized, attempting to initialize...');
+      await _initializeVideo();
+      return;
+    }
+    
+    if (_videoController != null && _isVideoInitialized) {
+      if (_isPlaying) {
+        print('EnhancedPostWidget: Pausing video...');
+        await _videoController!.pause();
+      } else {
+        print('EnhancedPostWidget: Playing video...');
+        await _videoController!.play();
+      }
+      setState(() {
+        _isPlaying = !_isPlaying;
+      });
+    } else {
+      print('EnhancedPostWidget: Cannot toggle - video controller is null or not initialized');
     }
   }
 
@@ -350,45 +479,68 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
 
   Widget _buildMediaContent() {
     // Check if it's a video/reel
-    if (widget.post.type == PostType.video || widget.post.type == PostType.reel) {
+    if (widget.post.type == PostType.video || widget.post.type == PostType.reel || widget.post.isReel) {
       if (widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
-        // Show video with thumbnail
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Video thumbnail or placeholder
-            Image.network(
-              widget.post.thumbnailUrl ?? widget.post.imageUrl ?? 'https://via.placeholder.com/400x400/6366F1/FFFFFF?text=Video',
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: const Color(0xFFF0F0F0),
-                  child: const Center(
-                    child: Icon(
-                      Icons.video_library,
-                      size: 64,
-                      color: Color(0xFFCCCCCC),
+        // Use different aspect ratios for reels vs regular videos
+        final aspectRatio = (widget.post.type == PostType.reel || widget.post.isReel) ? 9 / 16 : 4 / 3;
+        final height = MediaQuery.of(context).size.width / aspectRatio;
+        
+        return Container(
+          height: height.clamp(200.0, 400.0),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.grey.withOpacity(0.1),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              children: [
+                // Video Player or Thumbnail
+                if (_isVideoInitialized && _videoController != null && !_hasError)
+                  VideoPlayer(_videoController!)
+                else
+                  Image.network(
+                    widget.post.thumbnailUrl ?? widget.post.imageUrl ?? 'https://via.placeholder.com/400x400/6366F1/FFFFFF?text=Video',
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: const Color(0xFFF0F0F0),
+                        child: const Center(
+                          child: Icon(
+                            Icons.video_library,
+                            size: 64,
+                            color: Color(0xFFCCCCCC),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                
+                // Play/Pause Overlay - always show when video is not playing
+                if (!_isPlaying || _hasError)
+                  Center(
+                    child: GestureDetector(
+                      onTap: _hasError ? null : _togglePlayPause,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _hasError ? Icons.error : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
+              ],
             ),
-            // Play button overlay
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.play_arrow,
-                color: Colors.white,
-                size: 32,
-              ),
-            ),
-          ],
+          ),
         );
       } else {
         // No video URL, show placeholder

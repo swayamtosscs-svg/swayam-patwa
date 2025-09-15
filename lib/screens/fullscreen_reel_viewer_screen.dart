@@ -36,9 +36,15 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
 
   Future<void> _initializeVideo() async {
     try {
+      print('FullscreenReelViewerScreen: Initializing video: ${widget.reel.video.url}');
+      
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(widget.reel.video.url),
       );
+      
+      // Set video player configuration
+      _videoController!.setVolume(1.0);
+      _videoController!.setLooping(true);
       
       await _videoController!.initialize();
       
@@ -46,11 +52,19 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
         setState(() {
           _isVideoInitialized = true;
         });
-        // Auto-play the video
-        _videoController!.play();
-        setState(() {
-          _isPlaying = true;
+        
+        // Add listener for video state changes
+        _videoController!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _videoController!.value.isPlaying;
+            });
+          }
         });
+        
+        // Auto-play the video with retry mechanism
+        print('FullscreenReelViewerScreen: Starting autoplay...');
+        await _startAutoplayWithRetry();
       }
     } catch (e) {
       print('FullscreenReelViewerScreen: Error initializing video: $e');
@@ -58,6 +72,34 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
         setState(() {
           _hasError = true;
         });
+      }
+    }
+  }
+
+  Future<void> _startAutoplayWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && mounted && !_isPlaying) {
+      try {
+        await _videoController!.play();
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+          });
+        }
+        print('FullscreenReelViewerScreen: Autoplay started successfully (attempt ${retryCount + 1})');
+        break;
+      } catch (playError) {
+        retryCount++;
+        print('FullscreenReelViewerScreen: Autoplay attempt $retryCount failed: $playError');
+        
+        if (retryCount < maxRetries) {
+          // Wait before retrying, with increasing delay
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        } else {
+          print('FullscreenReelViewerScreen: All autoplay attempts failed');
+        }
       }
     }
   }

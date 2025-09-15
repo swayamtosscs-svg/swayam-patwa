@@ -13,7 +13,7 @@ class InAppVideoWidget extends StatefulWidget {
   const InAppVideoWidget({
     Key? key,
     required this.reel,
-    this.autoplay = false,
+    this.autoplay = true, // Enable autoplay by default
     this.showFullDetails = true,
     this.onTap,
   }) : super(key: key);
@@ -114,38 +114,33 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
           print('InAppVideoWidget: Starting autoplay...');
           _videoController!.setLooping(true); // Enable looping for better autoplay
           
-          // Start autoplay timer
-          _autoplayTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
-            if (_isPlaying || _hasError) {
-              timer.cancel();
-              return;
-            }
-            _forcePlay();
-          });
-          
-          // Add a small delay to ensure video is ready
-          await Future.delayed(const Duration(milliseconds: 500));
-          
+          // Start autoplay immediately
           try {
             await _videoController!.play();
             setState(() {
               _isPlaying = true;
             });
-            _autoplayTimer?.cancel();
             print('InAppVideoWidget: Autoplay started successfully');
           } catch (playError) {
             print('InAppVideoWidget: Error starting autoplay: $playError');
-            // Try again after a longer delay
-            await Future.delayed(const Duration(milliseconds: 1000));
+            // Try again after a short delay
+            await Future.delayed(const Duration(milliseconds: 300));
             try {
               await _videoController!.play();
               setState(() {
                 _isPlaying = true;
               });
-              _autoplayTimer?.cancel();
               print('InAppVideoWidget: Autoplay started on retry');
             } catch (retryError) {
               print('InAppVideoWidget: Failed to start autoplay after retry: $retryError');
+              // Set up a timer to keep trying
+              _autoplayTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) {
+                if (_isPlaying || _hasError || !mounted) {
+                  timer.cancel();
+                  return;
+                }
+                _forcePlay();
+              });
             }
           }
         }

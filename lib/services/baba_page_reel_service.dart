@@ -5,7 +5,7 @@ import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 
 class BabaPageReelService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api/baba-pages';
+  static const String baseUrl = 'http://103.14.120.163:8081/api/baba-pages';
 
   /// Upload reel/video for Baba Ji page
   static Future<Map<String, dynamic>> uploadBabaPageReel({

@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/baba_page_post_model.dart';
 
 class BabaPagePostService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api';
+  static const String baseUrl = 'http://103.14.120.163:8081/api';
 
   /// Create a post for a Baba Ji page
   static Future<BabaPagePostResponse> createBabaPagePost({

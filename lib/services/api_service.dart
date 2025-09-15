@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 // Note: No model imports required in this service file
 
 class ApiService {
-  static const String baseUrl = 'http://tossconsultancyservices.com/rgram';
-  static const String reelApiUrl = 'https://api-rgram1.vercel.app/api';
-  static const String authApiUrl = 'https://api-rgram1.vercel.app/api/auth';
+  static const String baseUrl = 'http://103.14.120.163:8081';
+  static const String reelApiUrl = 'http://103.14.120.163:8081/api';
+  static const String authApiUrl = 'http://103.14.120.163:8081/api/auth';
   
   // Headers
   static Map<String, String> get _headers => {
@@ -127,7 +127,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getRGramProfile(String? token) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/user/profile'),
+        Uri.parse('http://103.14.120.163:8081/api/user/profile'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null) 'Authorization': token, // Note: This API uses token directly, not Bearer
@@ -147,7 +147,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.put(
-        Uri.parse('https://api-rgram1.vercel.app/api/user/update'),
+        Uri.parse('http://103.14.120.163:8081/api/user/update'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token, // Note: This API uses token directly, not Bearer
@@ -168,7 +168,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.put(
-        Uri.parse('https://api-rgram1.vercel.app/api/user/toggle-privacy-by-id'),
+        Uri.parse('http://103.14.120.163:8081/api/user/toggle-privacy-by-id'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Note: This API uses Bearer token
@@ -193,7 +193,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/chat/quick-message'),
+        Uri.parse('http://103.14.120.163:8081/api/chat/quick-message'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -219,7 +219,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/chat/quick-message?threadId=$threadId&limit=$limit'),
+        Uri.parse('http://103.14.120.163:8081/api/chat/quick-message?threadId=$threadId&limit=$limit'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -366,7 +366,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/search?q=$query&type=users&page=$page&limit=$limit'),
+        Uri.parse('http://103.14.120.163:8081/api/search?q=$query&type=users&page=$page&limit=$limit'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Note: This API uses Bearer token
@@ -400,7 +400,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/follow/$targetUserId'),
+        Uri.parse('http://103.14.120.163:8081/api/follow/$targetUserId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -419,7 +419,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.delete(
-        Uri.parse('https://api-rgram1.vercel.app/api/follow/$targetUserId'),
+        Uri.parse('http://103.14.120.163:8081/api/follow/$targetUserId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -438,7 +438,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/following/$userId'),
+        Uri.parse('http://103.14.120.163:8081/api/following/$userId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -457,7 +457,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/followers/$userId'),
+        Uri.parse('http://103.14.120.163:8081/api/followers/$userId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -476,7 +476,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/follow/status/$targetUserId'),
+        Uri.parse('http://103.14.120.163:8081/api/follow/status/$targetUserId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -496,7 +496,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/feed?page=$page&limit=$limit'),
+        Uri.parse('http://103.14.120.163:8081/api/feed?page=$page&limit=$limit'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Note: This API uses Bearer token
@@ -517,7 +517,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/user/$userId/media?page=$page&limit=$limit'),
+        Uri.parse('http://103.14.120.163:8081/api/user/$userId/media?page=$page&limit=$limit'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -536,7 +536,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/follow-request/$targetUserId'),
+        Uri.parse('http://103.14.120.163:8081/api/follow-request/$targetUserId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -555,7 +555,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('https://api-rgram1.vercel.app/api/follow-requests?page=$page&limit=$limit'),
+        Uri.parse('http://103.14.120.163:8081/api/follow-requests?page=$page&limit=$limit'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -574,7 +574,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.put(
-        Uri.parse('https://api-rgram1.vercel.app/api/follow-request/$requestId'),
+        Uri.parse('http://103.14.120.163:8081/api/follow-request/$requestId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
@@ -652,7 +652,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/auth/logout'),
+        Uri.parse('http://103.14.120.163:8081/api/auth/logout'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token', // Note: This API uses Bearer token
@@ -675,7 +675,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.delete(
-        Uri.parse('https://api-rgram1.vercel.app/api/media/delete?id=$mediaId'),
+        Uri.parse('http://103.14.120.163:8081/api/media/delete?id=$mediaId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

@@ -93,6 +93,9 @@ class MediaData {
       secureUrl = json['secureUrl'];
     } else if (json['url'] != null) {
       secureUrl = json['url'];
+    } else if (json['publicUrl'] != null) {
+      // Handle the new API format that uses publicUrl
+      secureUrl = 'http://103.14.120.163:8081${json['publicUrl']}';
     }
     
     // Extract fileType
@@ -223,7 +226,7 @@ class MediaRetrieveResponse {
 }
 
 class MediaUploadService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api';
+  static const String baseUrl = 'http://103.14.120.163:8081/api';
 
   /// Upload media file (image or video) with userId and title
   static Future<MediaUploadResponse> uploadMedia({

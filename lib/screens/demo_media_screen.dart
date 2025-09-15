@@ -208,7 +208,7 @@ class _DemoMediaScreenState extends State<DemoMediaScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Endpoint: https://api-rgram1.vercel.app/api/media/combined',
+                      'Endpoint: http://103.14.120.163:8081/api/media/combined',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.blue.shade700,
                       ),

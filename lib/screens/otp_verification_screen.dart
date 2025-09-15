@@ -168,7 +168,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       // Call the R-Gram signup API
       final response = await http.post(
-        Uri.parse('https://api-rgram1.vercel.app/api/auth/signup'),
+        Uri.parse('http://103.14.120.163:8081/api/auth/signup'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -189,18 +189,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         final data = jsonDecode(response.body);
         
         if (data['success'] == true) {
-          // Account created successfully, navigate to login page
+          // Account created successfully, show success message first
+          setState(() {
+            _successMessage = 'User successfully registered';
+            _isLoading = false;
+          });
+          
+          // Wait a moment to show success message, then redirect
           if (mounted) {
+            await Future.delayed(const Duration(seconds: 2));
             Navigator.pushReplacementNamed(context, '/login');
-            
-            // Show success message
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Account created successfully! Please log in to continue.'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
           }
         } else {
           setState(() {

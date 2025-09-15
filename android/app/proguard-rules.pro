@@ -28,6 +28,10 @@
 -keep class io.flutter.**  { *; }
 -keep class io.flutter.plugins.**  { *; }
 
+# Keep essential Flutter classes
+-keep class io.flutter.embedding.** { *; }
+-keep class io.flutter.plugin.common.** { *; }
+
 # Keep native methods
 -keepclassmembers class * {
     native <methods>;
@@ -63,4 +67,28 @@
 -keep class com.example.my_auth_app.models.** { *; }
 -keep class com.example.my_auth_app.providers.** { *; }
 -keep class com.example.my_auth_app.services.** { *; }
+
+# Additional optimizations for smaller APK
+-optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
+-optimizationpasses 5
+-allowaccessmodification
+
+# Remove unused resources
+-dontwarn **
+-ignorewarnings
+
+# Keep only essential classes for reflection
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+
+# Remove debug information
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+}
 

@@ -8,12 +8,14 @@ class BabaPageReelWidget extends StatefulWidget {
   final BabaPageReel reel;
   final VoidCallback? onTap;
   final bool showFullDetails;
+  final bool autoplay;
 
   const BabaPageReelWidget({
     Key? key,
     required this.reel,
     this.onTap,
     this.showFullDetails = true,
+    this.autoplay = true, // Enable autoplay by default
   }) : super(key: key);
 
   @override
@@ -24,6 +26,7 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
   VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -39,9 +42,16 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
 
   Future<void> _initializeVideo() async {
     try {
+      print('BabaPageReelWidget: Initializing video: ${widget.reel.video.url}');
+      print('BabaPageReelWidget: Autoplay enabled: ${widget.autoplay}');
+      
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(widget.reel.video.url),
       );
+      
+      // Set video player configuration
+      _videoController!.setVolume(1.0);
+      _videoController!.setLooping(true);
       
       await _videoController!.initialize();
       
@@ -49,14 +59,57 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
         setState(() {
           _isVideoInitialized = true;
         });
+        
+        // Add listener for video state changes
+        _videoController!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _videoController!.value.isPlaying;
+            });
+          }
+        });
+        
+        // Auto-play if enabled - with multiple retry attempts
+        if (widget.autoplay) {
+          print('BabaPageReelWidget: Starting autoplay...');
+          await _startAutoplayWithRetry();
+        }
       }
     } catch (e) {
       print('BabaPageReelWidget: Error initializing video: $e');
-      // If video initialization fails, just show thumbnail
       if (mounted) {
         setState(() {
+          _hasError = true;
           _isVideoInitialized = false;
         });
+      }
+    }
+  }
+
+  Future<void> _startAutoplayWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && mounted && !_isPlaying) {
+      try {
+        await _videoController!.play();
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+          });
+        }
+        print('BabaPageReelWidget: Autoplay started successfully (attempt ${retryCount + 1})');
+        break;
+      } catch (playError) {
+        retryCount++;
+        print('BabaPageReelWidget: Autoplay attempt $retryCount failed: $playError');
+        
+        if (retryCount < maxRetries) {
+          // Wait before retrying, with increasing delay
+          await Future.delayed(Duration(milliseconds: 300 * retryCount));
+        } else {
+          print('BabaPageReelWidget: All autoplay attempts failed');
+        }
       }
     }
   }
@@ -137,7 +190,7 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
           fit: StackFit.expand,
           children: [
             // Video Player or Thumbnail
-            if (_isVideoInitialized && _videoController != null)
+            if (_isVideoInitialized && _videoController != null && !_hasError)
               VideoPlayer(_videoController!)
             else
               Image.network(
@@ -167,21 +220,25 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
                 },
               ),
             
-            // Play/Pause Overlay
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _isPlaying ? Icons.pause : Icons.play_arrow,
-                  color: Colors.white,
-                  size: 32,
+            // Play/Pause Overlay (only show when not playing or not initialized)
+            if (!_isPlaying || !_isVideoInitialized || _hasError)
+              Center(
+                child: GestureDetector(
+                  onTap: _hasError ? null : _togglePlayPause,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _hasError ? Icons.error : (_isPlaying ? Icons.pause : Icons.play_arrow),
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
                 ),
               ),
-            ),
             
             // Category Badge
             Positioned(

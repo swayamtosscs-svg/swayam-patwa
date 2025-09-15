@@ -1,3 +1,25 @@
+// Helper function to construct full URL from relative path
+String _constructFullUrl(String url) {
+  if (url.isEmpty) return url;
+  
+  // If it's already a full URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // If it's a relative path starting with /uploads, construct full URL
+  if (url.startsWith('/uploads/')) {
+    return 'http://103.14.120.163:8081$url';
+  }
+  
+  // If it's a relative path without leading slash, add it
+  if (url.startsWith('uploads/')) {
+    return 'http://103.14.120.163:8081/$url';
+  }
+  
+  return url;
+}
+
 class BabaPageReel {
   final String id;
   final String babaPageId;
@@ -123,7 +145,7 @@ class ReelVideo {
 
   factory ReelVideo.fromJson(Map<String, dynamic> json) {
     return ReelVideo(
-      url: json['url'] ?? '',
+      url: _constructFullUrl(json['url'] ?? ''),
       filename: json['filename'] ?? '',
       size: json['size'] ?? 0,
       duration: json['duration'] ?? 0,
@@ -161,7 +183,7 @@ class ReelThumbnail {
 
   factory ReelThumbnail.fromJson(Map<String, dynamic> json) {
     return ReelThumbnail(
-      url: json['url'] ?? '',
+      url: _constructFullUrl(json['url'] ?? ''),
       filename: json['filename'] ?? '',
       size: json['size'] ?? 0,
       mimeType: json['mimeType'] ?? 'image/jpeg',

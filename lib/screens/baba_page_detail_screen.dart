@@ -1314,7 +1314,7 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
         final reel = _reels[index];
         return InAppVideoWidget(
           reel: reel,
-          autoplay: false, // Don't autoplay in the detail screen
+          autoplay: true, // Enable autoplay for reels
           showFullDetails: true,
           onTap: () {
             // Handle reel tap - could open full screen or navigate to reel detail

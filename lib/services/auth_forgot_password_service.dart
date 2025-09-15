@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthForgotPasswordService {
-  static const String baseUrl = 'https://api-rgram1.vercel.app/api/auth';
+  static const String baseUrl = 'http://103.14.120.163:8081/api/auth';
 
   /// Send forgot password request
   static Future<Map<String, dynamic>> sendForgotPasswordRequest({

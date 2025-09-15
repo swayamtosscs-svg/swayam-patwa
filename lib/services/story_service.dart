@@ -8,7 +8,7 @@ import 'custom_http_client.dart';
 import 'api_service.dart';
 
 class StoryService {
-  static const String _baseUrl = 'https://api-rgram1.vercel.app/api';
+  static const String _baseUrl = 'http://103.14.120.163:8081/api';
 
   /// Upload a story with media file directly to story API
   static Future<StoryUploadResponse> uploadStory({
@@ -58,7 +58,7 @@ class StoryService {
             authorName: storyData['author']?['fullName'] ?? storyData['author']?['username'] ?? '',
             authorUsername: storyData['author']?['username'] ?? '',
             authorAvatar: storyData['author']?['avatar'] ?? '',
-            media: storyData['secureUrl'] ?? storyData['media'] ?? '',
+            media: _constructFullUrl(storyData['secureUrl'] ?? storyData['media'] ?? ''),
             mediaId: storyData['storyId'] ?? storyData['id'] ?? '',
             type: storyData['mediaType'] ?? storyData['type'] ?? 'image',
             mentions: List<String>.from(storyData['mentions'] ?? []),
@@ -196,7 +196,7 @@ class StoryService {
                 authorName: storyJson['author']?['fullName'] ?? storyJson['author']?['username'] ?? '',
                 authorUsername: storyJson['author']?['username'] ?? '',
                 authorAvatar: storyJson['author']?['avatar'] ?? '',
-                media: storyJson['media'] ?? '',
+                media: _constructFullUrl(storyJson['media'] ?? ''),
                 mediaId: storyJson['id'] ?? '',
                 type: storyJson['type'] ?? 'image',
                 mentions: List<String>.from(storyJson['mentions'] ?? []),
@@ -393,6 +393,28 @@ class StoryService {
       print('Error marking story as viewed: $e');
       return false;
     }
+  }
+
+  // Helper method to construct full URL from relative path
+  static String _constructFullUrl(String url) {
+    if (url.isEmpty) return url;
+    
+    // If it's already a full URL, return as is
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // If it's a relative path starting with /uploads, construct full URL
+    if (url.startsWith('/uploads/')) {
+      return 'http://103.14.120.163:8081$url';
+    }
+    
+    // If it's a relative path without leading slash, add it
+    if (url.startsWith('uploads/')) {
+      return 'http://103.14.120.163:8081/$url';
+    }
+    
+    return url;
   }
 
   // Removed retrieveMedia method since it's no longer needed for stories
