@@ -819,7 +819,7 @@ class _BabaPageReelUploadScreenState extends State<BabaPageReelUploadScreen> {
       );
 
       if (response['success'] == true) {
-        _showSnackBar('Reel uploaded successfully!', Colors.green);
+        _showSnackBar('Reel uploaded successfully! Video will be available for playback shortly.', Colors.green);
         Navigator.of(context).pop(true);
       } else {
         _showSnackBar(response['message'] ?? 'Failed to upload reel', Colors.red);

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../services/baba_page_dp_service.dart';
 import '../utils/app_theme.dart';
 import '../screens/fullscreen_dp_viewer_screen.dart';
@@ -45,6 +46,34 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentImageUrl != widget.currentImageUrl) {
       _localImageUrl = widget.currentImageUrl;
+    }
+  }
+
+  /// Refresh DP from server
+  Future<void> refreshDP() async {
+    try {
+      print('BabaPageDPWidget: Refreshing DP from server');
+      
+      final response = await BabaPageDPService.retrieveBabaPageDP(
+        babaPageId: widget.babaPageId,
+        token: widget.token,
+      );
+
+      if (response['success'] == true && mounted) {
+        final data = response['data'];
+        final avatar = data['avatar'] as String?;
+        
+        setState(() {
+          _localImageUrl = avatar;
+        });
+        
+        widget.onImageChanged(avatar ?? '');
+        print('BabaPageDPWidget: DP refreshed successfully: $avatar');
+      } else {
+        print('BabaPageDPWidget: DP refresh failed: ${response['message']}');
+      }
+    } catch (e) {
+      print('BabaPageDPWidget: Error refreshing DP: $e');
     }
   }
 
@@ -96,6 +125,9 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
         });
         widget.onImageChanged('');
         
+        // Refresh DP from server to ensure consistency
+        await refreshDP();
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -136,17 +168,8 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
 
   void _handleDPTap() {
     if (_localImageUrl != null && _localImageUrl!.isNotEmpty) {
-      // Show full screen view
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => FullscreenDPViewerScreen(
-            imageUrl: _localImageUrl!,
-            title: 'Profile Picture',
-            subtitle: 'Baba Ji Page',
-          ),
-        ),
-      );
+      // If image exists, do nothing - user can use the view button
+      return;
     } else {
       // Upload new image
       _pickAndUploadImage();
@@ -189,11 +212,11 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
             _showSnackBar('Error processing selected image. Please try again.', Colors.red);
           }
         } else {
-          // For mobile platforms, use File object
+          // For mobile platforms, use File object with cropping
           final imageFile = File(image.path);
           if (await imageFile.exists()) {
-            print('BabaPageDPWidget: Image file exists, proceeding with upload');
-            await _uploadImage(imageFile);
+            print('BabaPageDPWidget: Image file exists, proceeding with crop and upload');
+            await _cropAndUploadImage(imageFile);
           } else {
             print('BabaPageDPWidget: Image file does not exist');
             _showSnackBar('Selected image file not found', Colors.red);
@@ -205,6 +228,41 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
     } catch (e) {
       print('BabaPageDPWidget: Error picking image: $e');
       _showSnackBar('Error picking image: $e', Colors.red);
+    }
+  }
+
+  Future<void> _cropAndUploadImage(File imageFile) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Baba Ji Profile Picture',
+            toolbarColor: AppTheme.primaryColor,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+          IOSUiSettings(
+            title: 'Crop Baba Ji Profile Picture',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPickerButtonHidden: true,
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        await _uploadImage(File(croppedFile.path));
+      }
+    } catch (e) {
+      print('BabaPageDPWidget: Error cropping image: $e');
+      // If cropping fails, upload original image
+      await _uploadImage(imageFile);
     }
   }
 
@@ -241,6 +299,9 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
         // Notify parent about the change
         print('BabaPageDPWidget: Calling onImageChanged with: ${data['avatarUrl']}');
         widget.onImageChanged(data['avatarUrl']);
+
+        // Refresh DP from server to ensure consistency
+        await refreshDP();
 
         _showSnackBar('Baba Ji page display picture uploaded successfully!', Colors.green);
       } else {
@@ -301,6 +362,9 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
         // Notify parent about the change
         print('BabaPageDPWidget: Web calling onImageChanged with: ${data['avatarUrl']}');
         widget.onImageChanged(data['avatarUrl']);
+
+        // Refresh DP from server to ensure consistency
+        await refreshDP();
 
         _showSnackBar('Baba Ji page display picture uploaded successfully!', Colors.green);
       } else {
@@ -392,22 +456,59 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
           ),
         ),
         
-        // Click indicator (only show if there's an image)
+        // Action buttons (only show if there's an image)
         if (_localImageUrl != null && _localImageUrl!.isNotEmpty)
           Positioned(
             bottom: 8,
             right: 8,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.zoom_in,
-                color: Colors.white,
-                size: 16,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Delete button
+                GestureDetector(
+                  onTap: _isLoading ? null : _deleteImage,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.delete,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // View button
+                GestureDetector(
+                  onTap: _isLoading ? null : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FullscreenDPViewerScreen(
+                          imageUrl: _localImageUrl!,
+                          title: 'Profile Picture',
+                          subtitle: 'Baba Ji Page',
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.zoom_in,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
       ],

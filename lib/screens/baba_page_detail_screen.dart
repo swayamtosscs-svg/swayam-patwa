@@ -15,6 +15,7 @@ import '../widgets/baba_comment_dialog.dart';
 import 'baba_page_post_creation_screen.dart';
 import 'baba_page_reel_upload_screen.dart';
 import 'baba_page_edit_menu_screen.dart';
+import 'baba_ji_posts_slider_screen.dart';
 import 'package:provider/provider.dart';
 
 class BabaPageDetailScreen extends StatefulWidget {
@@ -793,7 +794,12 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
                                 ),
                               ),
                             ).then((_) {
-                              _loadReels();
+                              // Add delay to allow server processing time
+                              Future.delayed(const Duration(seconds: 3), () {
+                                if (mounted) {
+                                  _loadReels();
+                                }
+                              });
                             });
                           }
                         },
@@ -1221,14 +1227,48 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
       );
     }
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _posts.length,
-      itemBuilder: (context, index) {
-        final post = _posts[index];
-        return _buildPostCard(post);
-      },
+    return Column(
+      children: [
+        // Posts counter header
+        if (_posts.length > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  'Posts',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                // Post counter removed as requested
+                const Spacer(),
+                Text(
+                  '${_posts.length} posts',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        
+        // Posts list
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _posts.length,
+          itemBuilder: (context, index) {
+            final post = _posts[index];
+            return _buildPostCard(post);
+          },
+        ),
+      ],
     );
   }
 
@@ -1326,17 +1366,31 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
   }
 
   Widget _buildPostCard(BabaPagePost post) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return GestureDetector(
+      onTap: () {
+        // Navigate to posts slider
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BabaJiPostsSliderScreen(
+              babaPageId: _currentBabaPage.id,
+              babaPageName: _currentBabaPage.name,
+              initialIndex: _posts.indexOf(post),
+            ),
+          ),
+        );
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Post Header
             Row(
               children: [
@@ -1406,28 +1460,63 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            // Post Media
+            // Post Media - Support multiple images
             if (post.media.isNotEmpty) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  post.media.first.url,
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
+              if (post.media.length == 1)
+                // Single image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    post.media.first.url,
+                    width: double.infinity,
                     height: 200,
-                    color: Colors.grey[200],
-                    child: const Center(
-                      child: Icon(
-                        Icons.broken_image,
-                        color: Colors.grey,
-                        size: 48,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                          size: 48,
+                        ),
                       ),
                     ),
                   ),
+                )
+              else
+                // Multiple images - show in a grid
+                Container(
+                  height: 200,
+                  child: GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: post.media.length > 2 ? 2 : post.media.length,
+                      crossAxisSpacing: 4,
+                      mainAxisSpacing: 4,
+                    ),
+                    itemCount: post.media.length,
+                    itemBuilder: (context, index) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          post.media[index].url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                color: Colors.grey,
+                                size: 32,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
               const SizedBox(height: 12),
             ],
             // Post Stats
@@ -1446,6 +1535,7 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

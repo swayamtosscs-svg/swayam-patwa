@@ -15,6 +15,7 @@ import '../screens/user_profile_screen.dart'; // Added import for UserProfileScr
 import '../screens/chat_screen.dart'; // Added import for ChatScreen
 import '../widgets/dp_widget.dart'; // Added import for DPWidget
 import '../services/dp_service.dart'; // Added import for DPService
+import '../screens/post_full_view_screen.dart';
 
 
 class ProfileScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Instagram-style: Posts, Reels, Saved
     _tabController.addListener(() {
       setState(() {
         _selectedTabIndex = _tabController.index;
@@ -55,7 +56,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         }
 
         return Scaffold(
-          backgroundColor: AppTheme.backgroundColor,
+          backgroundColor: const Color(0xFFF0EBE1), // Same as login page background
+          appBar: _buildInstagramStyleAppBar(authProvider.userProfile!),
           body: RefreshIndicator(
             onRefresh: () async {
               final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -64,14 +66,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  // Profile Header
-                  _buildProfileHeader(authProvider.userProfile!),
+                  // Instagram-style Profile Header
+                  _buildInstagramStyleProfileHeader(authProvider.userProfile!),
                   
-                  // Profile Stats
-                  _buildProfileStats(authProvider.userProfile!),
-                  
-                  // Tab Bar
-                  _buildTabBar(),
+                  // Instagram-style Tab Bar
+                  _buildInstagramStyleTabBar(),
                   
                   // Tab Content
                   _buildTabContent(authProvider.userProfile!),
@@ -81,6 +80,286 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           ),
         );
       },
+    );
+  }
+
+  PreferredSizeWidget _buildInstagramStyleAppBar(UserModel user) {
+    return AppBar(
+      backgroundColor: const Color(0xFFF0EBE1), // Same as login page background
+      elevation: 0,
+      leading: IconButton(
+        onPressed: () => Navigator.of(context).pop(),
+        icon: const Icon(Icons.arrow_back, color: Colors.black),
+      ),
+      title: Row(
+        children: [
+          Text(
+            user.username ?? 'username',
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Verified badge (if user is verified)
+          if (user.isVerified)
+            const Icon(
+              Icons.verified,
+              color: Colors.blue,
+              size: 16,
+            ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          onPressed: () {
+            // Show more options
+          },
+          icon: const Icon(Icons.more_vert, color: Colors.black),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInstagramStyleProfileHeader(UserModel user) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Profile Picture and Stats Row
+          Row(
+            children: [
+              // Profile Picture
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey[300]!, width: 1),
+                ),
+                child: ClipOval(
+                  child: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
+                      ? Image.network(
+                          user.profileImageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[200],
+                              child: const Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          color: Colors.grey[200],
+                          child: const Icon(
+                            Icons.person,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                        ),
+                ),
+              ),
+              
+              const SizedBox(width: 20),
+              
+              // Stats
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildStatColumn('${user.postsCount}', 'posts'),
+                    _buildStatColumn('${user.followersCount}', 'followers'),
+                    _buildStatColumn('${user.followingCount}', 'following'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // User Info
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Full Name
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                
+                const SizedBox(height: 4),
+                
+                // Bio
+                if (user.bio != null && user.bio!.isNotEmpty)
+                  Text(
+                    user.bio!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black,
+                    ),
+                  ),
+                
+                const SizedBox(height: 4),
+                
+                // Website Link (if available)
+                if (user.website != null && user.website!.isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.link,
+                        size: 14,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        user.website!,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Action Buttons
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Edit Profile action
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProfileEditScreen(user: user),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[100],
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  child: const Text(
+                    'Edit Profile',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Share Profile action
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[100],
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  child: const Text(
+                    'Share Profile',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  onPressed: () {
+                    // Add person action
+                  },
+                  icon: const Icon(
+                    Icons.person_add,
+                    color: Colors.black,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatColumn(String count, String label) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInstagramStyleTabBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.grey, width: 0.5),
+        ),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicatorColor: Colors.black,
+        labelColor: Colors.black,
+        unselectedLabelColor: Colors.grey,
+        tabs: const [
+          Tab(icon: Icon(Icons.grid_on)),
+          Tab(icon: Icon(Icons.video_library)),
+          Tab(icon: Icon(Icons.bookmark_border)),
+        ],
+      ),
     );
   }
 
@@ -675,31 +954,68 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             
             return Container(
               height: maxHeight,
-              child: ListView.builder(
-                padding: EdgeInsets.all(isSmallScreen ? 8 : 12), // Reduce padding
+              child: GridView.builder(
+                padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2, // 2 columns for horizontal grid
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 0.8, // Adjust aspect ratio for better display
+                ),
                 itemCount: posts.length,
                 itemBuilder: (context, index) {
                   final post = posts[index];
-                  return Container(
-                    margin: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8), // Reduce margin
-                    child: PostWidget(
-                      post: post,
-                      onComment: () {
-                        // Handle comment
-                      },
-                      onShare: () {
-                        // Handle share
-                      },
-                      onUserTap: () {
-                        _navigateToUserProfile(post);
-                      },
-                      onDelete: () {
-                        // Remove the deleted post from the list and refresh
-                        setState(() {
-                          posts.removeWhere((p) => p.id == post.id);
-                        });
-                        print('Post deleted: ${post.id}');
-                      },
+                  return GestureDetector(
+                    onTap: () {
+                      // Navigate to full screen post view
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostFullViewScreen(post: post),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: post.imageUrl != null
+                            ? Image.network(
+                                post.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[200],
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported,
+                                        color: Colors.grey,
+                                        size: 40,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.image_not_supported,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
+                      ),
                     ),
                   );
                 },
@@ -788,31 +1104,68 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             
             return Container(
               height: maxHeight,
-              child: ListView.builder(
-                padding: EdgeInsets.all(isSmallScreen ? 8 : 12), // Reduce padding
+              child: GridView.builder(
+                padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2, // 2 columns for horizontal grid
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 0.6, // Adjust aspect ratio for video reels
+                ),
                 itemCount: reels.length,
                 itemBuilder: (context, index) {
                   final reel = reels[index];
-                  return Container(
-                    margin: EdgeInsets.only(bottom: isSmallScreen ? 6 : 8), // Reduce margin
-                    child: PostWidget(
-                      post: reel,
-                      onComment: () {
-                        // Handle comment
-                      },
-                      onShare: () {
-                        // Handle share
-                      },
-                      onUserTap: () {
-                        _navigateToUserProfile(reel);
-                      },
-                      onDelete: () {
-                        // Remove the deleted reel from the list and refresh
-                        setState(() {
-                          reels.removeWhere((r) => r.id == reel.id);
-                        });
-                        print('Reel deleted: ${reel.id}');
-                      },
+                  return GestureDetector(
+                    onTap: () {
+                      // Navigate to full screen post view
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostFullViewScreen(post: reel),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: reel.thumbnailUrl != null
+                            ? Image.network(
+                                reel.thumbnailUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[200],
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.play_circle_outline,
+                                        color: Colors.grey,
+                                        size: 40,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.play_circle_outline,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
+                      ),
                     ),
                   );
                 },

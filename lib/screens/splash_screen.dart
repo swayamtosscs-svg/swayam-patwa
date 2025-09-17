@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
-import '../utils/app_theme.dart';
-import '../widgets/app_loader.dart';
-import 'login_screen.dart';
-import 'home_screen.dart';
+import '../utils/font_theme.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -78,67 +75,12 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeService>(
-      builder: (context, themeService, child) {
-        final religion = themeService.userReligion.toLowerCase();
-        List<Color> gradientColors;
-        
-        switch (religion) {
-          case 'hinduism':
-          case 'hindu':
-            gradientColors = [ThemeService.hinduSaffronOrange, ThemeService.hinduWarmOrange, ThemeService.hinduWhite, ThemeService.hinduMaroon];
-            break;
-          case 'islam':
-          case 'muslim':
-            gradientColors = [ThemeService.islamDarkGreen, ThemeService.islamFreshGreen, ThemeService.islamCream, ThemeService.islamWhite];
-            break;
-          case 'christianity':
-          case 'christian':
-            gradientColors = [ThemeService.christianDeepBlue, ThemeService.christianLightBlue, ThemeService.christianWhite, ThemeService.christianGold];
-            break;
-          case 'jainism':
-          case 'jain':
-            gradientColors = [ThemeService.jainDeepRed, ThemeService.jainSaffron, ThemeService.jainWhite, ThemeService.jainDeepRed];
-            break;
-          case 'buddhism':
-          case 'buddhist':
-            gradientColors = [ThemeService.buddhistMonkOrange, ThemeService.buddhistGoldenYellow, ThemeService.buddhistPaleGold, ThemeService.buddhistWhite];
-            break;
-          case 'sikhism':
-          case 'sikh':
-            gradientColors = [ThemeService.sikhSaffron, ThemeService.sikhDeepOrange, ThemeService.sikhWhite, ThemeService.sikhNavyBlue];
-            break;
-          case 'judaism':
-          case 'jewish':
-            gradientColors = [ThemeService.jewishDeepBlue, ThemeService.jewishLightBlue, ThemeService.jewishSilver, ThemeService.jewishWhite];
-            break;
-          case 'bahai':
-          case 'baha\'i':
-            gradientColors = [ThemeService.bahaiWarmOrange, ThemeService.bahaiViolet, ThemeService.bahaiJadeGreen, ThemeService.bahaiWhite];
-            break;
-          case 'taoism':
-          case 'daoism':
-            gradientColors = [ThemeService.taoBlack, ThemeService.taoCharcoal, ThemeService.taoJadeGreen, ThemeService.taoOffWhite];
-            break;
-          case 'indigenous':
-          case 'earth_spiritual':
-            gradientColors = [ThemeService.indigenousEarthBrown, ThemeService.indigenousClayBrown, ThemeService.indigenousForestGreen, ThemeService.indigenousWhite];
-            break;
-          default:
-            gradientColors = [const Color(0xFF8B4513), const Color(0xFFD2691E), const Color(0xFFF5DEB3), const Color(0xFFD2691E)];
-        }
-        
-        return Scaffold(
-          backgroundColor: gradientColors.first,
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: gradientColors,
-                stops: const [0.0, 0.3, 0.7, 1.0],
-              ),
-            ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0EBE1), // Logo box color from the image
+      body: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF0EBE1), // Logo box color background
+        ),
         child: Center(
           child: AnimatedBuilder(
             animation: _animationController,
@@ -150,185 +92,99 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Religious decorative elements
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildReligiousIcon(Icons.self_improvement, themeService),
-                          const SizedBox(width: 20),
-                          _buildReligiousIcon(Icons.favorite, themeService),
-                          const SizedBox(width: 20),
-                          _buildReligiousIcon(Icons.star, themeService),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 30),
-                      
-                      // RGRAM Logo with enhanced religious styling
+                      // RGRAM Logo with Square Background (Instagram-style) - Same as Login Screen
                       Container(
-                        width: 220,
-                        height: 220,
+                        width: 200,
+                        height: 200,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: AppTheme.primaryGradient,
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                          borderRadius: BorderRadius.circular(24), // Square with rounded corners (scaled up from login)
+                          color: const Color(0xFFF0EBE1), // Light beige background
+                          border: Border.all(
+                            color: const Color(0xFFE0D5C7), // Subtle border
+                            width: 2, // Scaled up from login
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.primaryColor.withOpacity(0.4),
-                              blurRadius: 40,
-                              spreadRadius: 15,
-                            ),
-                            BoxShadow(
-                              color: AppTheme.goldColor.withOpacity(0.3),
-                              blurRadius: 60,
-                              spreadRadius: 5,
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 30, // Scaled up from login
+                              spreadRadius: 4, // Scaled up from login
+                              offset: const Offset(0, 10), // Scaled up from login
                             ),
                           ],
                         ),
-                        child: Container(
-                          margin: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.1),
-                          ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              'assets/icons/RGRAM logo.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                // Enhanced fallback with religious symbols
-                                return Container(
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      colors: AppTheme.primaryGradient,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24), // Match container border radius
+                          child: Image.asset(
+                            'assets/icons/Peaceful Sunburst Icon Design.png',
+                            width: 200,
+                            height: 200,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              // Simple fallback
+                              return Container(
+                                decoration: const BoxDecoration(
+                                  borderRadius: BorderRadius.all(Radius.circular(24)),
+                                  color: Color(0xFFD29650), // Text color from logo
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.self_improvement,
+                                      color: Colors.white,
+                                      size: 80, // Scaled up
                                     ),
-                                  ),
-                                  child: const Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.self_improvement,
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'RGRAM',
+                                      style: TextStyle(
                                         color: Colors.white,
-                                        size: 60,
+                                        fontSize: 24, // Scaled up
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'RGRAM',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
                       
                       const SizedBox(height: 40),
                       
-                      // App Name with religious styling
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: AppTheme.buttonGradient,
-                          ),
-                          borderRadius: BorderRadius.circular(25),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primaryColor.withOpacity(0.3),
-                              blurRadius: 15,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: const Text(
-                          'RGRAM',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Poppins',
-                            letterSpacing: 3,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black26,
-                                offset: Offset(2, 2),
-                                blurRadius: 4,
-                              ),
-                            ],
-                          ),
+                      // App Name with system font branding
+                      const Text(
+                        'RGRAM',
+                        style: TextStyle(
+                          fontFamily: 'Roboto', // System font
+                          color: Color(0xFFD29650), // Text color from logo
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 3,
                         ),
                       ),
                       
                       const SizedBox(height: 20),
                       
-                      // Enhanced tagline
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: AppTheme.goldColor.withOpacity(0.5),
-                            width: 1,
-                          ),
-                        ),
-                        child: const Text(
-                          'Spiritual Connection Platform',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'Poppins',
-                            letterSpacing: 1,
-                          ),
+                      // Tagline with system font
+                      const Text(
+                        'Spiritual Connection Platform',
+                        style: TextStyle(
+                          fontFamily: 'Roboto', // System font
+                          color: Color(0xFFD29650), // Text color from logo
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1,
                         ),
                       ),
                       
                       const SizedBox(height: 60),
                       
-                      // Enhanced loading indicator
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.1),
-                              border: Border.all(
-                                color: _getLoadingIndicatorColor(religion).withOpacity(0.5),
-                                width: 2,
-                              ),
-                            ),
-                            child: CircularProgressIndicator(
-                              color: _getLoadingIndicatorColor(religion),
-                              strokeWidth: 4,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Connecting to Divine...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              fontFamily: 'Poppins',
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ],
+                      // Simple loading indicator
+                      const CircularProgressIndicator(
+                        color: Color(0xFFD29650), // Text color from logo
+                        strokeWidth: 3,
                       ),
                     ],
                   ),
@@ -337,51 +193,6 @@ class _SplashScreenState extends State<SplashScreen>
             },
           ),
         ),
-      ),
-    );
-      },
-    );
-  }
-  
-  Color _getLoadingIndicatorColor(String religion) {
-    switch (religion) {
-      case 'hinduism':
-      case 'hindu':
-        return ThemeService.hinduWarmOrange;
-      case 'islam':
-      case 'muslim':
-        return ThemeService.islamFreshGreen;
-      case 'christianity':
-      case 'christian':
-        return ThemeService.christianGold;
-      case 'jainism':
-      case 'jain':
-        return ThemeService.jainSaffron;
-      case 'buddhism':
-      case 'buddhist':
-        return ThemeService.buddhistPaleGold;
-      default:
-        return const Color(0xFFD2691E);
-    }
-  }
-
-  Widget _buildReligiousIcon(IconData icon, ThemeService themeService) {
-    final religion = themeService.userReligion.toLowerCase();
-    
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.2),
-        border: Border.all(
-          color: _getLoadingIndicatorColor(religion).withOpacity(0.6),
-          width: 2,
-        ),
-      ),
-      child: Icon(
-        icon,
-        color: _getLoadingIndicatorColor(religion),
-        size: 24,
       ),
     );
   }

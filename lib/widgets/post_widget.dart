@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
+import '../screens/post_full_view_screen.dart';
+import 'image_slider_widget.dart';
 
 class PostWidget extends StatefulWidget {
   final Post post;
@@ -32,6 +35,7 @@ class _PostWidgetState extends State<PostWidget> {
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
   bool _hasError = false;
+  bool _isCaptionExpanded = false;
 
   @override
   void initState() {
@@ -53,8 +57,12 @@ class _PostWidgetState extends State<PostWidget> {
     try {
       print('PostWidget: Initializing reel video: ${widget.post.videoUrl}');
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.post.videoUrl!),
+      _videoController = VideoPlayerController.network(
+        widget.post.videoUrl!,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
       );
       
       // Set video player configuration
@@ -143,34 +151,45 @@ class _PostWidgetState extends State<PostWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // Reduced margins
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+    return GestureDetector(
+      onTap: () {
+        // Navigate to full screen post view
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostFullViewScreen(post: widget.post),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Post Header
-          _buildPostHeader(),
-          
-          // Post Content
-          _buildPostContent(),
-          
-          // Post Actions
-          _buildPostActions(),
-          
-          // Post Stats
-          _buildPostStats(),
-        ],
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Post Header
+            _buildPostHeader(),
+            
+            // Post Content
+            _buildPostContent(),
+            
+            // Post Actions
+            _buildPostActions(),
+            
+            // Post Stats
+            _buildPostStats(),
+          ],
+        ),
       ),
     );
   }
@@ -179,13 +198,28 @@ class _PostWidgetState extends State<PostWidget> {
     // Check if userAvatar is a valid image URL
     if (widget.post.userAvatar.isNotEmpty && 
         (widget.post.userAvatar.startsWith('http://') || widget.post.userAvatar.startsWith('https://'))) {
-      // If it's a valid URL, show the image
+      // If it's a valid URL, show the image with caching
       return ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Image.network(
-          widget.post.userAvatar,
+        child: CachedNetworkImage(
+          imageUrl: widget.post.userAvatar,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
+          width: 40,
+          height: 40,
+          placeholder: (context, url) => Container(
+            width: 40,
+            height: 40,
+            color: Colors.grey[200],
+            child: const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+          errorWidget: (context, url, error) {
+            print('PostWidget: Avatar load error for URL: $url');
+            print('PostWidget: Error: $error');
             // Fallback to initials if image fails to load
             return _buildAvatarInitials();
           },
@@ -324,32 +358,35 @@ class _PostWidgetState extends State<PostWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Caption
-        if (widget.post.caption != null) ...[
+        if (widget.post.caption != null && widget.post.caption!.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
-            child: Text(
-              widget.post.caption!,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF1A1A1A),
-                fontFamily: 'Poppins',
-                height: 1.4,
-              ),
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _buildExpandableCaption(),
           ),
-          const SizedBox(height: 12),
-        ],
         
-        // Media Content
-        if (widget.post.imageUrl != null || widget.post.videoUrl != null) ...[
-          _buildMediaContent(),
-          const SizedBox(height: 12),
-        ],
+        // Image/Video Content
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
+            // Use original image aspect ratio to preserve natural dimensions
+            final aspectRatio = 4 / 3; // Natural aspect ratio to preserve original image
+            final height = maxWidth / aspectRatio; // Preserve original proportions
+            
+            return Container(
+              width: maxWidth,
+              height: height,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                child: _buildMediaContent(),
+              ),
+            );
+          },
+        ),
         
         // Hashtags
         if (widget.post.hashtags.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Wrap(
               spacing: 8,
               runSpacing: 4,
@@ -373,106 +410,71 @@ class _PostWidgetState extends State<PostWidget> {
               }).toList(),
             ),
           ),
-          const SizedBox(height: 12),
         ],
       ],
     );
   }
 
   Widget _buildMediaContent() {
-    if (widget.post.type == PostType.image && widget.post.imageUrl != null) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth = constraints.maxWidth;
-          final aspectRatio = 4 / 3; // 4:3 aspect ratio
-          final height = (maxWidth / aspectRatio).clamp(200.0, 300.0); // Min 200, Max 300
-          
-          return Container(
-            height: height,
-            margin: const EdgeInsets.symmetric(horizontal: 12), // Reduced margin
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.grey.withOpacity(0.1),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                widget.post.imageUrl!,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    color: Colors.grey.withOpacity(0.1),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.primaryColor,
+    if (widget.post.type == PostType.image) {
+      // Support multiple images
+      final imagesToShow = widget.post.imageUrls.isNotEmpty 
+          ? widget.post.imageUrls 
+          : (widget.post.imageUrl != null ? [widget.post.imageUrl!] : []);
+      
+      if (imagesToShow.isNotEmpty) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
+            // Use natural aspect ratio to preserve original image dimensions
+            final aspectRatio = 4 / 3;
+            final height = maxWidth / aspectRatio; // Preserve original proportions
+            
+            // Use ImageSliderWidget for all images
+            return Container(
+              width: maxWidth,
+              height: height,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                child: ImageSliderWidget(
+                  imageUrls: imagesToShow.cast<String>(),
+                  height: height,
+                  showCounter: true,
+                  onTap: () {
+                    // Navigate to full screen image viewer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PostFullViewScreen(post: widget.post),
                       ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey.withOpacity(0.1),
-                  child: const Center(
-                    child: Icon(
-                      Icons.image_not_supported,
-                      color: Color(0xFF666666),
-                      size: 48,
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
-            ),
-          );
-        },
-      );
+            );
+          },
+        );
+      }
     } else if ((widget.post.type == PostType.video || widget.post.type == PostType.reel || widget.post.isReel) && widget.post.videoUrl != null) {
       return LayoutBuilder(
         builder: (context, constraints) {
           final maxWidth = constraints.maxWidth;
           // Use different aspect ratios for reels vs regular videos
-          final aspectRatio = (widget.post.type == PostType.reel || widget.post.isReel) ? 9 / 16 : 4 / 3;
-          final height = (maxWidth / aspectRatio).clamp(200.0, 400.0); // Min 200, Max 400
+          final aspectRatio = (widget.post.type == PostType.reel || widget.post.isReel) ? 9 / 16 : 4 / 3; // Natural ratio for regular videos, 9:16 for reels
+          final height = maxWidth / aspectRatio; // Preserve original proportions
           
           return Container(
+            width: maxWidth,
             height: height,
-            margin: const EdgeInsets.symmetric(horizontal: 12), // Reduced margin
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.grey.withOpacity(0.1),
-            ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
               child: Stack(
                 children: [
                   // Video Player or Thumbnail
                   if (_isVideoInitialized && _videoController != null && !_hasError)
                     VideoPlayer(_videoController!)
                   else
-                    Image.network(
-                      widget.post.thumbnailUrl ?? widget.post.imageUrl ?? '',
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          color: Colors.grey.withOpacity(0.1),
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: Colors.grey.withOpacity(0.1),
-                        child: const Center(
-                          child: Icon(
-                            Icons.video_library,
-                            color: Color(0xFF666666),
-                            size: 48,
-                          ),
-                        ),
-                      ),
-                    ),
+                    _buildVideoThumbnail(),
                   
                   // Play/Pause Overlay - always show when video is not playing
                   if (!_isPlaying || _hasError)
@@ -770,5 +772,127 @@ class _PostWidgetState extends State<PostWidget> {
         ),
       );
     }
+  }
+
+  Widget _buildVideoThumbnail() {
+    final thumbnailUrl = widget.post.thumbnailUrl ?? widget.post.imageUrl ?? '';
+    
+    if (thumbnailUrl.isEmpty) {
+      return Container(
+        color: Colors.grey.withOpacity(0.1),
+        child: const Center(
+          child: Icon(
+            Icons.video_library,
+            color: Color(0xFF666666),
+            size: 48,
+          ),
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: thumbnailUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      placeholder: (context, url) => Container(
+        color: Colors.grey.withOpacity(0.1),
+        child: const Center(
+          child: CircularProgressIndicator(
+            color: AppTheme.primaryColor,
+            strokeWidth: 2,
+          ),
+        ),
+      ),
+      errorWidget: (context, url, error) {
+        print('PostWidget: Video thumbnail error for URL: $url');
+        print('PostWidget: Error: $error');
+        return Container(
+          color: Colors.grey.withOpacity(0.1),
+          child: const Center(
+            child: Icon(
+              Icons.video_library,
+              color: Color(0xFF666666),
+              size: 48,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildExpandableCaption() {
+    const int maxLines = 3; // Show only 3 lines initially
+    final caption = widget.post.caption!;
+    
+    // Check if caption is long enough to need expansion
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: caption,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF1A1A1A),
+          fontFamily: 'Poppins',
+          height: 1.4,
+        ),
+      ),
+      maxLines: maxLines,
+      textDirection: TextDirection.ltr,
+    );
+    
+    textPainter.layout();
+    final isLongCaption = textPainter.didExceedMaxLines;
+    
+    if (!isLongCaption) {
+      // If caption is short, show it normally
+      return Text(
+        caption,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF1A1A1A),
+          fontFamily: 'Poppins',
+          height: 1.4,
+        ),
+      );
+    }
+    
+    // If caption is long, show expandable version
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              caption,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF1A1A1A),
+                fontFamily: 'Poppins',
+                height: 1.4,
+              ),
+              maxLines: _isCaptionExpanded ? null : maxLines,
+              overflow: _isCaptionExpanded ? null : TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isCaptionExpanded = !_isCaptionExpanded;
+                });
+              },
+              child: Text(
+                _isCaptionExpanded ? 'Show less' : 'Show more',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF666666),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 } 

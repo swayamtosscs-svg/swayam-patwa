@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../services/dp_service.dart';
 import '../utils/app_theme.dart';
 
@@ -79,6 +80,7 @@ class _DPWidgetState extends State<DPWidget> {
             _isLoading = false;
           });
           print('DPWidget: DP loaded: $_localImageUrl');
+          print('DPWidget: File name: $_fileName');
           
           // Notify parent about the change if we got a new image
           if (widget.currentImageUrl != _localImageUrl) {
@@ -87,6 +89,8 @@ class _DPWidgetState extends State<DPWidget> {
         } else {
           print('DPWidget: No DP data in response');
           setState(() {
+            _localImageUrl = null;
+            _fileName = null;
             _isLoading = false;
           });
         }
@@ -94,11 +98,13 @@ class _DPWidgetState extends State<DPWidget> {
         print('DPWidget: Failed to load DP: ${response['message']}');
         print('DPWidget: Error details: ${response['error']}');
         setState(() {
+          _localImageUrl = null;
+          _fileName = null;
           _isLoading = false;
         });
         
-        // Show error message to user
-        if (mounted) {
+        // Don't show error message for "No display picture found" - this is normal
+        if (response['message'] != 'No display picture found for this user.' && mounted) {
           _showSnackBar(
             response['message'] ?? 'Failed to load display picture',
             Colors.orange,
@@ -108,6 +114,8 @@ class _DPWidgetState extends State<DPWidget> {
     } catch (e) {
       print('DPWidget: Error loading DP: $e');
       setState(() {
+        _localImageUrl = null;
+        _fileName = null;
         _isLoading = false;
       });
       _showSnackBar('Error loading display picture: $e', Colors.red);
@@ -150,11 +158,11 @@ class _DPWidgetState extends State<DPWidget> {
             _showSnackBar('Error processing selected image. Please try again.', Colors.red);
           }
         } else {
-          // For mobile platforms, use File object
+          // For mobile platforms, use File object with cropping
           final imageFile = File(image.path);
           if (await imageFile.exists()) {
-            print('DPWidget: Image file exists, proceeding with upload');
-            await _uploadImage(imageFile);
+            print('DPWidget: Image file exists, proceeding with crop and upload');
+            await _cropAndUploadImage(imageFile);
           } else {
             print('DPWidget: Image file does not exist');
             _showSnackBar('Selected image file not found', Colors.red);
@@ -166,6 +174,41 @@ class _DPWidgetState extends State<DPWidget> {
     } catch (e) {
       print('DPWidget: Error picking image: $e');
       _showSnackBar('Error picking image: $e', Colors.red);
+    }
+  }
+
+  Future<void> _cropAndUploadImage(File imageFile) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Profile Picture',
+            toolbarColor: AppTheme.primaryColor,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+          IOSUiSettings(
+            title: 'Crop Profile Picture',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPickerButtonHidden: true,
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        await _uploadImage(File(croppedFile.path));
+      }
+    } catch (e) {
+      print('DPWidget: Error cropping image: $e');
+      // If cropping fails, upload original image
+      await _uploadImage(imageFile);
     }
   }
 
@@ -282,10 +325,17 @@ class _DPWidgetState extends State<DPWidget> {
   }
 
   Future<void> _deleteDP() async {
-    if (_fileName == null || widget.token.isEmpty) {
+    if (_fileName == null || _fileName!.isEmpty) {
       _showSnackBar('No display picture to delete', Colors.orange);
       return;
     }
+
+    if (widget.token.isEmpty) {
+      _showSnackBar('Authentication token not found', Colors.red);
+      return;
+    }
+
+    print('DPWidget: Attempting to delete DP with fileName: $_fileName');
 
     // Show confirmation dialog
     final shouldDelete = await showDialog<bool>(
@@ -368,6 +418,13 @@ class _DPWidgetState extends State<DPWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // Debug information
+    print('DPWidget: Building widget');
+    print('DPWidget: _localImageUrl: $_localImageUrl');
+    print('DPWidget: _fileName: $_fileName');
+    print('DPWidget: showEditButton: ${widget.showEditButton}');
+    print('DPWidget: Should show delete button: ${widget.showEditButton && _localImageUrl != null && _localImageUrl!.isNotEmpty && _fileName != null && _fileName!.isNotEmpty}');
+    
     return Stack(
       children: [
         // Main DP container
@@ -455,8 +512,12 @@ class _DPWidgetState extends State<DPWidget> {
             ),
           ),
         
-        // Delete button (only show if DP exists)
-        if (widget.showEditButton && _localImageUrl != null && _localImageUrl!.isNotEmpty)
+        // Delete button (only show if DP exists and we have fileName)
+        if (widget.showEditButton && 
+            _localImageUrl != null && 
+            _localImageUrl!.isNotEmpty && 
+            _fileName != null && 
+            _fileName!.isNotEmpty)
           Positioned(
             top: 0,
             right: 0,
@@ -501,11 +562,7 @@ class _DPWidgetState extends State<DPWidget> {
           end: Alignment.bottomRight,
         ),
       ),
-      child: Icon(
-        Icons.person,
-        size: widget.size * 0.5,
-        color: widget.borderColor,
-      ),
+      // Removed the person icon - now shows empty gradient background
     );
   }
 }

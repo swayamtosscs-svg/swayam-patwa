@@ -675,7 +675,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.delete(
-        Uri.parse('http://103.14.120.163:8081/api/media/delete?id=$mediaId'),
+        Uri.parse('https://api-rgram1.vercel.app/api/media/delete?id=$mediaId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

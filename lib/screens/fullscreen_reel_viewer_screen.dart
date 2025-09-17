@@ -38,8 +38,12 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
     try {
       print('FullscreenReelViewerScreen: Initializing video: ${widget.reel.video.url}');
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.reel.video.url),
+      _videoController = VideoPlayerController.network(
+        widget.reel.video.url,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
       );
       
       // Set video player configuration

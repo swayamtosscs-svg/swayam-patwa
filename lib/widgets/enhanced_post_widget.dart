@@ -3,11 +3,12 @@ import 'package:video_player/video_player.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../services/baba_like_service.dart';
-import '../services/baba_comment_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
+import '../screens/post_full_view_screen.dart';
 import 'baba_comment_dialog.dart';
+import 'image_slider_widget.dart';
 
 class EnhancedPostWidget extends StatefulWidget {
   final Post post;
@@ -41,6 +42,7 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
   bool _hasError = false;
+  bool _isCaptionExpanded = false;
 
   @override
   void initState() {
@@ -75,8 +77,12 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       print('EnhancedPostWidget: Initializing reel video: ${widget.post.videoUrl}');
       print('EnhancedPostWidget: Post type: ${widget.post.type}, isReel: ${widget.post.isReel}');
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.post.videoUrl!),
+      _videoController = VideoPlayerController.network(
+        widget.post.videoUrl!,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
       );
       
       // Set video player configuration
@@ -216,15 +222,15 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), // Better spacing like second image
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.08), // Slightly stronger shadow
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -445,32 +451,16 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           if (widget.post.caption != null && widget.post.caption!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                widget.post.caption!,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF1A1A1A),
-                  fontFamily: 'Poppins',
-                ),
-              ),
+              child: _buildExpandableCaption(),
             ),
           
-          // Image/Video Content
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final maxWidth = constraints.maxWidth;
-              final aspectRatio = 4 / 3; // 4:3 aspect ratio for better mobile viewing
-              final height = (maxWidth / aspectRatio).clamp(200.0, 400.0); // Min 200, Max 400
-              
-              return Container(
-                width: maxWidth,
-                height: height,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                  child: _buildMediaContent(),
-                ),
-              );
-            },
+          // Image/Video Content - Full width like second image
+          Container(
+            width: double.infinity,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+              child: _buildMediaContent(),
+            ),
           ),
         ],
       ),
@@ -481,12 +471,9 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
     // Check if it's a video/reel
     if (widget.post.type == PostType.video || widget.post.type == PostType.reel || widget.post.isReel) {
       if (widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
-        // Use different aspect ratios for reels vs regular videos
-        final aspectRatio = (widget.post.type == PostType.reel || widget.post.isReel) ? 9 / 16 : 4 / 3;
-        final height = MediaQuery.of(context).size.width / aspectRatio;
-        
+        // Use consistent height for videos like second image
         return Container(
-          height: height.clamp(200.0, 400.0),
+          height: 400, // Fixed height for consistent display
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -569,25 +556,30 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
         );
       }
     } else {
-      // Show image
-      if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty) {
-        return Image.network(
-          widget.post.imageUrl!,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              color: const Color(0xFFF0F0F0),
-              child: const Center(
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: 64,
-                  color: Color(0xFFCCCCCC),
-                ),
-              ),
-            );
-          },
+      // Show images - support multiple images
+      final imagesToShow = widget.post.imageUrls.isNotEmpty 
+          ? widget.post.imageUrls 
+          : (widget.post.imageUrl != null ? [widget.post.imageUrl!] : []);
+      
+      if (imagesToShow.isNotEmpty) {
+        // Use ImageSliderWidget for all images - full width like second image
+        return Stack(
+          children: [
+            ImageSliderWidget(
+              imageUrls: imagesToShow.cast<String>(),
+              height: 400, // Fixed height for consistent display
+              showCounter: true,
+              onTap: () {
+                // Navigate to full screen image viewer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PostFullViewScreen(post: widget.post),
+                  ),
+                );
+              },
+            ),
+          ],
         );
       } else {
         // No image URL, show placeholder
@@ -609,81 +601,87 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Distribute buttons evenly
         children: [
           // Like Button - Only for Baba Ji posts
-          if (widget.post.isBabaJiPost && widget.onLike != null) ...[
-            GestureDetector(
-              onTap: _handleLike,
-              child: Row(
-                children: [
-                  Icon(
-                    _isLiked ? Icons.favorite : Icons.favorite_border,
-                    color: _isLiked ? Colors.red : const Color(0xFF666666),
-                    size: 28,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Like',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+          if (widget.post.isBabaJiPost && widget.onLike != null)
+            Expanded(
+              child: GestureDetector(
+                onTap: _handleLike,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isLiked ? Icons.favorite : Icons.favorite_border,
                       color: _isLiked ? Colors.red : const Color(0xFF666666),
+                      size: 24, // Reduced size
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Like',
+                      style: TextStyle(
+                        fontSize: 12, // Reduced font size
+                        fontWeight: FontWeight.w500,
+                        color: _isLiked ? Colors.red : const Color(0xFF666666),
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          
+          // Comment Button
+          Expanded(
+            child: GestureDetector(
+              onTap: _handleComment,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.chat_bubble_outline,
+                    color: Color(0xFF666666),
+                    size: 24, // Reduced size
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Comments',
+                    style: TextStyle(
+                      fontSize: 12, // Reduced font size
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF666666),
                       fontFamily: 'Poppins',
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 24),
-          ],
-          
-          // Comment Button
-          GestureDetector(
-            onTap: _handleComment,
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.chat_bubble_outline,
-                  color: Color(0xFF666666),
-                  size: 28,
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Comments',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF666666),
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
           ),
           
-          const SizedBox(width: 24),
-          
           // Share Button
-          GestureDetector(
-            onTap: widget.onShare,
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.share_outlined,
-                  color: Color(0xFF666666),
-                  size: 28,
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Share',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+          Expanded(
+            child: GestureDetector(
+              onTap: widget.onShare,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.share_outlined,
                     color: Color(0xFF666666),
-                    fontFamily: 'Poppins',
+                    size: 24, // Reduced size
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Share',
+                    style: TextStyle(
+                      fontSize: 12, // Reduced font size
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF666666),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -1057,6 +1055,78 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           isPrivate: false, // Default to public, will be updated when user profile is loaded
         ),
       ),
+    );
+  }
+
+  Widget _buildExpandableCaption() {
+    const int maxLines = 3; // Show only 3 lines initially
+    final caption = widget.post.caption!;
+    
+    // Check if caption is long enough to need expansion
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: caption,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF1A1A1A),
+          fontFamily: 'Poppins',
+        ),
+      ),
+      maxLines: maxLines,
+      textDirection: TextDirection.ltr,
+    );
+    
+    textPainter.layout();
+    final isLongCaption = textPainter.didExceedMaxLines;
+    
+    if (!isLongCaption) {
+      // If caption is short, show it normally
+      return Text(
+        caption,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF1A1A1A),
+          fontFamily: 'Poppins',
+        ),
+      );
+    }
+    
+    // If caption is long, show expandable version
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              caption,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF1A1A1A),
+                fontFamily: 'Poppins',
+              ),
+              maxLines: _isCaptionExpanded ? null : maxLines,
+              overflow: _isCaptionExpanded ? null : TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isCaptionExpanded = !_isCaptionExpanded;
+                });
+              },
+              child: Text(
+                _isCaptionExpanded ? 'Show less' : 'Show more',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF666666),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

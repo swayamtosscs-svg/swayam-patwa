@@ -6,6 +6,7 @@ import '../screens/followers_screen.dart';
 import '../screens/following_screen.dart';
 import '../services/user_media_service.dart';
 import '../screens/chat_screen.dart';
+import '../screens/post_full_view_screen.dart';
 import 'package:flutter/foundation.dart'; // Added for kDebugMode
 
 class UserProfileScreen extends StatefulWidget {
@@ -137,108 +138,282 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      appBar: AppBar(
-        title: Text(widget.fullName),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: const Color(0xFF1A1A1A),
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () async {
-              // Refresh following status and posts
-              await _checkFollowingStatus();
-              await _loadUserMedia();
+      backgroundColor: const Color(0xFFF0EBE1), // Same as own profile page background
+      appBar: _buildInstagramStyleAppBar(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await _checkFollowingStatus();
+          await _loadUserMedia();
+        },
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Instagram-style Profile Header
+              _buildInstagramStyleProfileHeader(),
               
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Profile refreshed'),
-                    backgroundColor: Color(0xFF6366F1),
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.refresh, color: Color(0xFF1A1A1A)),
+              // Instagram-style Tab Bar
+              _buildInstagramStyleTabBar(),
+              
+              // Tab Content
+              _buildTabContent(),
+            ],
           ),
-          
-          // Message Button
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatScreen(
-                    recipientUserId: widget.userId,
-                    recipientUsername: widget.username,
-                    recipientFullName: widget.fullName,
-                    recipientAvatar: widget.avatar,
-                    threadId: null, // New conversation
-                  ),
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildInstagramStyleAppBar() {
+    return AppBar(
+      backgroundColor: const Color(0xFFF0EBE1), // Same as own profile page background
+      elevation: 0,
+      leading: IconButton(
+        onPressed: () => Navigator.of(context).pop(),
+        icon: const Icon(Icons.arrow_back, color: Colors.black),
+      ),
+      title: Text(
+        widget.username,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      actions: [
+        IconButton(
+          onPressed: () async {
+            // Refresh following status and posts
+            await _checkFollowingStatus();
+            await _loadUserMedia();
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Profile refreshed'),
+                  backgroundColor: Color(0xFF6366F1),
                 ),
               );
-            },
-            icon: const Icon(Icons.message, color: Color(0xFF6366F1)),
-            tooltip: 'Send Message',
-          ),
-          // Debug button to show raw data
-          if (kDebugMode)
-            IconButton(
-              onPressed: () => _showDebugInfo(),
-              icon: const Icon(Icons.bug_report),
-              tooltip: 'Debug Info',
-            ),
-        ],
-      ),
-      body: CustomScrollView(
-        slivers: [
-          // Profile Header
-          SliverToBoxAdapter(
-            child: _buildProfileHeader(),
-          ),
-
-          // Tab Bar
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _SliverAppBarDelegate(
-              TabBar(
-                controller: _tabController,
-                labelColor: const Color(0xFF6366F1),
-                unselectedLabelColor: const Color(0xFF666666),
-                indicatorColor: const Color(0xFF6366F1),
-                tabs: const [
-                  Tab(text: 'Posts'),
-                  Tab(text: 'Reels'),
-                  Tab(text: 'Tagged'),
-                ],
+            }
+          },
+          icon: const Icon(Icons.refresh, color: Colors.black),
+        ),
+        
+        // Message Button
+        IconButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(
+                  recipientUserId: widget.userId,
+                  recipientUsername: widget.username,
+                  recipientFullName: widget.fullName,
+                  recipientAvatar: widget.avatar,
+                  threadId: null, // New conversation
+                ),
               ),
-            ),
-          ),
+            );
+          },
+          icon: const Icon(Icons.message, color: Colors.black),
+          tooltip: 'Send Message',
+        ),
+        
+        // More options
+        IconButton(
+          onPressed: () {
+            // Show more options
+          },
+          icon: const Icon(Icons.more_vert, color: Colors.black),
+        ),
+      ],
+    );
+  }
 
-          // Tab Content
-          SliverFillRemaining(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                RefreshIndicator(
-                  onRefresh: _loadUserMedia,
-                  child: _buildPostsTab(),
+  Widget _buildInstagramStyleProfileHeader() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Profile Picture and Stats Row
+          Row(
+            children: [
+              // Profile Picture
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF4A2C2A), width: 2),
                 ),
-                RefreshIndicator(
-                  onRefresh: _loadUserMedia,
-                  child: _buildReelsTab(),
+                child: ClipOval(
+                  child: widget.avatar.isNotEmpty
+                      ? Image.network(
+                          widget.avatar,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF4A2C2A).withOpacity(0.1),
+                                    const Color(0xFF4A2C2A).withOpacity(0.3),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF4A2C2A).withOpacity(0.1),
+                                const Color(0xFF4A2C2A).withOpacity(0.3),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                        ),
                 ),
-                RefreshIndicator(
-                  onRefresh: _loadUserMedia,
-                  child: _buildTaggedTab(),
+              ),
+              
+              const SizedBox(width: 20),
+              
+              // Stats Column
+              Expanded(
+                child: Column(
+                  children: [
+                    // Stats Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildStatColumn(_postsCount.toString(), 'posts'),
+                        _buildStatColumn(_reelsCount.toString(), 'reels'),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => FollowersScreen(userId: widget.userId),
+                              ),
+                            );
+                          },
+                          child: _buildStatColumn(widget.followersCount.toString(), 'followers'),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => FollowingScreen(userId: widget.userId),
+                              ),
+                            );
+                          },
+                          child: _buildStatColumn(widget.followingCount.toString(), 'following'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // User Name and Bio
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.fullName,
+                style: const TextStyle(
+                  color: Color(0xFF4A2C2A), // Deep Brown
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              
+              if (widget.bio.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  widget.bio,
+                  style: const TextStyle(
+                    color: Color(0xFF4A2C2A), // Deep Brown
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
+          
+          const SizedBox(height: 16),
+          
+          // Follow Button
+          _buildFollowButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatColumn(String count, String label) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: const TextStyle(
+            color: Color(0xFF4A2C2A), // Deep Brown
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF4A2C2A), // Deep Brown
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInstagramStyleTabBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
+        ),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        labelColor: const Color(0xFF4A2C2A), // Deep Brown
+        unselectedLabelColor: const Color(0xFF999999),
+        indicatorColor: const Color(0xFF4A2C2A), // Deep Brown
+        tabs: const [
+          Tab(icon: Icon(Icons.grid_on)),
+          Tab(icon: Icon(Icons.play_circle_outline)),
+          Tab(icon: Icon(Icons.bookmark_border)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.6,
+      child: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildPostsTab(),
+          _buildReelsTab(),
+          _buildTaggedTab(),
         ],
       ),
     );
@@ -389,106 +564,74 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       return const SizedBox.shrink();
     }
 
-    // Show different button states based on account privacy and follow status
-    if (widget.isPrivate && !_isFollowing) {
-      // Show "Follow" button for private account
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: _isLoadingFollowRequest ? null : () async {
-            await _followUser();
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6366F1),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
-          child: _isLoadingFollowRequest
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : const Text(
-                  'Follow',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-        ),
-      );
-    } else {
-      // Show normal follow/unfollow button for public accounts or already followed users
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: () async {
-            final authProvider = Provider.of<AuthProvider>(context, listen: false);
-            bool success;
-            
-            if (_isFollowing) {
-              // Unfollow the user
-              success = await authProvider.unfollowUser(_targetUserId);
-            } else {
-              // Follow the user
-              success = await authProvider.followUser(_targetUserId);
-            }
+    // Instagram-style Follow button
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: _isLoadingFollowRequest ? null : () async {
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          bool success;
+          
+          if (_isFollowing) {
+            // Unfollow the user
+            success = await authProvider.unfollowUser(_targetUserId);
+          } else {
+            // Follow the user
+            success = await authProvider.followUser(_targetUserId);
+          }
 
-            if (success) {
-              if (mounted) {
-                setState(() {
-                  _isFollowing = !_isFollowing;
-                });
-                
-                // Refresh the following status to ensure consistency
-                await _checkFollowingStatus();
-              }
+          if (success) {
+            if (mounted) {
+              setState(() {
+                _isFollowing = !_isFollowing;
+              });
               
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_isFollowing ? 'Following ${widget.username}' : 'Unfollowed ${widget.username}'),
-                  backgroundColor: const Color(0xFF6366F1),
-                ),
-              );
-            } else {
-              final errorMessage = Provider.of<AuthProvider>(context, listen: false).error ?? 'Action failed';
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(errorMessage),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              // Refresh the following status to ensure consistency
+              await _checkFollowingStatus();
             }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _isFollowing ? Colors.grey[200] : const Color(0xFF6366F1),
-            foregroundColor: _isFollowing ? const Color(0xFF666666) : Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(_isFollowing ? 'Following ${widget.username}' : 'Unfollowed ${widget.username}'),
+                backgroundColor: const Color(0xFF6366F1),
+              ),
+            );
+          } else {
+            final errorMessage = Provider.of<AuthProvider>(context, listen: false).error ?? 'Action failed';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(errorMessage),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFFD4AF37), width: 1), // Muted Gold border
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(
-            _isFollowing ? 'Following' : 'Follow',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Poppins',
-            ),
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
         ),
-      );
-    }
+        child: _isLoadingFollowRequest
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF4A2C2A),
+                  strokeWidth: 2,
+                ),
+              )
+            : Text(
+                _isFollowing ? 'Following' : 'Follow',
+                style: const TextStyle(
+                  color: Color(0xFF4A2C2A), // Deep Brown
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+      ),
+    );
   }
 
   /// Follow a user directly
@@ -628,10 +771,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     return GestureDetector(
       onTap: () {
         // Navigate to post full view
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Viewing post by ${post.username}'),
-            backgroundColor: const Color(0xFF6366F1),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostFullViewScreen(
+              post: post,
+            ),
           ),
         );
       },

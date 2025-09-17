@@ -4,6 +4,8 @@ import 'dart:convert';
 import '../utils/app_theme.dart';
 import '../services/theme_service.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../screens/home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -22,18 +24,19 @@ class _SignupScreenState extends State<SignupScreen> {
   final _bioController = TextEditingController();
   bool _isLoading = false;
   String? _error;
+  String? _successMessage;
   String? _selectedReligion;
   bool _isPrivate = false;
 
   final List<Map<String, dynamic>> _religions = [
-    {'name': 'Hindu', 'displayName': '🕉 Hinduism'},
-    {'name': 'Islam', 'displayName': '🌙 Islam'},
-    {'name': 'Christianity', 'displayName': '✝ Christianity'},
-    {'name': 'Jainism', 'displayName': '🕊 Jainism'},
-    {'name': 'Buddhism', 'displayName': '☸ Buddhism'},
-    {'name': 'Sikhism', 'displayName': '⚔ Sikhism'},
-    {'name': 'Judaism', 'displayName': '✡ Judaism'},
-    {'name': 'Other', 'displayName': '🕉 Other'},
+    {'name': 'hinduism', 'displayName': '🕉 Hinduism'},
+    {'name': 'islam', 'displayName': '🌙 Islam'},
+    {'name': 'christianity', 'displayName': '✝ Christianity'},
+    {'name': 'jainism', 'displayName': '🕊 Jainism'},
+    {'name': 'buddhism', 'displayName': '☸ Buddhism'},
+    {'name': 'sikhism', 'displayName': '⚔ Sikhism'},
+    {'name': 'judaism', 'displayName': '✡ Judaism'},
+    {'name': 'other', 'displayName': '🕉 Other'},
   ];
 
   @override
@@ -45,6 +48,139 @@ class _SignupScreenState extends State<SignupScreen> {
     _confirmPasswordController.dispose();
     _bioController.dispose();
     super.dispose();
+  }
+
+  // Auto-login method after successful signup
+  Future<void> _autoLogin() async {
+    try {
+      print('Attempting auto-login after signup...');
+      
+      // Try login with email first
+      final response = await http.post(
+        Uri.parse('http://103.14.120.163:8081/api/auth/login'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
+        }),
+      );
+
+      print('Auto-login response status: ${response.statusCode}');
+      print('Auto-login response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data['success'] == true) {
+          final token = data['data']?['token'];
+          final user = data['data']?['user'];
+          
+          if (token != null && user != null) {
+            // Auto-login successful
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            await authProvider.handleSuccessfulLogin(token, user);
+            
+            // Show success message
+            final userName = user['fullName'] ?? user['username'] ?? 'User';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Welcome to RGRAM, $userName!'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            
+            // Navigate to home screen
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+              );
+            }
+            return;
+          }
+        }
+      }
+      
+      // If email login fails, try username login
+      print('Email login failed, trying username login...');
+      final usernameResponse = await http.post(
+        Uri.parse('http://103.14.120.163:8081/api/auth/login'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'username': _usernameController.text.trim(),
+          'password': _passwordController.text,
+        }),
+      );
+
+      print('Username login response status: ${usernameResponse.statusCode}');
+      print('Username login response body: ${usernameResponse.body}');
+      
+      if (usernameResponse.statusCode == 200) {
+        final data = jsonDecode(usernameResponse.body);
+        
+        if (data['success'] == true) {
+          final token = data['data']?['token'];
+          final user = data['data']?['user'];
+          
+          if (token != null && user != null) {
+            // Username login successful
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            await authProvider.handleSuccessfulLogin(token, user);
+            
+            // Show success message
+            final userName = user['fullName'] ?? user['username'] ?? 'User';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Welcome to RGRAM, $userName!'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            
+            // Navigate to home screen
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const HomeScreen()),
+              );
+            }
+            return;
+          }
+        }
+      }
+      
+      // If both login attempts fail, redirect to login page
+      print('Auto-login failed, redirecting to login page...');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created! Please login manually.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+      
+    } catch (e) {
+      print('Auto-login error: $e');
+      // If auto-login fails, redirect to login page
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created! Please login manually.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    }
   }
 
   Future<void> _signup() async {
@@ -93,19 +229,24 @@ class _SignupScreenState extends State<SignupScreen> {
         final data = jsonDecode(response.body);
         
         if (data['success'] == true) {
-          // Account created successfully, show success message and redirect to login
+          // Account created successfully, show success message and auto-login
+          setState(() {
+            _successMessage = 'User successfully registered!';
+            _isLoading = false;
+          });
+          
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('User successfully registered'),
+                content: Text('Account created! Logging you in...'),
                 backgroundColor: Colors.green,
                 duration: Duration(seconds: 2),
               ),
             );
             
-            // Wait a moment to show success message, then redirect
-            await Future.delayed(const Duration(seconds: 2));
-            Navigator.pushReplacementNamed(context, '/login');
+            // Wait a moment to show success message, then auto-login
+            await Future.delayed(const Duration(seconds: 1));
+            await _autoLogin();
           }
         } else {
           setState(() {
@@ -140,20 +281,8 @@ class _SignupScreenState extends State<SignupScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  themeService.backgroundColor,
-                  themeService.surfaceColor,
-                  themeService.backgroundColor,
-                ],
-              ),
-            ),
-        child: SafeArea(
-          child: Center(
+          backgroundColor: const Color(0xFFF0EBE1), // Custom background color
+          body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Form(
@@ -161,29 +290,49 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // RGRAM Logo
-                    Image.asset(
-                      'assets/icons/RGRAM logo.png',
-                      width: 120,
-                      height: 120,
-                    ),
-                    const SizedBox(height: 24),
-                    // App Name
-                    const Text(
-                      'RGRAM',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                        letterSpacing: 2,
+                    const SizedBox(height: 40),
+                    
+                    // RGRAM Logo with Square Background (Instagram-style)
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12), // Square with rounded corners
+                        color: const Color(0xFFF0EBE1), // Light beige background
+                        border: Border.all(
+                          color: const Color(0xFFE0D5C7), // Subtle border
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12), // Match container border radius
+                        child: Image.asset(
+                          'assets/icons/Peaceful Sunburst Icon Design.png',
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    
+                    const SizedBox(height: 60),
+                    
+                    // Sign Up Text
                     const Text(
                       'Sign Up',
                       style: TextStyle(
-                        fontSize: 22,
-                        color: AppTheme.textPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        letterSpacing: 1,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -197,7 +346,32 @@ class _SignupScreenState extends State<SignupScreen> {
                         }
                         return null;
                       },
-                      decoration: AppTheme.inputDecoration('Full name'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Full name',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
@@ -213,7 +387,32 @@ class _SignupScreenState extends State<SignupScreen> {
                         }
                         return null;
                       },
-                      decoration: AppTheme.inputDecoration('Username'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Username',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
@@ -229,7 +428,32 @@ class _SignupScreenState extends State<SignupScreen> {
                         }
                         return null;
                       },
-                      decoration: AppTheme.inputDecoration('Email address'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Email address',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
@@ -246,7 +470,32 @@ class _SignupScreenState extends State<SignupScreen> {
                         }
                         return null;
                       },
-                      decoration: AppTheme.inputDecoration('Password'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Password',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
@@ -260,7 +509,32 @@ class _SignupScreenState extends State<SignupScreen> {
                         }
                         return null;
                       },
-                      decoration: AppTheme.inputDecoration('Confirm Password'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Confirm Password',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
@@ -268,14 +542,64 @@ class _SignupScreenState extends State<SignupScreen> {
                     TextFormField(
                       controller: _bioController,
                       maxLines: 3,
-                      decoration: AppTheme.inputDecoration('Bio (optional)'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Bio (optional)',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     
                     // Religion Selection
                     DropdownButtonFormField<String>(
                       value: _selectedReligion,
-                      decoration: AppTheme.inputDecoration('Select Religion'),
+                      style: const TextStyle(
+                        color: Color(0xFF4A2C2A), // Deep Brown
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Select Religion',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.8), // Light background
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 1), // Deep Green
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      ),
                       items: _religions.map((religion) {
                         return DropdownMenuItem<String>(
                           value: religion['name'],
@@ -348,37 +672,80 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    if (_error != null) ...[
-                      Text(
-                        _error!,
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
+                    // Success Message
+                    if (_successMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(
+                          _successMessage!,
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                       const SizedBox(height: 16),
                     ],
                     
-                    // Sign Up Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: AppTheme.primaryButtonStyle.copyWith(
-                          padding: MaterialStateProperty.all(
-                            const EdgeInsets.symmetric(vertical: 16),
+                    // Error Message
+                    if (_error != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.3),
                           ),
                         ),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    
+                    // Sign Up Button (same style as login)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
                         onPressed: _isLoading ? null : _signup,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFD4AF37), width: 1), // Muted Gold border
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
                         child: _isLoading
                             ? const SizedBox(
-                                width: 20.0,
-                                height: 20.0,
+                                width: 20,
+                                height: 20,
                                 child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 3,
+                                  color: Color(0xFF4A2C2A),
+                                  strokeWidth: 2,
                                 ),
                               )
                             : const Text(
                                 'Sign Up',
-                                style: TextStyle(fontSize: 18),
+                                style: TextStyle(
+                                  color: Color(0xFF4A2C2A), // Deep Brown
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                       ),
                     ),
@@ -391,16 +758,32 @@ class _SignupScreenState extends State<SignupScreen> {
                       },
                       child: const Text(
                         'Already have an account? Log in',
-                        style: TextStyle(color: AppTheme.primaryColor),
+                        style: TextStyle(
+                          color: Color(0xFFD4AF37), // Muted Gold
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
                       ),
                     ),
+                    
+                    const SizedBox(height: 40),
+                    
+                    // TOSS SOLUTIONS Logo Only
+                    Center(
+                      child: Image.asset(
+                        'assets/images/Tosslogo.png',
+                        width: 40,
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
             ),
           ),
-        ),
-      ),
         );
       },
     );

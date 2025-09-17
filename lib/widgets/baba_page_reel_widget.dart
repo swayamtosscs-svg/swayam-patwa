@@ -45,8 +45,12 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
       print('BabaPageReelWidget: Initializing video: ${widget.reel.video.url}');
       print('BabaPageReelWidget: Autoplay enabled: ${widget.autoplay}');
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.reel.video.url),
+      _videoController = VideoPlayerController.network(
+        widget.reel.video.url,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
       );
       
       // Set video player configuration

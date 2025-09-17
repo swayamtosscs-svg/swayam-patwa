@@ -60,6 +60,42 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
     }
   }
 
+  Future<void> _startAutoplayWithRetry() async {
+    int retryCount = 0;
+    const maxRetries = 5;
+    
+    while (retryCount < maxRetries && mounted && !_isPlaying && !_hasError) {
+      try {
+        await _videoController!.play();
+        if (mounted) {
+          setState(() {
+            _isPlaying = true;
+          });
+        }
+        print('InAppVideoWidget: Autoplay started successfully (attempt ${retryCount + 1})');
+        break;
+      } catch (playError) {
+        retryCount++;
+        print('InAppVideoWidget: Autoplay attempt $retryCount failed: $playError');
+        
+        if (retryCount < maxRetries) {
+          // Wait before retrying, with increasing delay
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        } else {
+          print('InAppVideoWidget: All autoplay attempts failed, setting up periodic retry');
+          // Set up a timer to keep trying periodically
+          _autoplayTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+            if (_isPlaying || _hasError || !mounted) {
+              timer.cancel();
+              return;
+            }
+            _forcePlay();
+          });
+        }
+      }
+    }
+  }
+
   @override
   void dispose() {
     _autoplayTimer?.cancel();
@@ -78,19 +114,49 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
         throw Exception('Video URL is empty');
       }
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.reel.video.url),
+      _videoController = VideoPlayerController.network(
+        widget.reel.video.url,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
       );
       
       // Set video player configuration for better compatibility
       _videoController!.setVolume(1.0);
       
-      // Add error handling for initialization
-      try {
-        await _videoController!.initialize();
-      } catch (initError) {
-        print('InAppVideoWidget: Video initialization failed: $initError');
-        throw initError;
+      // Add error handling for initialization with retry logic
+      int retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await _videoController!.initialize();
+          print('InAppVideoWidget: Video initialized successfully on attempt ${retryCount + 1}');
+          break;
+        } catch (initError) {
+          retryCount++;
+          print('InAppVideoWidget: Video initialization attempt $retryCount failed: $initError');
+          
+          if (retryCount < maxRetries) {
+            // Wait before retrying, with increasing delay
+            await Future.delayed(Duration(milliseconds: 1000 * retryCount));
+            
+            // Dispose and recreate controller for retry
+            _videoController?.dispose();
+            _videoController = VideoPlayerController.network(
+              widget.reel.video.url,
+              videoPlayerOptions: VideoPlayerOptions(
+                mixWithOthers: true,
+                allowBackgroundPlayback: false,
+              ),
+            );
+            _videoController!.setVolume(1.0);
+          } else {
+            print('InAppVideoWidget: All initialization attempts failed');
+            throw initError;
+          }
+        }
       }
       
       if (mounted) {
@@ -114,35 +180,8 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
           print('InAppVideoWidget: Starting autoplay...');
           _videoController!.setLooping(true); // Enable looping for better autoplay
           
-          // Start autoplay immediately
-          try {
-            await _videoController!.play();
-            setState(() {
-              _isPlaying = true;
-            });
-            print('InAppVideoWidget: Autoplay started successfully');
-          } catch (playError) {
-            print('InAppVideoWidget: Error starting autoplay: $playError');
-            // Try again after a short delay
-            await Future.delayed(const Duration(milliseconds: 300));
-            try {
-              await _videoController!.play();
-              setState(() {
-                _isPlaying = true;
-              });
-              print('InAppVideoWidget: Autoplay started on retry');
-            } catch (retryError) {
-              print('InAppVideoWidget: Failed to start autoplay after retry: $retryError');
-              // Set up a timer to keep trying
-              _autoplayTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) {
-                if (_isPlaying || _hasError || !mounted) {
-                  timer.cancel();
-                  return;
-                }
-                _forcePlay();
-              });
-            }
-          }
+          // Start autoplay with multiple retry attempts
+          await _startAutoplayWithRetry();
         }
       }
     } catch (e) {
@@ -150,6 +189,17 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
       if (mounted) {
         setState(() {
           _hasError = true;
+          _isVideoInitialized = false;
+        });
+      }
+      
+      // Try one more time with a delay
+      if (!_hasError) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted && _hasError) {
+            print('InAppVideoWidget: Retrying video initialization...');
+            _initializeVideo();
+          }
         });
       }
     }
@@ -252,11 +302,18 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
                             ),
                           ],
                         ),
-                        child: Icon(
-                          _hasError ? Icons.error : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 50,
-                        ),
+                        child: _hasError 
+                            ? const Icon(Icons.error, color: Colors.white, size: 50)
+                            : !_isVideoInitialized 
+                                ? const SizedBox(
+                                    width: 50,
+                                    height: 50,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : const Icon(Icons.play_arrow, color: Colors.white, size: 50),
                       ),
                     ),
                   ),

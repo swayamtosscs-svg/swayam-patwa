@@ -65,118 +65,46 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: const Color(0xFFF0EBE1), // Same as login page
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF0EBE1),
         elevation: 0,
         leading: IconButton(
           onPressed: () => _handleBackNavigation(),
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF4A2C2A)), // Deep Brown
         ),
         title: const Text(
-          'Edit Profile',
+          'Edit profile',
           style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Poppins',
+            color: Color(0xFF4A2C2A), // Deep Brown
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
           ),
         ),
+        centerTitle: true,
         actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _saveProfile,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text(
-                    'Save',
-                    style: TextStyle(
-                      color: Color(0xFF6366F1),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
+          IconButton(
+            onPressed: () => _showLogoutMenu(),
+            icon: const Icon(Icons.more_vert, color: Color(0xFF4A2C2A)), // Deep Brown
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Image Section
-              _buildProfileImageSection(),
+              // Profile Picture Section
+              _buildInstagramProfileSection(),
               
-              const SizedBox(height: 24),
+              // Profile Information Fields
+              _buildInstagramProfileFields(),
               
-              // Full Name Field
-              _buildTextField(
-                controller: _fullNameController,
-                label: 'Full Name',
-                hint: 'Enter your full name',
-                icon: Icons.person,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Full name is required';
-                  }
-                  return null;
-                },
-              ),
+              // Additional Sections
+              _buildInstagramAdditionalSections(),
               
-              const SizedBox(height: 20),
-              
-              // Bio Field
-              _buildTextField(
-                controller: _bioController,
-                label: 'Bio',
-                hint: 'Tell us about yourself',
-                icon: Icons.description,
-                maxLines: 3,
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Website Field
-              _buildTextField(
-                controller: _websiteController,
-                label: 'Website',
-                hint: 'https://yourwebsite.com',
-                icon: Icons.link,
-                keyboardType: TextInputType.url,
-                validator: (value) {
-                  if (value != null && value.trim().isNotEmpty) {
-                    // Basic URL validation
-                    if (!value.startsWith('http://') && !value.startsWith('https://')) {
-                      return 'Website must start with http:// or https://';
-                    }
-                    try {
-                      Uri.parse(value);
-                    } catch (e) {
-                      return 'Please enter a valid URL';
-                    }
-                  }
-                  return null;
-                },
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Location Field
-              _buildTextField(
-                controller: _locationController,
-                label: 'Location',
-                hint: 'Enter your location',
-                icon: Icons.location_on,
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // Religion Selection
-              _buildReligionSection(),
+              // Save Button
+              _buildSaveButton(),
               
               const SizedBox(height: 32),
             ],
@@ -186,49 +114,72 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  Widget _buildProfileImageSection() {
-    return Center(
+  Widget _buildInstagramProfileSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Display Picture Widget
-          DPWidget(
-            currentImageUrl: _editingUser.profileImageUrl,
-            userId: _editingUser.id,
-            token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
-            onImageChanged: (String newImageUrl) async {
-              // Update the user profile with new image URL
-              setState(() {
-                // Create a new user object with updated profile image
-                _editingUser = _editingUser.copyWith(
-                  profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
-                );
-              });
-              
-              // Also update the auth provider for consistency
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              if (authProvider.userProfile != null) {
-                final updatedAuthUser = authProvider.userProfile!.copyWith(
-                  profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
-                );
-                authProvider.updateLocalUserProfile(updatedAuthUser);
-              }
-            },
-            size: 100,
-            borderColor: _getReligionColor(_selectedReligion),
-            showEditButton: true,
+          // Single profile picture
+          Center(
+            child: GestureDetector(
+              onTap: () => _changeProfilePicture(),
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF4A2C2A), width: 2),
+                ),
+                child: ClipOval(
+                  child: _editingUser.profileImageUrl != null && _editingUser.profileImageUrl!.isNotEmpty
+                      ? Image.network(
+                          _editingUser.profileImageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    const Color(0xFF4A2C2A).withOpacity(0.1),
+                                    const Color(0xFF4A2C2A).withOpacity(0.3),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF4A2C2A).withOpacity(0.1),
+                                const Color(0xFF4A2C2A).withOpacity(0.3),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
           ),
           
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           
-          // Info text
-          Text(
-            'Tap the camera icon to change or delete your profile picture',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontStyle: FontStyle.italic,
+          // Change profile picture text
+          GestureDetector(
+            onTap: () => _changeProfilePicture(),
+            child: const Text(
+              'Change profile picture',
+              style: TextStyle(
+                color: Color(0xFF4A2C2A), // Deep Brown
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -237,13 +188,58 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
 
 
-  Widget _buildTextField({
-    required TextEditingController controller,
+  Widget _buildInstagramProfileFields() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          // Name field
+          _buildInstagramField(
+            label: 'Name',
+            controller: _fullNameController,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Name is required';
+              }
+              return null;
+            },
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Username field
+          _buildInstagramField(
+            label: 'Username',
+            controller: TextEditingController(text: _editingUser.username ?? ''),
+            readOnly: true, // Username is usually not editable
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Pronouns field
+          _buildInstagramField(
+            label: 'Pronouns',
+            controller: TextEditingController(), // New field for pronouns
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Bio field
+          _buildInstagramField(
+            label: 'Bio',
+            controller: _bioController,
+            maxLines: 3,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstagramField({
     required String label,
-    required String hint,
-    required IconData icon,
+    required TextEditingController controller,
     int maxLines = 1,
-    TextInputType? keyboardType,
+    bool readOnly = false,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -254,60 +250,37 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
-            fontFamily: 'Poppins',
+            color: Color(0xFF4A2C2A), // Deep Brown
           ),
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
-          keyboardType: keyboardType,
+          readOnly: readOnly,
           validator: validator,
+          style: const TextStyle(
+            color: Color(0xFF4A2C2A), // Deep Brown
+            fontSize: 16,
+          ),
           decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(
-              color: Color(0xFF999999),
-              fontSize: 14,
-            ),
-            prefixIcon: Icon(
-              icon,
-              color: const Color(0xFF666666),
-              size: 20,
-            ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: Colors.white.withOpacity(0.8), // Same as login page
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.grey[300]!,
-                width: 1,
-              ),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.grey[300]!,
-                width: 1,
-              ),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF6366F1),
-                width: 2,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Colors.red,
-                width: 1,
-              ),
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFF2E5D4F), width: 2), // Deep Green
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 16,
+              vertical: 12,
             ),
           ),
         ),
@@ -315,86 +288,408 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     );
   }
 
-  Widget _buildReligionSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Religion',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
-            fontFamily: 'Poppins',
+  Widget _buildInstagramAdditionalSections() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          // Links section
+          _buildInstagramSection(
+            title: 'Links',
+            subtitle: '1',
+            onTap: () => _manageLinks(),
           ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _selectedReligion != null
-                  ? _getReligionColor(_selectedReligion)
-                  : Colors.grey[300]!,
-              width: _selectedReligion != null ? 2 : 1,
-            ),
+          
+          const SizedBox(height: 16),
+          
+          // Add banners section
+          _buildInstagramSection(
+            title: 'Add banners',
+            onTap: () => _addBanners(),
           ),
-          child: DropdownButtonFormField<Religion>(
-            value: _selectedReligion,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              prefixIcon: Icon(Icons.self_improvement, color: Color(0xFF666666)),
-            ),
-            hint: const Text(
-              'Select your religion',
-              style: TextStyle(
-                color: Color(0xFF999999),
-                fontSize: 14,
-              ),
-            ),
-            items: Religion.values.map((Religion religion) {
-              return DropdownMenuItem<Religion>(
-                value: religion,
-                child: Row(
-                  children: [
-                    Text(
-                      religion.religionSymbol,
-                      style: const TextStyle(fontSize: 18),
+          
+          const SizedBox(height: 16),
+          
+          // Gender section
+          _buildInstagramSection(
+            title: 'Gender',
+            subtitle: 'Male',
+            trailing: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4A2C2A)),
+            onTap: () => _selectGender(),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Music section
+          _buildInstagramSection(
+            title: 'Music',
+            subtitle: 'Add music to your profile >',
+            onTap: () => _addMusic(),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Threads badge section
+          _buildThreadsBadgeSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstagramSection({
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF4A2C2A), // Deep Brown
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(width: 12),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
                     Text(
-                      religion.religionDisplayName,
-                      style: const TextStyle(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.grey[600],
                         fontSize: 14,
-                        fontFamily: 'Poppins',
                       ),
                     ),
                   ],
+                ],
+              ),
+            ),
+            if (trailing != null) trailing,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThreadsBadgeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Show Threads badge',
+                style: TextStyle(
+                  color: Color(0xFF4A2C2A), // Deep Brown
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-              );
-            }).toList(),
-            onChanged: (Religion? newValue) {
-              setState(() {
-                _selectedReligion = newValue;
-              });
-              
-              // Update theme immediately when religion changes
-              if (newValue != null) {
-                final themeService = Provider.of<ThemeService>(context, listen: false);
-                themeService.setUserReligion(newValue.toString().split('.').last);
-              }
-            },
-            validator: (value) {
-              if (value == null) {
-                return 'Please select a religion';
-              }
-              return null;
-            },
+              ),
+            ),
+            Switch(
+              value: false, // Default to off
+              onChanged: (value) {
+                // Handle Threads badge toggle
+              },
+              activeColor: const Color(0xFF2E5D4F), // Deep Green
+              inactiveThumbColor: Colors.grey[600],
+              inactiveTrackColor: Colors.grey[300],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'When turned off, the Instagram badge on your Threads profile will also disappear.',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton(
+          onPressed: _isLoading ? null : _saveProfile,
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFFD4AF37), width: 1), // Muted Gold border
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF4A2C2A),
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Text(
+                  'Save',
+                  style: TextStyle(
+                    color: Color(0xFF4A2C2A), // Deep Brown
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF0EBE1),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Color(0xFF4A2C2A)),
+              title: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Color(0xFF4A2C2A),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _confirmLogout();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF0EBE1),
+        title: const Text(
+          'Logout',
+          style: TextStyle(color: Color(0xFF4A2C2A)),
+        ),
+        content: const Text(
+          'Are you sure you want to logout?',
+          style: TextStyle(color: Color(0xFF4A2C2A)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF4A2C2A)),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _performLogout();
+            },
+            child: const Text(
+              'Logout',
+              style: TextStyle(color: Color(0xFF2E5D4F)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performLogout() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.logout();
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+  }
+
+  void _changeProfilePicture() {
+    // Implement profile picture change functionality using DPWidget
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF0EBE1),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Change Profile Picture',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF4A2C2A),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF4A2C2A)),
+              title: const Text(
+                'Take Photo',
+                style: TextStyle(color: Color(0xFF4A2C2A)),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                // Implement camera functionality
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xFF4A2C2A)),
+              title: const Text(
+                'Choose from Gallery',
+                style: TextStyle(color: Color(0xFF4A2C2A)),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                // Implement gallery functionality
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _selectAvatar() {
+    // Implement avatar selection functionality
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Select Avatar', style: TextStyle(color: Colors.white)),
+        content: const Text('Avatar selection functionality', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _manageLinks() {
+    // Implement links management functionality
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Manage Links', style: TextStyle(color: Colors.white)),
+        content: const Text('Links management functionality', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addBanners() {
+    // Implement add banners functionality
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Add Banners', style: TextStyle(color: Colors.white)),
+        content: const Text('Add banners functionality', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _selectGender() {
+    // Implement gender selection functionality
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Select Gender', style: TextStyle(color: Colors.white)),
+        content: const Text('Gender selection functionality', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addMusic() {
+    // Implement add music functionality
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Add Music', style: TextStyle(color: Colors.white)),
+        content: const Text('Add music functionality', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
     );
   }
 

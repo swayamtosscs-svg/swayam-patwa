@@ -932,7 +932,13 @@ class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
     });
 
     try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      final controller = VideoPlayerController.network(
+        widget.videoUrl,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
+      );
       _controller = controller;
       
       // Set a timeout for video initialization

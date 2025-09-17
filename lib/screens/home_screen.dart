@@ -12,7 +12,9 @@ import '../widgets/story_widget.dart';
 import '../widgets/enhanced_post_widget.dart';
 import '../widgets/in_app_video_widget.dart';
 import '../widgets/app_loader.dart';
+import '../widgets/image_slider_widget.dart';
 import '../utils/app_theme.dart';
+import '../utils/font_theme.dart';
 import '../screens/story_upload_screen.dart';
 import '../screens/story_viewer_screen.dart';
 import '../screens/post_full_view_screen.dart';
@@ -24,6 +26,7 @@ import '../services/chat_service.dart';
 import '../models/chat_thread_model.dart';
 import '../screens/profile_screen.dart'; // Added import for ProfileScreen
 import '../screens/search_screen.dart'; // Added import for SearchScreen
+import '../screens/instagram_search_screen.dart'; // Added import for InstagramSearchScreen
 import '../screens/add_options_screen.dart'; // Added import for AddOptionsScreen
 import '../screens/user_profile_screen.dart'; // Added import for UserProfileScreen
 import '../screens/chat_list_screen.dart'; // Added import for ChatListScreen
@@ -48,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isRefreshing = false; // Single loading state for refresh operations
   final ScrollController _scrollController = ScrollController();
   int _currentPostIndex = 0;
-  static const int _postsPerPage = 3; // Load even fewer posts initially for faster loading
+  static const int _postsPerPage = 10; // Increased to show more Baba Ji posts
   static const int _maxPostsInMemory = 30; // Maximum posts to keep in memory
 
   @override
@@ -441,7 +444,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
 
 
-
   @override
   Widget build(BuildContext context) {
     // Get screen dimensions for responsive design
@@ -451,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          backgroundColor: themeService.backgroundColor,
+          backgroundColor: const Color(0xFFF0EBE1), // Same as login page
       body: SafeArea( // Add SafeArea to prevent overflow on different screen sizes
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
@@ -473,21 +475,28 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
-            return RefreshIndicator(
-              onRefresh: _refreshFeed,
-              child: CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  // App Bar
-                  _buildAppBar(authProvider.userProfile!),
-                  
-                  // Stories Section
-                  _buildStoriesSection(),
-                  
-                  // Feed Content
-                  _buildFeedContent(),
-                ],
-              ),
+            return Stack(
+              children: [
+                RefreshIndicator(
+                  onRefresh: _refreshFeed,
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
+                      // App Bar
+                      _buildAppBar(authProvider.userProfile!),
+                      
+                      // Stories Section
+                      _buildStoriesSection(),
+                      
+                      // Feed Content
+                      _buildFeedContent(),
+                    ],
+                  ),
+                ),
+                
+                // Post Navigation Buttons
+                if (_posts.isNotEmpty) _buildPostNavigationButtons(),
+              ],
             );
           },
         ),
@@ -502,71 +511,57 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return SliverAppBar(
-          expandedHeight: 80,
+          expandedHeight: 60,
           floating: false,
           pinned: true,
-          backgroundColor: themeService.surfaceColor,
+          backgroundColor: themeService.backgroundColor,
           elevation: 0,
           flexibleSpace: FlexibleSpaceBar(
             title: Row(
               children: [
-                // App Logo
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'assets/icons/RGRAM logo.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.self_improvement,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                // RGram Logo Image (Instagram style - left aligned)
+                Image.asset(
+                  'assets/icons/home_header_logo.png',
+                  height: 24,
+                  width: 80,
+                  fit: BoxFit.contain,
                 ),
-                
-                const SizedBox(width: 12),
               ],
             ),
+            centerTitle: false,
             titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
           ),
           actions: [
-            // Refresh Button
+            // Refresh Button (Instagram style)
             IconButton(
               onPressed: () {
                 _refreshFeed();
               },
-              icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
+              icon: Icon(
+                Icons.refresh,
+                color: themeService.onSurfaceColor,
+                size: 24,
+              ),
               tooltip: 'Refresh Feed',
             ),
-            // Notification Icon with Badge
+            
+            // Notification Icon with Badge (Instagram style)
             Stack(
               children: [
                 IconButton(
                   onPressed: () {
-                    // Navigate to notifications screen
                     Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationsScreen(),
-                    ),
-                  );
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen(),
+                      ),
+                    );
                   },
-                  icon: const Icon(Icons.notifications, color: AppTheme.primaryColor),
+                  icon: Icon(
+                    Icons.favorite_border,
+                    color: themeService.onSurfaceColor,
+                    size: 24,
+                  ),
                   tooltip: 'Notifications',
                 ),
                 // Unread notification badge
@@ -604,12 +599,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            // Message Icon with Badge
+            
+            // Message Icon with Badge (Instagram style)
             Stack(
               children: [
                 IconButton(
                   onPressed: () {
-                    // Navigate to chat list screen
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -617,7 +612,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.message, color: AppTheme.primaryColor),
+                  icon: Icon(
+                    Icons.chat_bubble_outline,
+                    color: themeService.onSurfaceColor,
+                    size: 24,
+                  ),
                   tooltip: 'Messages',
                 ),
                 // Unread message badge
@@ -639,24 +638,42 @@ class _HomeScreenState extends State<HomeScreen> {
                         constraints: const BoxConstraints(
                           minWidth: 16,
                           minHeight: 16,
-                    ),
-                    child: Text(
-                      count > 99 ? '99+' : count.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                },
+                        ),
+                        child: Text(
+                          count > 99 ? '99+' : count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
             ),
             
-            // Theme Switcher Button
+            // Search Icon (Instagram style)
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const InstagramSearchScreen(),
+                  ),
+                );
+              },
+              icon: Icon(
+                Icons.search,
+                color: themeService.onSurfaceColor,
+                size: 24,
+              ),
+              tooltip: 'Search',
+            ),
+            
+            // Theme Switcher Button (Instagram style - sparkles)
             Consumer<ThemeService>(
               builder: (context, themeService, child) {
                 final currentReligion = themeService.userReligion.toLowerCase();
@@ -667,8 +684,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     themeService.setUserReligion(nextReligion);
                   },
                   icon: Icon(
-                    _getThemeIcon(currentReligion),
+                    Icons.auto_awesome,
                     color: _getThemeColor(currentReligion),
+                    size: 24,
                   ),
                   tooltip: 'Switch to ${_getReligionDisplayName(nextReligion)} Theme',
                 );
@@ -771,101 +789,27 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildStoriesSection() {
     return SliverToBoxAdapter(
       child: Container(
-        // Remove fixed height to prevent overflow
-        margin: const EdgeInsets.symmetric(vertical: 16),
+        margin: const EdgeInsets.only(top: 8, bottom: 8),
         child: Column(
-          mainAxisSize: MainAxisSize.min, // Prevent overflow
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Stories Header with Refresh Button
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 16,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox.shrink(),
-                  IconButton(
-                    onPressed: () => _refreshFeed(),
-                    icon: Icon(
-                      Icons.refresh,
-                      color: Colors.grey[600],
-                    ),
-                    tooltip: 'Refresh Stories',
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            
-            // Show stories or no stories message
+            // Show stories or simple add story option
             if (_groupedStories.isEmpty)
-              // No stories available message
+              // Simple add story state
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                child: Column(
+                height: 80,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
                   children: [
-                    Icon(
-                      Icons.auto_stories,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No stories yet',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Share your first story or follow users to see their stories here',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[500],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _navigateToStoryUpload,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Story'),
-                          style: AppTheme.primaryButtonStyle.copyWith(
-                            padding: MaterialStateProperty.all(
-                              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/search');
-                          },
-                          icon: const Icon(Icons.search, size: 18),
-                          label: const Text('Find Users'),
-                          style: AppTheme.secondaryButtonStyle.copyWith(
-                            backgroundColor: MaterialStateProperty.all(AppTheme.cardColor),
-                            foregroundColor: MaterialStateProperty.all(AppTheme.textSecondary),
-                            padding: MaterialStateProperty.all(
-                              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    // Your Story Circle (Instagram style)
+                    _buildInstagramStyleAddStoryButton(),
                   ],
                 ),
               )
             else
-              // Stories List - Use SizedBox with flexible height
-              SizedBox(
-                height: 90, // Reduced height to prevent overflow
+              // Stories List
+              Container(
+                height: 80,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: EdgeInsets.symmetric(
@@ -910,22 +854,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       mediaUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=Story';
                     }
                     
-                                         return StoryWidget(
-                       storyId: userId, // Use userId as storyId for the section
-                       userId: firstStory.authorId,
-                       userName: displayName, // Use the determined display name
-                       userImage: firstStory.authorAvatar,
-                       storyImage: mediaUrl,
-                       isViewed: false, // Will be updated based on view status
-                       currentUserId: authProvider.userProfile?.id, // Pass current user ID
-                       onTap: () {
-                         // Open story viewer with all stories from this user
-                         print('Opening story section for user: ${firstStory.authorName}');
-                         print('User has ${userStories.length} stories to view');
-                         _openStoryViewerForUser(userId, userStories);
-                       },
-                       
-                     );
+                    return StoryWidget(
+                      storyId: userId, // Use userId as storyId for the section
+                      userId: firstStory.authorId,
+                      userName: displayName, // Use the determined display name
+                      userImage: firstStory.authorAvatar,
+                      storyImage: mediaUrl,
+                      isViewed: false, // Will be updated based on view status
+                      currentUserId: authProvider.userProfile?.id, // Pass current user ID
+                      onTap: () {
+                        // Open story viewer with all stories from this user
+                        print('Opening story section for user: ${firstStory.authorName}');
+                        print('User has ${userStories.length} stories to view');
+                        _openStoryViewerForUser(userId, userStories);
+                      },
+                    );
                   },
                 ),
               ),
@@ -934,6 +877,61 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildInstagramStyleAddStoryButton() {
+    return Container(
+      width: 70,
+      height: 80,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Your Story Circle (Instagram style)
+          GestureDetector(
+            onTap: () {
+              _navigateToStoryUpload();
+            },
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey[300], // Light gray background like Instagram
+              ),
+              child: Container(
+                margin: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+                child: Icon(
+                  Icons.add,
+                  color: Colors.grey[600],
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 4),
+          
+          // Your Story Text
+          Text(
+            'Your story',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w400,
+              fontFamily: 'Poppins',
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildAddStoryButton() {
     // Get screen dimensions for responsive design
@@ -1421,11 +1419,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: 'Search',
                 isSelected: false,
                 onTap: () {
-                  // Navigate to search screen
+                  // Navigate to Instagram-style search screen
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const SearchScreen(),
+                      builder: (context) => const InstagramSearchScreen(),
                     ),
                   );
                 },
@@ -1618,6 +1616,117 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildPostNavigationButtons() {
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 100, // Above bottom navigation bar
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Previous Post Button
+          GestureDetector(
+            onTap: _goToPreviousPost,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          
+          // Next Post Button
+          GestureDetector(
+            onTap: _goToNextPost,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _goToPreviousPost() {
+    // Check if there's an image slider with multiple images
+    if (ImageSliderController.hasMultipleImages) {
+      ImageSliderController.previousImage();
+    } else {
+      // Fallback to post navigation if no image slider
+      if (_currentPostIndex > 0) {
+        setState(() {
+          _currentPostIndex--;
+        });
+        _scrollToPost(_currentPostIndex);
+      }
+    }
+  }
+
+  void _goToNextPost() {
+    // Check if there's an image slider with multiple images
+    if (ImageSliderController.hasMultipleImages) {
+      ImageSliderController.nextImage();
+    } else {
+      // Fallback to post navigation if no image slider
+      if (_currentPostIndex < _posts.length - 1) {
+        setState(() {
+          _currentPostIndex++;
+        });
+        _scrollToPost(_currentPostIndex);
+      } else {
+        // Load more posts if at the end
+        _loadMorePosts();
+      }
+    }
+  }
+
+  void _scrollToPost(int index) {
+    // Calculate approximate position based on post index
+    // This is a rough estimation - you might need to adjust based on your layout
+    final double estimatedPostHeight = 400.0; // Approximate height of each post
+    final double storiesHeight = 120.0; // Approximate height of stories section
+    final double appBarHeight = 80.0; // Approximate height of app bar
+    
+    final double targetPosition = appBarHeight + storiesHeight + (index * estimatedPostHeight);
+    
+    _scrollController.animateTo(
+      targetPosition,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
     );
   }
 }
@@ -1845,4 +1954,3 @@ class ReligiousDiversityPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

@@ -6,6 +6,7 @@ import 'package:http_parser/http_parser.dart';
 
 class BabaPageDPService {
   static const String baseUrl = 'http://103.14.120.163:8081/api/baba-pages';
+  static const String retrieveBaseUrl = 'https://api-rgram1.vercel.app/api/baba-pages';
 
   /// Upload Display Picture for Baba Ji page
   static Future<Map<String, dynamic>> uploadBabaPageDP({
@@ -13,6 +14,24 @@ class BabaPageDPService {
     required String babaPageId,
     required String token,
   }) async {
+    // Try the main upload method first
+    final result = await _uploadBabaPageDPMain(imageFile, babaPageId, token);
+    
+    // If it fails with "No file provided", try alternative field names
+    if (!result['success'] && result['message']?.contains('No file provided') == true) {
+      print('BabaPageDPService: Main upload failed, trying alternative field names');
+      return await _uploadBabaPageDPAlternative(imageFile, babaPageId, token);
+    }
+    
+    return result;
+  }
+
+  /// Main upload method
+  static Future<Map<String, dynamic>> _uploadBabaPageDPMain(
+    File imageFile,
+    String babaPageId,
+    String token,
+  ) async {
     try {
       print('BabaPageDPService: Starting Baba Ji page DP upload for page $babaPageId');
       print('BabaPageDPService: Image file path: ${imageFile.path}');
@@ -35,6 +54,7 @@ class BabaPageDPService {
       
       // Validate file
       if (!await imageFile.exists()) {
+        print('BabaPageDPService: File does not exist at path: ${imageFile.path}');
         return {
           'success': false,
           'message': 'Image file does not exist',
@@ -42,7 +62,9 @@ class BabaPageDPService {
       }
       
       final fileSize = await imageFile.length();
+      print('BabaPageDPService: File size: $fileSize bytes');
       if (fileSize == 0) {
+        print('BabaPageDPService: File is empty');
         return {
           'success': false,
           'message': 'Image file is empty',
@@ -112,20 +134,35 @@ class BabaPageDPService {
       print('BabaPageDPService: Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
       
       // Add the image file with correct MIME type
-      final multipartFile = await http.MultipartFile.fromPath(
-        'file',
-        imageFile.path,
+      // Try using bytes instead of fromPath to ensure file is properly read
+      final fileBytes = await imageFile.readAsBytes();
+      print('BabaPageDPService: File bytes length: ${fileBytes.length}');
+      
+      final multipartFile = http.MultipartFile.fromBytes(
+        'file', // Field name for the file
+        fileBytes,
         contentType: MediaType('image', extension),
+        filename: fileName, // Explicitly set filename
       );
       request.files.add(multipartFile);
       
       // Add any additional fields if needed
       request.fields['babaPageId'] = babaPageId;
+      request.fields['filename'] = fileName;
+      request.fields['fileType'] = 'image';
       
       print('BabaPageDPService: Added file: ${multipartFile.field} - ${multipartFile.filename}');
+      print('BabaPageDPService: File size: ${multipartFile.length} bytes');
+      print('BabaPageDPService: File content type: ${multipartFile.contentType}');
       print('BabaPageDPService: Total files in request: ${request.files.length}');
       print('BabaPageDPService: Request fields: ${request.fields}');
       print('BabaPageDPService: Request files count: ${request.files.length}');
+      
+      // Debug: Print all files being sent
+      for (int i = 0; i < request.files.length; i++) {
+        final file = request.files[i];
+        print('BabaPageDPService: File $i: field=${file.field}, filename=${file.filename}, length=${file.length}');
+      }
       
       // Send the request
       print('BabaPageDPService: Sending request...');
@@ -156,13 +193,13 @@ class BabaPageDPService {
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
           final data = jsonResponse['data'];
           
-          // Extract data from the response
-          final avatarUrl = data['avatar'] as String;
-          final publicId = data['publicId'] as String;
-          final format = data['format'] as String;
-          final width = data['width'] as int;
-          final height = data['height'] as int;
-          final size = data['size'] as int;
+          // Extract data from the response - handle different response formats
+          final avatarUrl = data['avatar'] as String? ?? data['avatarUrl'] as String?;
+          final publicId = data['publicId'] as String? ?? '';
+          final format = data['format'] as String? ?? 'unknown';
+          final width = data['width'] as int? ?? 0;
+          final height = data['height'] as int? ?? 0;
+          final size = data['size'] as int? ?? 0;
           
           print('BabaPageDPService: Upload successful');
           print('BabaPageDPService: Avatar URL: $avatarUrl');
@@ -171,17 +208,32 @@ class BabaPageDPService {
           print('BabaPageDPService: Dimensions: ${width}x${height}');
           print('BabaPageDPService: Size: $size bytes');
           
+          if (avatarUrl != null && avatarUrl.isNotEmpty) {
+            return {
+              'success': true,
+              'message': 'Baba Ji page display picture uploaded successfully',
+              'data': {
+                'avatarUrl': avatarUrl,
+                'publicId': publicId,
+                'format': format,
+                'width': width,
+                'height': height,
+                'size': size,
+              },
+            };
+          } else {
+            return {
+              'success': false,
+              'message': 'Upload successful but no avatar URL returned',
+              'error': 'No Avatar URL',
+            };
+          }
+        } else if (jsonResponse['success'] == false) {
+          // Handle case where API returns success: false but with a message
           return {
-            'success': true,
-            'message': 'Baba Ji page display picture uploaded successfully',
-            'data': {
-              'avatarUrl': avatarUrl,
-              'publicId': publicId,
-              'format': format,
-              'width': width,
-              'height': height,
-              'size': size,
-            },
+            'success': false,
+            'message': jsonResponse['message'] ?? 'Upload failed',
+            'error': 'Upload Failed',
           };
         }
         
@@ -246,7 +298,7 @@ class BabaPageDPService {
         };
       }
 
-      final url = '$baseUrl/$babaPageId/dp/retrieve';
+      final url = '$retrieveBaseUrl/$babaPageId/dp/retrieve';
       print('BabaPageDPService: Retrieve URL: $url');
       
       final response = await http.get(
@@ -281,11 +333,11 @@ class BabaPageDPService {
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
           final data = jsonResponse['data'];
           
-          // Extract data from the response
-          final pageId = data['pageId'] as String;
-          final pageName = data['pageName'] as String;
+          // Extract data from the response - handle different response formats
+          final pageId = data['pageId'] as String? ?? babaPageId;
+          final pageName = data['pageName'] as String? ?? 'Baba Ji Page';
           final avatar = data['avatar'] as String?;
-          final hasAvatar = data['hasAvatar'] as bool? ?? false;
+          final hasAvatar = data['hasAvatar'] as bool? ?? (avatar != null && avatar.isNotEmpty);
           final followersCount = data['followersCount'] as int? ?? 0;
           final avatarInfo = data['avatarInfo'] as Map<String, dynamic>?;
           
@@ -307,6 +359,13 @@ class BabaPageDPService {
               'followersCount': followersCount,
               'avatarInfo': avatarInfo,
             },
+          };
+        } else if (jsonResponse['success'] == false) {
+          // Handle case where API returns success: false but with a message
+          return {
+            'success': false,
+            'message': jsonResponse['message'] ?? 'No display picture available for this Baba Ji page',
+            'error': 'No DP Available',
           };
         }
         
@@ -503,6 +562,151 @@ class BabaPageDPService {
         'success': false,
         'message': 'An error occurred while deleting the Baba Ji page display picture: ${e.toString()}',
         'error': 'Delete Error',
+      };
+    }
+  }
+
+  /// Alternative upload method with different field names
+  static Future<Map<String, dynamic>> _uploadBabaPageDPAlternative(
+    File imageFile,
+    String babaPageId,
+    String token,
+  ) async {
+    try {
+      print('BabaPageDPService: Trying alternative upload method');
+      
+      // Validate file
+      if (!await imageFile.exists()) {
+        return {
+          'success': false,
+          'message': 'Image file does not exist',
+        };
+      }
+      
+      final fileSize = await imageFile.length();
+      if (fileSize == 0) {
+        return {
+          'success': false,
+          'message': 'Image file is empty',
+        };
+      }
+
+      // Validate file extension
+      final fileName = imageFile.path.split('/').last;
+      final extension = fileName.split('.').last.toLowerCase();
+      
+      // Check if it's a valid image extension
+      final validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      if (!validExtensions.contains(extension)) {
+        return {
+          'success': false,
+          'message': 'Unsupported image format. Please use JPG, PNG, GIF, or WEBP.',
+        };
+      }
+
+      // Create multipart request
+      final url = '$baseUrl/$babaPageId/dp/upload';
+      print('BabaPageDPService: Alternative upload URL: $url');
+      
+      var request = http.MultipartRequest('POST', Uri.parse(url));
+      
+      // Add headers
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+      
+      // Try different field names that servers might expect
+      final fieldNames = ['image', 'avatar', 'photo', 'picture', 'dp'];
+      
+      for (String fieldName in fieldNames) {
+        try {
+          final fileBytes = await imageFile.readAsBytes();
+          final multipartFile = http.MultipartFile.fromBytes(
+            fieldName,
+            fileBytes,
+            contentType: MediaType('image', extension),
+            filename: fileName,
+          );
+          request.files.add(multipartFile);
+          print('BabaPageDPService: Added file with field name: $fieldName');
+        } catch (e) {
+          print('BabaPageDPService: Error adding file with field $fieldName: $e');
+        }
+      }
+      
+      // Add fields
+      request.fields['babaPageId'] = babaPageId;
+      request.fields['filename'] = fileName;
+      request.fields['fileType'] = 'image';
+      
+      print('BabaPageDPService: Alternative request - Files: ${request.files.length}, Fields: ${request.fields}');
+      
+      // Send the request
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Upload request timed out');
+        },
+      );
+      
+      final response = await http.Response.fromStream(streamedResponse);
+      print('BabaPageDPService: Alternative response status: ${response.statusCode}');
+      print('BabaPageDPService: Alternative response body: ${response.body}');
+
+      Map<String, dynamic> jsonResponse;
+      try {
+        jsonResponse = jsonDecode(response.body);
+      } catch (e) {
+        print('BabaPageDPService: Failed to parse JSON response: $e');
+        return {
+          'success': false,
+          'message': 'Invalid response format from server',
+          'error': 'JSON Parse Error',
+        };
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+          final data = jsonResponse['data'];
+          
+          // Extract data from the response
+          final avatarUrl = data['avatar'] as String? ?? data['avatarUrl'] as String?;
+          final publicId = data['publicId'] as String? ?? '';
+          final format = data['format'] as String? ?? 'unknown';
+          final width = data['width'] as int? ?? 0;
+          final height = data['height'] as int? ?? 0;
+          final size = data['size'] as int? ?? 0;
+          
+          print('BabaPageDPService: Alternative upload successful');
+          print('BabaPageDPService: Avatar URL: $avatarUrl');
+          
+          if (avatarUrl != null && avatarUrl.isNotEmpty) {
+            return {
+              'success': true,
+              'message': 'Baba Ji page display picture uploaded successfully',
+              'data': {
+                'avatarUrl': avatarUrl,
+                'publicId': publicId,
+                'format': format,
+                'width': width,
+                'height': height,
+                'size': size,
+              },
+            };
+          }
+        }
+      }
+      
+      return {
+        'success': false,
+        'message': jsonResponse['message'] ?? 'Upload failed with alternative method',
+        'error': 'Upload Failed',
+      };
+    } catch (e) {
+      print('BabaPageDPService: Alternative upload error: $e');
+      return {
+        'success': false,
+        'message': 'An error occurred while uploading the Baba Ji page display picture: ${e.toString()}',
+        'error': 'Upload Error',
       };
     }
   }

@@ -10,6 +10,7 @@ class Post {
   final String? caption;
   final String? imageUrl;
   final String? videoUrl;
+  final List<String> imageUrls; // Support for multiple images
   final PostType type;
   final int likes;
   final int comments;
@@ -34,6 +35,7 @@ class Post {
     this.caption,
     this.imageUrl,
     this.videoUrl,
+    this.imageUrls = const [],
     required this.type,
     this.likes = 0,
     this.comments = 0,
@@ -60,6 +62,7 @@ class Post {
       caption: json['caption'],
       imageUrl: json['imageUrl'],
       videoUrl: json['videoUrl'],
+      imageUrls: List<String>.from(json['imageUrls'] ?? []),
       type: PostType.values.firstWhere(
         (e) => e.toString() == 'PostType.${json['type']}',
         orElse: () => PostType.image,
@@ -90,6 +93,7 @@ class Post {
       'caption': caption,
       'imageUrl': imageUrl,
       'videoUrl': videoUrl,
+      'imageUrls': imageUrls,
       'type': type.toString().split('.').last,
       'likes': likes,
       'comments': comments,
@@ -116,6 +120,7 @@ class Post {
     String? caption,
     String? imageUrl,
     String? videoUrl,
+    List<String>? imageUrls,
     PostType? type,
     int? likes,
     int? comments,
@@ -140,6 +145,7 @@ class Post {
       caption: caption ?? this.caption,
       imageUrl: imageUrl ?? this.imageUrl,
       videoUrl: videoUrl ?? this.videoUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
       type: type ?? this.type,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,

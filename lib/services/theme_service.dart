@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/font_theme.dart';
 
 class ThemeService extends ChangeNotifier {
   static const String _religionKey = 'user_religion';
@@ -179,7 +180,7 @@ class ThemeService extends ChangeNotifier {
           color: hinduWhite,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -193,7 +194,7 @@ class ThemeService extends ChangeNotifier {
             borderRadius: BorderRadius.circular(25),
           ),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -205,7 +206,7 @@ class ThemeService extends ChangeNotifier {
         style: TextButton.styleFrom(
           foregroundColor: hinduSaffronOrange,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -230,11 +231,11 @@ class ThemeService extends ChangeNotifier {
         ),
         labelStyle: const TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -261,74 +262,74 @@ class ThemeService extends ChangeNotifier {
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineLarge: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineSmall: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         titleLarge: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleSmall: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelMedium: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelSmall: TextStyle(
           color: hinduSaffronOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -436,7 +437,7 @@ class ThemeService extends ChangeNotifier {
           color: islamWhite,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -450,7 +451,7 @@ class ThemeService extends ChangeNotifier {
             borderRadius: BorderRadius.circular(25),
           ),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -462,7 +463,7 @@ class ThemeService extends ChangeNotifier {
         style: TextButton.styleFrom(
           foregroundColor: islamDarkGreen,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -487,11 +488,11 @@ class ThemeService extends ChangeNotifier {
         ),
         labelStyle: const TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -518,74 +519,74 @@ class ThemeService extends ChangeNotifier {
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineLarge: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineSmall: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         titleLarge: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleSmall: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelMedium: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelSmall: TextStyle(
           color: islamDarkGreen,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -693,7 +694,7 @@ class ThemeService extends ChangeNotifier {
           color: christianWhite,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -707,7 +708,7 @@ class ThemeService extends ChangeNotifier {
             borderRadius: BorderRadius.circular(25),
           ),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -719,7 +720,7 @@ class ThemeService extends ChangeNotifier {
         style: TextButton.styleFrom(
           foregroundColor: christianDeepBlue,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -744,11 +745,11 @@ class ThemeService extends ChangeNotifier {
         ),
         labelStyle: const TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -775,74 +776,74 @@ class ThemeService extends ChangeNotifier {
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineLarge: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineSmall: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         titleLarge: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleSmall: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelMedium: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelSmall: TextStyle(
           color: christianDeepBlue,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -950,7 +951,7 @@ class ThemeService extends ChangeNotifier {
           color: jainWhite,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -964,7 +965,7 @@ class ThemeService extends ChangeNotifier {
             borderRadius: BorderRadius.circular(25),
           ),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -976,7 +977,7 @@ class ThemeService extends ChangeNotifier {
         style: TextButton.styleFrom(
           foregroundColor: jainDeepRed,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -1001,11 +1002,11 @@ class ThemeService extends ChangeNotifier {
         ),
         labelStyle: const TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -1032,74 +1033,74 @@ class ThemeService extends ChangeNotifier {
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineLarge: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineSmall: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         titleLarge: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleSmall: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelMedium: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelSmall: TextStyle(
           color: jainDeepRed,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -1207,7 +1208,7 @@ class ThemeService extends ChangeNotifier {
           color: buddhistWhite,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -1221,7 +1222,7 @@ class ThemeService extends ChangeNotifier {
             borderRadius: BorderRadius.circular(25),
           ),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -1233,7 +1234,7 @@ class ThemeService extends ChangeNotifier {
         style: TextButton.styleFrom(
           foregroundColor: buddhistMonkOrange,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -1258,11 +1259,11 @@ class ThemeService extends ChangeNotifier {
         ),
         labelStyle: const TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -1289,74 +1290,74 @@ class ThemeService extends ChangeNotifier {
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineLarge: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineSmall: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         titleLarge: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleSmall: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelMedium: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelSmall: TextStyle(
           color: buddhistMonkOrange,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -1464,7 +1465,7 @@ class ThemeService extends ChangeNotifier {
           color: defaultSecondary,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -1478,7 +1479,7 @@ class ThemeService extends ChangeNotifier {
             borderRadius: BorderRadius.circular(25),
           ),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -1490,7 +1491,7 @@ class ThemeService extends ChangeNotifier {
         style: TextButton.styleFrom(
           foregroundColor: defaultPrimary,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Roboto', // System font
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -1515,11 +1516,11 @@ class ThemeService extends ChangeNotifier {
         ),
         labelStyle: const TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
       ),
       
@@ -1546,74 +1547,74 @@ class ThemeService extends ChangeNotifier {
       textTheme: const TextTheme(
         displayLarge: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displayMedium: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         displaySmall: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineLarge: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         headlineSmall: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.bold,
         ),
         titleLarge: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleMedium: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         titleSmall: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelMedium: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
         labelSmall: TextStyle(
           color: defaultPrimary,
-          fontFamily: 'Poppins',
+          fontFamily: 'Roboto', // System font
           fontWeight: FontWeight.w500,
         ),
       ),

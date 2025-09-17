@@ -49,13 +49,28 @@ class FeedService {
                 continue;
               }
               
+              // Process image URLs
+              List<String> imageUrls = [];
+              if (postData['images'] != null && postData['images'] is List) {
+                for (var imageUrl in postData['images']) {
+                  if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+                    String cleanUrl = imageUrl.toString().trim();
+                    // Validate URL format
+                    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+                      imageUrls.add(cleanUrl);
+                    }
+                  }
+                }
+              }
+
               final post = Post(
                 id: postData['_id'] ?? '',
                 userId: postData['author']?['_id'] ?? '',
                 username: username,
                 userAvatar: postData['author']?['avatar'] ?? '',
                 caption: postData['content'] ?? '',
-                imageUrl: postData['images']?.isNotEmpty == true ? postData['images'][0] : null,
+                imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+                imageUrls: imageUrls, // Support multiple images
                 videoUrl: null, // This API doesn't seem to have video support yet
                 type: PostType.image, // Default to image for now
                 likes: postData['likesCount'] ?? 0,
@@ -299,12 +314,13 @@ class FeedService {
               babaPageId: babaPageId,
               token: token,
               page: 1,
-              limit: 10,
+              limit: 50, // Increased limit to fetch more posts
             );
 
             if (postsResponse.success) {
               for (final babaPost in postsResponse.posts) {
                 // Convert Baba Ji post to regular Post for feed
+                final imageUrls = babaPost.media.map((media) => media.url).toList();
                 final post = Post(
                   id: 'baba_${babaPost.id}',
                   userId: babaPost.babaPageId,
@@ -312,6 +328,7 @@ class FeedService {
                   userAvatar: babaPage['avatar'] ?? '',
                   caption: babaPost.content,
                   imageUrl: babaPost.media.isNotEmpty ? babaPost.media.first.url : null,
+                  imageUrls: imageUrls, // Pass all image URLs
                   videoUrl: null,
                   type: PostType.image,
                   likes: babaPost.likesCount,
@@ -344,7 +361,7 @@ class FeedService {
               babaPageId: babaPageId,
               token: token,
               page: 1,
-              limit: 10,
+              limit: 50, // Increased limit to fetch more reels
             );
 
             if (reelsResponse['success'] == true) {
@@ -417,7 +434,7 @@ class FeedService {
       final babaJiPosts = await getBabaJiPosts(
         token: token,
         page: page,
-        limit: limit ~/ 2, // Half for Baba Ji posts
+        limit: limit, // Get more Baba Ji posts
       );
 
       // Combine and sort all posts

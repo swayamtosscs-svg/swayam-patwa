@@ -36,6 +36,7 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
 
   @override
   void dispose() {
+    _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
     super.dispose();
   }
@@ -45,28 +46,49 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
       print('VideoReelWidget: Initializing video: ${widget.reel.video.url}');
       print('VideoReelWidget: Autoplay enabled: ${widget.autoplay}');
       
-      _videoController = VideoPlayerController.networkUrl(
-        Uri.parse(widget.reel.video.url),
+      // Check if URL is valid
+      if (widget.reel.video.url.isEmpty) {
+        throw Exception('Video URL is empty');
+      }
+      
+      _videoController = VideoPlayerController.network(
+        widget.reel.video.url,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
       );
       
       // Set video player configuration
-      _videoController!.setVolume(1.0);
+      _videoController!.setVolume(0.0); // Start muted
       _videoController!.setLooping(true);
       
-      await _videoController!.initialize();
+      // Add error listener before initialization
+      _videoController!.addListener(_videoListener);
+      
+      try {
+        await _videoController!.initialize();
+      } catch (initError) {
+        print('VideoReelWidget: Video initialization failed: $initError');
+        // Try alternative initialization
+        try {
+          print('VideoReelWidget: Trying alternative initialization...');
+          _videoController?.dispose();
+          _videoController = VideoPlayerController.network(
+            widget.reel.video.url,
+          );
+          await _videoController!.initialize();
+          print('VideoReelWidget: Alternative initialization successful');
+        } catch (altError) {
+          print('VideoReelWidget: Alternative initialization also failed: $altError');
+          throw initError;
+        }
+      }
       
       if (mounted) {
         setState(() {
           _isVideoInitialized = true;
-        });
-        
-        // Add listener for video state changes
-        _videoController!.addListener(() {
-          if (mounted) {
-            setState(() {
-              _isPlaying = _videoController!.value.isPlaying;
-            });
-          }
+          _hasError = false;
         });
         
         // Auto-play if enabled - with multiple retry attempts
@@ -81,6 +103,22 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
         setState(() {
           _hasError = true;
           _isVideoInitialized = false;
+        });
+      }
+    }
+  }
+
+  void _videoListener() {
+    if (mounted && _videoController != null) {
+      setState(() {
+        _isPlaying = _videoController!.value.isPlaying;
+      });
+      
+      // Check for errors
+      if (_videoController!.value.hasError) {
+        print('VideoReelWidget: Video error: ${_videoController!.value.errorDescription}');
+        setState(() {
+          _hasError = true;
         });
       }
     }
@@ -165,7 +203,45 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
                 // Video Player or Thumbnail
                 if (_isVideoInitialized && _videoController != null && !_hasError)
                   VideoPlayer(_videoController!)
+                else if (_hasError)
+                  // Show error state with retry option
+                  Container(
+                    color: Colors.grey.shade300,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.red,
+                            size: 50,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Video Error',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _hasError = false;
+                                _isVideoInitialized = false;
+                              });
+                              _initializeVideo();
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 else
+                  // Show thumbnail while loading
                   Image.network(
                     widget.reel.thumbnail.url,
                     fit: BoxFit.cover,
