@@ -460,27 +460,50 @@ curl -X GET "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/reels?page=1&l
 ### 42. Add Comment to Baba Ji Page
 **Endpoint**: `POST /baba-pages/{pageId}/comments`
 ```bash
-curl -X POST "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/comments" \
+curl -X POST "http://103.14.120.163:8081/api/baba-pages/PAGE_ID/comments" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "content": "Great post!",
+    "content": "Your comment text here",
     "contentId": "POST_ID",
-    "contentType": "post"
+    "contentType": "post",
+    "userId": "USER_ID"
   }'
 ```
 
 ### 43. Get Baba Ji Page Comments
 **Endpoint**: `GET /baba-pages/{pageId}/comments`
 ```bash
-curl -X GET "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/comments?contentId=POST_ID&contentType=post&page=1&limit=10" \
+curl -X GET "http://103.14.120.163:8081/api/baba-pages/PAGE_ID/comments?contentId=POST_ID&contentType=post&page=1&limit=10" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### 44. Add Comment to Baba Ji Page Reel
+**Endpoint**: `POST /baba-pages/{pageId}/comments`
+```bash
+curl -X POST "http://103.14.120.163:8081/api/baba-pages/PAGE_ID/comments" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "content": "Your comment text here",
+    "contentId": "REEL_ID",
+    "contentType": "reel",
+    "userId": "USER_ID"
+  }'
+```
+
+### 45. Get Baba Ji Page Reel Comments
+**Endpoint**: `GET /baba-pages/{pageId}/comments`
+```bash
+curl -X GET "http://103.14.120.163:8081/api/baba-pages/PAGE_ID/comments?contentId=REEL_ID&contentType=reel&page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ## Baba Ji Page Likes
 
-### 44. Like Baba Ji Page Content
+### 46. Like Baba Ji Page Content
 **Endpoint**: `POST /baba-pages/{pageId}/like`
 ```bash
 curl -X POST "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/like" \
@@ -492,7 +515,7 @@ curl -X POST "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/like" \
   }'
 ```
 
-### 45. Unlike Baba Ji Page Content
+### 47. Unlike Baba Ji Page Content
 **Endpoint**: `DELETE /baba-pages/{pageId}/like`
 ```bash
 curl -X DELETE "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/like" \
@@ -504,7 +527,7 @@ curl -X DELETE "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/like" \
   }'
 ```
 
-### 46. Check Like Status
+### 48. Check Like Status
 **Endpoint**: `GET /baba-pages/{pageId}/like`
 ```bash
 curl -X GET "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/like?contentId=POST_ID&contentType=post&userId=USER_ID" \
@@ -514,7 +537,7 @@ curl -X GET "https://api-rgram1.vercel.app/api/baba-pages/PAGE_ID/like?contentId
 
 ## Media Management
 
-### 47. Delete Media
+### 49. Delete Media
 **Endpoint**: `DELETE /media/delete`
 ```bash
 curl -X DELETE "https://api-rgram1.vercel.app/api/media/delete?id=MEDIA_ID" \
@@ -522,7 +545,7 @@ curl -X DELETE "https://api-rgram1.vercel.app/api/media/delete?id=MEDIA_ID" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 48. Get Media Upload
+### 50. Get Media Upload
 **Endpoint**: `GET /media/upload`
 ```bash
 curl -X GET "https://api-rgram1.vercel.app/api/media/upload?userId=USER_ID" \
@@ -532,7 +555,7 @@ curl -X GET "https://api-rgram1.vercel.app/api/media/upload?userId=USER_ID" \
 
 ## Notifications
 
-### 49. Get Notifications
+### 51. Get Notifications
 **Endpoint**: `GET /notifications`
 ```bash
 curl -X GET "https://api-rgram1.vercel.app/api/notifications?page=1&limit=20" \
@@ -544,7 +567,7 @@ curl -X GET "https://api-rgram1.vercel.app/api/notifications?page=1&limit=20" \
 
 The following APIs are from the legacy server (`http://tossconsultancyservices.com/rgram`) and may be deprecated:
 
-### 50. Legacy Send OTP
+### 52. Legacy Send OTP
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/send-otp.php" \
   -H "Content-Type: application/json" \
@@ -553,7 +576,7 @@ curl -X POST "http://tossconsultancyservices.com/rgram/send-otp.php" \
   }'
 ```
 
-### 51. Legacy Verify OTP
+### 53. Legacy Verify OTP
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/verify-otp.php" \
   -H "Content-Type: application/json" \
@@ -563,7 +586,7 @@ curl -X POST "http://tossconsultancyservices.com/rgram/verify-otp.php" \
   }'
 ```
 
-### 52. Legacy Login
+### 54. Legacy Login
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/login.php" \
   -H "Content-Type: application/json" \
@@ -573,7 +596,7 @@ curl -X POST "http://tossconsultancyservices.com/rgram/login.php" \
   }'
 ```
 
-### 53. Legacy Signup
+### 55. Legacy Signup
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/signup.php" \
   -H "Content-Type: application/json" \
@@ -584,21 +607,21 @@ curl -X POST "http://tossconsultancyservices.com/rgram/signup.php" \
   }'
 ```
 
-### 54. Legacy Get Profile
+### 56. Legacy Get Profile
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/profile.php?user_id=USER_ID" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 55. Legacy Get Feed
+### 57. Legacy Get Feed
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/feed.php?page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 56. Legacy Create Post
+### 58. Legacy Create Post
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/create-post.php" \
   -H "Content-Type: application/json" \
@@ -609,14 +632,14 @@ curl -X POST "http://tossconsultancyservices.com/rgram/create-post.php" \
   }'
 ```
 
-### 57. Legacy Get Posts
+### 59. Legacy Get Posts
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/posts.php?user_id=USER_ID&page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 58. Legacy Create Story
+### 60. Legacy Create Story
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/create-story.php" \
   -H "Content-Type: application/json" \
@@ -627,28 +650,28 @@ curl -X POST "http://tossconsultancyservices.com/rgram/create-story.php" \
   }'
 ```
 
-### 59. Legacy Get Stories
+### 61. Legacy Get Stories
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/stories.php" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 60. Legacy Search Users
+### 62. Legacy Search Users
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/search-users.php?q=john&page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 61. Legacy Get Notifications
+### 63. Legacy Get Notifications
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/notifications.php?page=1&limit=20" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 62. Legacy Add Comment
+### 64. Legacy Add Comment
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/add-comment.php" \
   -H "Content-Type: application/json" \
@@ -659,14 +682,14 @@ curl -X POST "http://tossconsultancyservices.com/rgram/add-comment.php" \
   }'
 ```
 
-### 63. Legacy Get Comments
+### 65. Legacy Get Comments
 ```bash
 curl -X GET "http://tossconsultancyservices.com/rgram/comments.php?post_id=POST_ID&page=1&limit=10" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### 64. Legacy Update Profile
+### 66. Legacy Update Profile
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/update-profile.php" \
   -H "Content-Type: application/json" \
@@ -678,7 +701,7 @@ curl -X POST "http://tossconsultancyservices.com/rgram/update-profile.php" \
   }'
 ```
 
-### 65. Legacy Upload
+### 67. Legacy Upload
 ```bash
 curl -X POST "http://tossconsultancyservices.com/rgram/upload.php" \
   -H "Authorization: Bearer YOUR_TOKEN" \

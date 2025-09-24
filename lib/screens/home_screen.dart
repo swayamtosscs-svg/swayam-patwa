@@ -25,6 +25,7 @@ import '../services/feed_service.dart';
 import '../services/chat_service.dart';
 import '../models/chat_thread_model.dart';
 import '../screens/profile_screen.dart'; // Added import for ProfileScreen
+import '../profile_ui.dart';
 import '../screens/search_screen.dart'; // Added import for SearchScreen
 import '../screens/instagram_search_screen.dart'; // Added import for InstagramSearchScreen
 import '../screens/add_options_screen.dart'; // Added import for AddOptionsScreen
@@ -453,8 +454,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          backgroundColor: const Color(0xFFF0EBE1), // Same as login page
-      body: SafeArea( // Add SafeArea to prevent overflow on different screen sizes
+          backgroundColor: Colors.transparent,
+          body: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/Signup page bg.jpeg'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: SafeArea(
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             // Show single loader for any loading state
@@ -493,14 +501,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                
-                // Post Navigation Buttons
-                if (_posts.isNotEmpty) _buildPostNavigationButtons(),
               ],
             );
           },
         ),
       ),
+            ),
       bottomNavigationBar: _buildBottomNavigationBar(),
         );
       },
@@ -532,19 +538,6 @@ class _HomeScreenState extends State<HomeScreen> {
             titlePadding: const EdgeInsets.only(left: 16, bottom: 16),
           ),
           actions: [
-            // Refresh Button (Instagram style)
-            IconButton(
-              onPressed: () {
-                _refreshFeed();
-              },
-              icon: Icon(
-                Icons.refresh,
-                color: themeService.onSurfaceColor,
-                size: 24,
-              ),
-              tooltip: 'Refresh Feed',
-            ),
-            
             // Notification Icon with Badge (Instagram style)
             Stack(
               children: [
@@ -653,44 +646,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
-            ),
-            
-            // Search Icon (Instagram style)
-            IconButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const InstagramSearchScreen(),
-                  ),
-                );
-              },
-              icon: Icon(
-                Icons.search,
-                color: themeService.onSurfaceColor,
-                size: 24,
-              ),
-              tooltip: 'Search',
-            ),
-            
-            // Theme Switcher Button (Instagram style - sparkles)
-            Consumer<ThemeService>(
-              builder: (context, themeService, child) {
-                final currentReligion = themeService.userReligion.toLowerCase();
-                final nextReligion = _getNextReligion(currentReligion);
-                
-                return IconButton(
-                  onPressed: () {
-                    themeService.setUserReligion(nextReligion);
-                  },
-                  icon: Icon(
-                    Icons.auto_awesome,
-                    color: _getThemeColor(currentReligion),
-                    size: 24,
-                  ),
-                  tooltip: 'Switch to ${_getReligionDisplayName(nextReligion)} Theme',
-                );
-              },
             ),
           ],
         );
@@ -862,6 +817,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       storyImage: mediaUrl,
                       isViewed: false, // Will be updated based on view status
                       currentUserId: authProvider.userProfile?.id, // Pass current user ID
+                      storyType: firstStory.type, // Pass story type for video indicator
                       onTap: () {
                         // Open story viewer with all stories from this user
                         print('Opening story section for user: ${firstStory.authorName}');
@@ -1487,7 +1443,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ProfileScreen(),
+                      builder: (context) => const ProfileUI(),
                     ),
                   );
                 },
@@ -1619,116 +1575,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPostNavigationButtons() {
-    return Positioned(
-      left: 16,
-      right: 16,
-      bottom: 100, // Above bottom navigation bar
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Previous Post Button
-          GestureDetector(
-            onTap: _goToPreviousPost,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-          
-          // Next Post Button
-          GestureDetector(
-            onTap: _goToNextPost,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _goToPreviousPost() {
-    // Check if there's an image slider with multiple images
-    if (ImageSliderController.hasMultipleImages) {
-      ImageSliderController.previousImage();
-    } else {
-      // Fallback to post navigation if no image slider
-      if (_currentPostIndex > 0) {
-        setState(() {
-          _currentPostIndex--;
-        });
-        _scrollToPost(_currentPostIndex);
-      }
-    }
-  }
-
-  void _goToNextPost() {
-    // Check if there's an image slider with multiple images
-    if (ImageSliderController.hasMultipleImages) {
-      ImageSliderController.nextImage();
-    } else {
-      // Fallback to post navigation if no image slider
-      if (_currentPostIndex < _posts.length - 1) {
-        setState(() {
-          _currentPostIndex++;
-        });
-        _scrollToPost(_currentPostIndex);
-      } else {
-        // Load more posts if at the end
-        _loadMorePosts();
-      }
-    }
-  }
-
-  void _scrollToPost(int index) {
-    // Calculate approximate position based on post index
-    // This is a rough estimation - you might need to adjust based on your layout
-    final double estimatedPostHeight = 400.0; // Approximate height of each post
-    final double storiesHeight = 120.0; // Approximate height of stories section
-    final double appBarHeight = 80.0; // Approximate height of app bar
-    
-    final double targetPosition = appBarHeight + storiesHeight + (index * estimatedPostHeight);
-    
-    _scrollController.animateTo(
-      targetPosition,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-    );
-  }
 }
 
 // Custom Painter for Religious Diversity Symbol

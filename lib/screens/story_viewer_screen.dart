@@ -4,6 +4,7 @@ import '../models/story_model.dart';
 // Removed Cloudinary dependency
 import '../services/story_service.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/video_player_widget.dart';
 
 class StoryViewerScreen extends StatefulWidget {
   final Story story;
@@ -98,33 +99,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
 
   Widget _buildStoryMedia(Story story) {
     if (story.type.toLowerCase() == 'video') {
-      // For video stories, show a video placeholder
-      return Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: Colors.black,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.play_circle_outline,
-                color: Colors.white,
-                size: 80,
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Video Story',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      // For video stories, show actual video player
+      return _buildVideoPlayer(story);
     } else {
       // For image stories, use Image.network
       return Image.network(
@@ -603,5 +579,45 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
         ),
       );
     }
+  }
+
+  Widget _buildVideoPlayer(Story story) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Video Player
+          VideoPlayerWidget(
+            videoUrl: story.media,
+            autoPlay: true,
+            looping: true,
+          ),
+          
+          // Play/Pause overlay
+          Center(
+            child: GestureDetector(
+              onTap: () {
+                // Toggle play/pause - this will be handled by the VideoPlayerWidget
+              },
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 60,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

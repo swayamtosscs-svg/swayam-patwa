@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'baba_pages_screen.dart';
+import '../profile_ui.dart';
 import 'live_stream_screen.dart';
 import '../widgets/app_loader.dart';
 
@@ -292,6 +293,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) => const LiveStreamScreen(),
+              ),
+            );
+          }
+          // Account
+          else if (index == 4) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ProfileUI(),
               ),
             );
           }

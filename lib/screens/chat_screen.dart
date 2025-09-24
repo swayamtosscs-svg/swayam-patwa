@@ -57,24 +57,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Only refresh messages if we haven't refreshed recently
-    if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
-      final now = DateTime.now();
-      if (_lastRefreshTime == null || now.difference(_lastRefreshTime!).inSeconds >= 30) {
-        _loadMessages();
-      }
+    // Only load messages once when screen is first opened
+    if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_') && _messages.isEmpty) {
+      _loadMessages();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // Refresh messages when app becomes active, but only if we haven't refreshed recently
-    if (state == AppLifecycleState.resumed && _currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
-      final now = DateTime.now();
-      if (_lastRefreshTime == null || now.difference(_lastRefreshTime!).inSeconds >= 30) {
-        _loadMessages();
-      }
+    // Only refresh messages when app becomes active if we have no messages loaded
+    if (state == AppLifecycleState.resumed && _currentThreadId != null && !_currentThreadId!.startsWith('temp_') && _messages.isEmpty) {
+      _loadMessages();
     }
   }
 
@@ -96,8 +90,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
-      // If we have a real thread ID (not temp), load messages from that thread
-      if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
+      // If we have a real thread ID (not temp and not empty), load messages from that thread
+      if (_currentThreadId != null && 
+          _currentThreadId!.isNotEmpty && 
+          !_currentThreadId!.startsWith('temp_')) {
         print('ChatScreen: Loading messages for real thread: $_currentThreadId');
         print('ChatScreen: Current messages count before loading: ${_messages.length}');
         
@@ -108,25 +104,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         
         if (mounted) {
           setState(() {
-            // Store existing messages to preserve them
-            final existingMessages = List<Message>.from(_messages);
-            
-            // Merge new messages with existing ones, avoiding duplicates
-            final existingMessageIds = existingMessages.map((m) => m.id).toSet();
-            final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
-            
-            // Start with existing messages and add new ones
-            _messages = existingMessages;
-            _messages.addAll(newMessages);
-            
-            // Sort messages by creation time to maintain chronological order
-            _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+            // Only add new messages if we don't have any messages yet
+            if (_messages.isEmpty) {
+              _messages = messages;
+              print('ChatScreen: Loaded ${messages.length} messages from API (initial load)');
+            } else {
+              // Merge new messages with existing ones, avoiding duplicates
+              final existingMessageIds = _messages.map((m) => m.id).toSet();
+              final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
+              
+              if (newMessages.isNotEmpty) {
+                _messages.addAll(newMessages);
+                // Sort messages by creation time to maintain chronological order
+                _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                print('ChatScreen: Added ${newMessages.length} new messages, total: ${_messages.length}');
+              } else {
+                print('ChatScreen: No new messages to add');
+              }
+            }
             
             _isLoading = false;
           });
           _scrollToBottom();
           _lastRefreshTime = DateTime.now();
-          print('ChatScreen: Loaded ${messages.length} messages from API, total messages: ${_messages.length}');
         }
       } else if (_currentThreadId != null && _currentThreadId!.startsWith('temp_')) {
         // We have a temporary thread ID, just show the local messages
@@ -135,35 +135,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _isLoading = false;
         });
       } else {
-        // If no thread ID, try to find existing conversation with this user
-        print('ChatScreen: No thread ID provided, checking for existing conversation with ${widget.recipientUserId}');
+        // If no thread ID, try to create or get a thread with this user
+        print('ChatScreen: No thread ID provided, creating/getting thread with ${widget.recipientUserId}');
         
-        final allThreads = await ChatService.getAllConversations(
-          token: authProvider.authToken!,
+        final threadId = await ChatService.createOrGetThread(
           currentUserId: authProvider.userProfile!.id,
+          otherUserId: widget.recipientUserId,
+          token: authProvider.authToken!,
         );
         
-        // Look for existing thread with this user
-        final existingThread = allThreads.firstWhere(
-          (thread) => thread.userId == widget.recipientUserId,
-          orElse: () => ChatThread(
-            id: '',
-            userId: '',
-            username: '',
-            fullName: '',
-            avatar: '',
-            lastMessage: '',
-            lastMessageTime: DateTime.now(),
-            unreadCount: 0,
-          ),
-        );
-        
-        if (existingThread.id.isNotEmpty) {
-          // Found existing conversation
-          _currentThreadId = existingThread.id;
-          print('ChatScreen: Found existing thread: $_currentThreadId');
+        if (threadId != null) {
+          _currentThreadId = threadId;
+          print('ChatScreen: Got thread ID: $_currentThreadId');
           
-          // Load messages from the existing thread
+          // Load messages from this thread
           final messages = await ChatService.getMessagesByThreadId(
             threadId: _currentThreadId!,
             token: authProvider.authToken!,
@@ -171,16 +156,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           
           if (mounted) {
             setState(() {
-              // Merge new messages with existing ones, avoiding duplicates
-              final existingMessageIds = _messages.map((m) => m.id).toSet();
-              final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
-              
-              // Add new messages to the existing list
-              _messages.addAll(newMessages);
-              
-              // Sort messages by creation time to maintain chronological order
-              _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-              
+              _messages = messages;
               _isLoading = false;
             });
             _scrollToBottom();
@@ -194,8 +170,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             }
           }
         } else {
-          // No existing conversation, start fresh
-          print('ChatScreen: No existing conversation found, starting fresh');
+          // Failed to create thread, start fresh
+          print('ChatScreen: Failed to create thread, starting fresh');
           setState(() {
             _isLoading = false;
           });
@@ -457,19 +433,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
       // If no thread ID exists, try to create one first
-      if (_currentThreadId == null) {
-        print('ChatScreen: No thread ID, creating new chat thread');
-        final threadResponse = await ChatService.createChatThread(
-          toUserId: widget.recipientUserId,
+      if (_currentThreadId == null || _currentThreadId!.startsWith('temp_')) {
+        print('ChatScreen: No thread ID or temporary thread, creating new chat thread');
+        final threadId = await ChatService.createOrGetThread(
+          currentUserId: authProvider.userProfile!.id,
+          otherUserId: widget.recipientUserId,
           token: authProvider.authToken!,
         );
         
-        if (threadResponse['success'] == true && threadResponse['data']?['threadId'] != null) {
-          _currentThreadId = threadResponse['data']['threadId'];
+        if (threadId != null) {
+          _currentThreadId = threadId;
           print('ChatScreen: Created new thread with ID: $_currentThreadId');
         } else {
-          print('ChatScreen: Failed to create thread: ${threadResponse['message']}');
-          // Continue anyway, the message API might create the thread
+          print('ChatScreen: Failed to create thread, continuing with temporary');
         }
       }
       
@@ -478,6 +454,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         content: message,
         messageType: 'text',
         token: authProvider.authToken!,
+        currentUserId: authProvider.userProfile!.id,
       );
 
       if (response['success'] == true && mounted) {
@@ -521,21 +498,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         print('ChatScreen: Total messages in list: ${_messages.length}');
         _scrollToBottom();
         
-        // Start real-time updates only if not already running
-        if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
-          // Only start real-time updates if we haven't started them yet
-          if (_lastRefreshTime == null) {
-            _startRealTimeUpdates();
-          }
-        }
+        // Real-time updates disabled to prevent constant refreshing
         
-        // Reload messages after a short delay to ensure consistency
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && _currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
-            print('ChatScreen: Reloading messages after delay with real thread ID: $_currentThreadId');
-            _loadMessages(); // This now uses merging logic
-          }
-        });
+        // No need to reload messages - they are already added to the list
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -596,44 +561,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _onScroll() {
     if (_scrollController.position.pixels == _scrollController.position.minScrollExtent) {
       // User scrolled to top, could load more messages here
-      // Only refresh if we haven't refreshed recently
-      if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
-        final now = DateTime.now();
-        if (_lastRefreshTime == null || now.difference(_lastRefreshTime!).inSeconds >= 15) {
-          _loadMessages();
-        }
+      // Only load more messages if we have very few messages
+      if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_') && _messages.length < 5) {
+        _loadMessages();
       }
     }
   }
 
-  /// Refresh messages periodically for real-time updates
-  void _startRealTimeUpdates() {
-    // Only start real-time updates if we have a real thread ID and the screen is active
-    if (!mounted || _currentThreadId == null || _currentThreadId!.startsWith('temp_')) {
-      return;
-    }
-    
-    // Check if the screen is still active before refreshing
-    if (mounted && _currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
-      print('ChatScreen: Refreshing messages for real thread: $_currentThreadId');
-      
-      // Only refresh if we haven't refreshed recently (within last 10 seconds)
-      final now = DateTime.now();
-      if (_lastRefreshTime == null || now.difference(_lastRefreshTime!).inSeconds >= 10) {
-        _loadMessages();
-        _lastRefreshTime = now;
-      } else {
-        print('ChatScreen: Skipping refresh - last refresh was ${now.difference(_lastRefreshTime!).inSeconds} seconds ago');
-      }
-      
-      // Schedule next refresh only if screen is still mounted and active
-      if (mounted) {
-        Future.delayed(const Duration(seconds: 10), () {
-          if (mounted) {
-            _startRealTimeUpdates();
-          }
-        });
-      }
+  /// Manual refresh method for when user explicitly wants to refresh
+  void _manualRefresh() {
+    if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
+      print('ChatScreen: Manual refresh requested');
+      _loadMessages();
     }
   }
 
@@ -706,8 +645,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
         actions: [
           IconButton(
-            onPressed: _loadMessages,
+            onPressed: _manualRefresh,
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Messages',
           ),
         ],
       ),
@@ -768,7 +708,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _buildMessagesList(UserModel? currentUser) {
     return RefreshIndicator(
-      onRefresh: _loadMessages,
+      onRefresh: () async {
+        _manualRefresh();
+      },
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(16),

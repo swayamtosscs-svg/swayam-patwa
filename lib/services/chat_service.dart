@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_response_model.dart';
 import '../models/message_model.dart';
 import '../models/chat_thread_model.dart';
@@ -15,105 +16,11 @@ class ChatService {
     try {
       print('ChatService: Fetching chat threads for user: $currentUserId');
       
-      // Get all messages for the current user to build conversation threads
-      final response = await http.get(
-        Uri.parse('$baseUrl/quick-message?userId=$currentUserId&limit=100'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+      // Use the getAllConversations method which uses the correct API endpoint
+      return await getAllConversations(
+        token: token,
+        currentUserId: currentUserId,
       );
-
-      print('ChatService: Messages API Response Status: ${response.statusCode}');
-      print('ChatService: Messages API Response Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        
-        if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
-          final List<dynamic> messagesData = jsonResponse['data']['messages'] ?? [];
-          print('ChatService: Found ${messagesData.length} messages');
-          
-          // Group messages by thread to create conversation threads
-          final Map<String, List<dynamic>> threadGroups = {};
-          
-          for (final messageData in messagesData) {
-            final threadId = messageData['thread'] ?? '';
-            if (threadId.isNotEmpty) {
-              if (!threadGroups.containsKey(threadId)) {
-                threadGroups[threadId] = [];
-              }
-              threadGroups[threadId]!.add(messageData);
-            }
-          }
-          
-          print('ChatService: Grouped into ${threadGroups.length} threads');
-          
-          final List<ChatThread> threads = [];
-          
-          threadGroups.forEach((threadId, messages) {
-            if (messages.isNotEmpty) {
-              // Sort messages by time to get the latest one
-              messages.sort((a, b) {
-                final timeA = DateTime.tryParse(a['createdAt'] ?? '') ?? DateTime.now();
-                final timeB = DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime.now();
-                return timeB.compareTo(timeA);
-              });
-              
-              final lastMessage = messages.first;
-              final sender = lastMessage['sender'] ?? {};
-              
-              // Find the other participant (not current user)
-              String otherUserId = '';
-              String otherUsername = '';
-              String otherFullName = '';
-              String otherAvatar = '';
-              
-              if (sender['_id'] == currentUserId) {
-                // Last message is from current user, find recipient
-                otherUserId = lastMessage['recipient'] ?? '';
-              } else {
-                // Last message is from other user
-                otherUserId = sender['_id'] ?? '';
-                otherUsername = sender['username'] ?? '';
-                otherFullName = sender['fullName'] ?? '';
-                otherAvatar = sender['avatar'] ?? '';
-              }
-              
-              if (otherUserId.isNotEmpty && otherUserId != currentUserId) {
-                final thread = ChatThread(
-                  id: threadId,
-                  userId: otherUserId,
-                  username: otherUsername,
-                  fullName: otherFullName,
-                  avatar: otherAvatar,
-                  lastMessage: lastMessage['content'] ?? '',
-                  lastMessageTime: lastMessage['createdAt'] != null 
-                      ? DateTime.parse(lastMessage['createdAt']) 
-                      : DateTime.now(),
-                  unreadCount: messages.where((m) => 
-                    m['sender']?['_id'] != currentUserId && m['isRead'] == false
-                  ).length,
-                );
-                threads.add(thread);
-                print('ChatService: Created thread with ${otherUsername} (${otherFullName})');
-              } else {
-                print('ChatService: Skipping thread - otherUserId: $otherUserId, currentUserId: $currentUserId');
-              }
-            }
-          });
-          
-          if (threads.isNotEmpty) {
-            print('ChatService: Successfully created ${threads.length} chat threads');
-            return threads;
-          }
-        }
-      }
-      
-      // If no threads found, return empty list
-      print('ChatService: No chat threads found');
-      return [];
-      
     } catch (e) {
       print('ChatService: Error getting chat threads: $e');
       return [];
@@ -128,110 +35,286 @@ class ChatService {
     try {
       print('ChatService: Getting all conversations for user: $currentUserId');
       
-      // Get all messages for the current user
+      // Try to get conversations from local storage first
+      final localConversations = await _getLocalConversations(currentUserId);
+      if (localConversations.isNotEmpty) {
+        print('ChatService: Found ${localConversations.length} local conversations');
+        
+        // Try to get user information for conversations that don't have complete user data
+        final updatedConversations = <ChatThread>[];
+        for (final conversation in localConversations) {
+          if (conversation.username == 'User' || conversation.fullName == 'User') {
+            // Try to get user info from the API
+            final userInfo = await _getUserInfo(conversation.userId, token);
+            if (userInfo != null) {
+              final updatedThread = ChatThread(
+                id: conversation.id,
+                userId: conversation.userId,
+                username: userInfo['username'] ?? conversation.username,
+                fullName: userInfo['fullName'] ?? conversation.fullName,
+                avatar: userInfo['avatar'] ?? conversation.avatar,
+                lastMessage: conversation.lastMessage,
+                lastMessageTime: conversation.lastMessageTime,
+                unreadCount: conversation.unreadCount,
+              );
+              updatedConversations.add(updatedThread);
+              
+              // Update the stored conversation with user info
+              await _updateConversationUserInfo(currentUserId, conversation.userId, userInfo);
+            } else {
+              updatedConversations.add(conversation);
+            }
+          } else {
+            updatedConversations.add(conversation);
+          }
+        }
+        
+        return updatedConversations;
+      }
+      
+      // Since the message-crud endpoint is not working, return empty list
+      print('ChatService: message-crud endpoint not available, returning empty conversations list');
+      return [];
+      
+    } catch (e) {
+      print('ChatService: Error getting all conversations: $e');
+      return [];
+    }
+  }
+
+  /// Store conversation locally
+  static Future<void> _storeConversation(String userId, ChatThread thread) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'conversation_${userId}_${thread.userId}';
+      final threadJson = jsonEncode({
+        'id': thread.id,
+        'userId': thread.userId,
+        'username': thread.username,
+        'fullName': thread.fullName,
+        'avatar': thread.avatar,
+        'lastMessage': thread.lastMessage,
+        'lastMessageTime': thread.lastMessageTime.toIso8601String(),
+        'unreadCount': thread.unreadCount,
+      });
+      await prefs.setString(key, threadJson);
+      print('ChatService: Stored conversation locally: $key');
+    } catch (e) {
+      print('ChatService: Error storing conversation: $e');
+    }
+  }
+
+  /// Get conversations from local storage
+  static Future<List<ChatThread>> _getLocalConversations(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((key) => key.startsWith('conversation_${userId}_')).toList();
+      final conversations = <ChatThread>[];
+      
+      for (final key in keys) {
+        final threadJson = prefs.getString(key);
+        if (threadJson != null) {
+          final threadData = jsonDecode(threadJson);
+          final thread = ChatThread(
+            id: threadData['id'] ?? '',
+            userId: threadData['userId'] ?? '',
+            username: threadData['username'] ?? '',
+            fullName: threadData['fullName'] ?? '',
+            avatar: threadData['avatar'] ?? '',
+            lastMessage: threadData['lastMessage'] ?? '',
+            lastMessageTime: DateTime.parse(threadData['lastMessageTime']),
+            unreadCount: threadData['unreadCount'] ?? 0,
+          );
+          conversations.add(thread);
+        }
+      }
+      
+      return conversations;
+    } catch (e) {
+      print('ChatService: Error getting local conversations: $e');
+      return [];
+    }
+  }
+
+  /// Store message conversation data
+  static Future<void> _storeMessageConversation({
+    required String currentUserId,
+    required String otherUserId,
+    required String threadId,
+    required String lastMessage,
+    required DateTime lastMessageTime,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'conversation_${currentUserId}_$otherUserId';
+      
+      // Get existing conversation data or create new
+      final existingData = prefs.getString(key);
+      Map<String, dynamic> conversationData;
+      
+      if (existingData != null) {
+        conversationData = jsonDecode(existingData);
+      } else {
+        conversationData = {
+          'id': threadId,
+          'userId': otherUserId,
+          'username': 'User', // We'll update this when we get user info
+          'fullName': 'User',
+          'avatar': '',
+          'unreadCount': 0,
+        };
+      }
+      
+      // Update with latest message info
+      conversationData['lastMessage'] = lastMessage;
+      conversationData['lastMessageTime'] = lastMessageTime.toIso8601String();
+      
+      await prefs.setString(key, jsonEncode(conversationData));
+      print('ChatService: Stored message conversation: $key');
+    } catch (e) {
+      print('ChatService: Error storing message conversation: $e');
+    }
+  }
+
+  /// Get user information from API
+  static Future<Map<String, dynamic>?> _getUserInfo(String userId, String token) async {
+    try {
       final response = await http.get(
-        Uri.parse('$baseUrl/message-crud?userId=$currentUserId&limit=1000'),
+        Uri.parse('http://103.14.120.163:8081/api/user/$userId'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
-      print('ChatService: All messages API Response Status: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-        
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
-          final List<dynamic> messagesData = jsonResponse['data']['messages'] ?? [];
-          
-          // Group messages by conversation partner
-          final Map<String, List<dynamic>> conversationMap = {};
-          
-          for (final messageData in messagesData) {
-            final senderId = messageData['sender']?['_id'] ?? '';
-            final recipientId = messageData['recipient'] ?? '';
-            
-            // Determine the other user in the conversation
-            String otherUserId;
-            if (senderId == currentUserId) {
-              otherUserId = recipientId;
-            } else {
-              otherUserId = senderId;
-            }
-            
-            if (otherUserId.isNotEmpty) {
-              if (!conversationMap.containsKey(otherUserId)) {
-                conversationMap[otherUserId] = [];
-              }
-              conversationMap[otherUserId]!.add(messageData);
-            }
-          }
-          
-          // Create chat threads from conversations
-          final List<ChatThread> threads = [];
-          
-          for (final entry in conversationMap.entries) {
-            final otherUserId = entry.key;
-            final messages = entry.value;
-            
-            // Sort messages by time to get the latest one
-            messages.sort((a, b) {
-              final timeA = DateTime.tryParse(a['createdAt'] ?? '') ?? DateTime.now();
-              final timeB = DateTime.tryParse(b['createdAt'] ?? '') ?? DateTime.now();
-              return timeB.compareTo(timeA);
-            });
-            
-            final latestMessage = messages.first;
-            final senderId = latestMessage['sender']?['_id'] ?? '';
-            
-            // Get user info for the other person
-            String otherUsername = '';
-            String otherFullName = '';
-            String otherAvatar = '';
-            
-            if (senderId == currentUserId) {
-              // Latest message is from current user, we need to find the other user's info
-              // This might require additional API call to get user details
-              otherUsername = 'User';
-              otherFullName = 'User';
-            } else {
-              // Latest message is from other user
-              otherUsername = latestMessage['sender']?['username'] ?? '';
-              otherFullName = latestMessage['sender']?['fullName'] ?? '';
-              otherAvatar = latestMessage['sender']?['avatar'] ?? '';
-            }
-            
-            final thread = ChatThread(
-              id: latestMessage['thread'] ?? '',
-              userId: otherUserId,
-              username: otherUsername,
-              fullName: otherFullName,
-              avatar: otherAvatar,
-              lastMessage: latestMessage['content'] ?? '',
-              lastMessageTime: latestMessage['createdAt'] != null 
-                  ? DateTime.parse(latestMessage['createdAt']) 
-                  : DateTime.now(),
-              unreadCount: messages.where((m) => 
-                m['sender']?['_id'] != currentUserId && m['isRead'] == false
-              ).length,
-            );
-            threads.add(thread);
-          }
-          
-          if (threads.isNotEmpty) {
-            print('ChatService: Successfully created ${threads.length} conversation threads');
-            return threads;
-          }
+          return jsonResponse['data'];
+        }
+      }
+      return null;
+    } catch (e) {
+      print('ChatService: Error getting user info: $e');
+      return null;
+    }
+  }
+
+  /// Update conversation with user information
+  static Future<void> _updateConversationUserInfo(
+    String currentUserId,
+    String otherUserId,
+    Map<String, dynamic> userInfo,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'conversation_${currentUserId}_$otherUserId';
+      final existingData = prefs.getString(key);
+      
+      if (existingData != null) {
+        final conversationData = jsonDecode(existingData);
+        conversationData['username'] = userInfo['username'] ?? conversationData['username'];
+        conversationData['fullName'] = userInfo['fullName'] ?? conversationData['fullName'];
+        conversationData['avatar'] = userInfo['avatar'] ?? conversationData['avatar'];
+        
+        await prefs.setString(key, jsonEncode(conversationData));
+        print('ChatService: Updated conversation user info: $key');
+      }
+    } catch (e) {
+      print('ChatService: Error updating conversation user info: $e');
+    }
+  }
+
+  /// Add a conversation manually (when starting a new chat)
+  static Future<void> addConversation({
+    required String currentUserId,
+    required String otherUserId,
+    required String otherUsername,
+    required String otherFullName,
+    required String otherAvatar,
+    String? threadId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'conversation_${currentUserId}_$otherUserId';
+      
+      final conversationData = {
+        'id': threadId ?? '',
+        'userId': otherUserId,
+        'username': otherUsername,
+        'fullName': otherFullName,
+        'avatar': otherAvatar,
+        'lastMessage': '',
+        'lastMessageTime': DateTime.now().toIso8601String(),
+        'unreadCount': 0,
+      };
+      
+      await prefs.setString(key, jsonEncode(conversationData));
+      print('ChatService: Added manual conversation: $key');
+    } catch (e) {
+      print('ChatService: Error adding manual conversation: $e');
+    }
+  }
+
+  /// Update conversation with thread ID
+  static Future<void> _updateConversationThreadId(
+    String currentUserId,
+    String otherUserId,
+    String threadId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'conversation_${currentUserId}_$otherUserId';
+      final existingData = prefs.getString(key);
+      
+      if (existingData != null) {
+        final conversationData = jsonDecode(existingData);
+        conversationData['id'] = threadId;
+        
+        await prefs.setString(key, jsonEncode(conversationData));
+        print('ChatService: Updated conversation thread ID: $key -> $threadId');
+      }
+    } catch (e) {
+      print('ChatService: Error updating conversation thread ID: $e');
+    }
+  }
+
+  /// Refresh conversation data to ensure thread IDs are up to date
+  static Future<void> refreshConversationData(String currentUserId, String token) async {
+    try {
+      print('ChatService: Refreshing conversation data for user: $currentUserId');
+      
+      // Get all local conversations
+      final conversations = await _getLocalConversations(currentUserId);
+      
+      // For each conversation without a thread ID, try to get messages to find the thread
+      for (final conversation in conversations) {
+        if (conversation.id.isEmpty) {
+          print('ChatService: Conversation with ${conversation.userId} has no thread ID, skipping');
+          // We can't do much here without a thread ID, but we'll log it
         }
       }
       
-      print('ChatService: Failed to get messages, returning empty list');
-      return [];
-      
+      print('ChatService: Conversation data refresh completed');
     } catch (e) {
-      print('ChatService: Error getting all conversations: $e');
-      return [];
+      print('ChatService: Error refreshing conversation data: $e');
+    }
+  }
+
+  /// Clear all conversation data (for debugging/testing)
+  static Future<void> clearAllConversations(String currentUserId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((key) => key.startsWith('conversation_${currentUserId}_')).toList();
+      
+      for (final key in keys) {
+        await prefs.remove(key);
+        print('ChatService: Removed conversation: $key');
+      }
+      
+      print('ChatService: Cleared ${keys.length} conversations');
+    } catch (e) {
+      print('ChatService: Error clearing conversations: $e');
     }
   }
 
@@ -315,6 +398,7 @@ class ChatService {
     required String content,
     required String messageType,
     required String token,
+    String? currentUserId,
   }) async {
     try {
       print('ChatService: Sending message to user: $toUserId');
@@ -340,6 +424,30 @@ class ChatService {
         final jsonResponse = jsonDecode(response.body);
         if (jsonResponse['success'] == true) {
           print('ChatService: Message sent successfully');
+          
+          // Store conversation locally if we have thread info
+          if (jsonResponse['data']?['threadId'] != null) {
+            print('ChatService: Thread ID from send response: ${jsonResponse['data']['threadId']}');
+            
+            // Store this conversation for future reference
+            if (currentUserId != null) {
+              await _storeMessageConversation(
+                currentUserId: currentUserId,
+                otherUserId: toUserId,
+                threadId: jsonResponse['data']['threadId'],
+                lastMessage: content,
+                lastMessageTime: DateTime.now(),
+              );
+              
+              // Also update any existing conversation with the threadId
+              await _updateConversationThreadId(
+                currentUserId,
+                toUserId,
+                jsonResponse['data']['threadId'],
+              );
+            }
+          }
+          
           return jsonResponse;
         } else {
           print('ChatService: Send message failed: ${jsonResponse['message']}');
@@ -361,6 +469,39 @@ class ChatService {
         'success': false,
         'message': 'Network error: $e',
       };
+    }
+  }
+
+  /// Create or get a conversation thread between two users
+  static Future<String?> createOrGetThread({
+    required String currentUserId,
+    required String otherUserId,
+    required String token,
+  }) async {
+    try {
+      print('ChatService: Creating/getting thread between $currentUserId and $otherUserId');
+      
+      // Try to send a message to create the thread
+      final response = await sendMessage(
+        toUserId: otherUserId,
+        content: 'Hello', // Initial message to create thread
+        messageType: 'text',
+        token: token,
+        currentUserId: currentUserId,
+      );
+      
+      print('ChatService: Thread creation response: $response');
+      
+      if (response['success'] == true && response['data']?['threadId'] != null) {
+        print('ChatService: Thread created with ID: ${response['data']['threadId']}');
+        return response['data']['threadId'];
+      }
+      
+      print('ChatService: Failed to create thread - response: $response');
+      return null;
+    } catch (e) {
+      print('ChatService: Error creating thread: $e');
+      return null;
     }
   }
 

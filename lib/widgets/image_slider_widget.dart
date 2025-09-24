@@ -207,7 +207,15 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
         errorWidget: (context, url, error) {
           print('ImageSliderWidget: CachedNetworkImage error for URL: $url');
           print('ImageSliderWidget: Error: $error');
-          return _buildErrorWidget('Failed to load image');
+          // Try fallback to Image.network
+          return Image.network(
+            cleanUrl,
+            fit: BoxFit.fitWidth,
+            width: double.infinity,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildErrorWidget('Failed to load image');
+            },
+          );
         },
         memCacheWidth: 800, // Optimize memory usage
         memCacheHeight: 600,

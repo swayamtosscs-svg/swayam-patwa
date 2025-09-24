@@ -5,6 +5,7 @@ import '../models/post_model.dart';
 import '../screens/followers_screen.dart';
 import '../screens/following_screen.dart';
 import '../services/user_media_service.dart';
+import '../services/chat_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/post_full_view_screen.dart';
 import 'package:flutter/foundation.dart'; // Added for kDebugMode
@@ -200,7 +201,19 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         
         // Message Button
         IconButton(
-          onPressed: () {
+          onPressed: () async {
+            // Add conversation to local storage
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            if (authProvider.userProfile != null) {
+              await ChatService.addConversation(
+                currentUserId: authProvider.userProfile!.id,
+                otherUserId: widget.userId,
+                otherUsername: widget.username,
+                otherFullName: widget.fullName,
+                otherAvatar: widget.avatar,
+              );
+            }
+            
             Navigator.push(
               context,
               MaterialPageRoute(

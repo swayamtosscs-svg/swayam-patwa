@@ -336,6 +336,12 @@ class _BabaPageEditMenuScreenState extends State<BabaPageEditMenuScreen> {
             label: 'Share Page',
             onTap: _sharePage,
           ),
+          _buildQuickActionButton(
+            icon: Icons.delete_forever,
+            label: 'Delete Page',
+            onTap: _deletePage,
+            isDestructive: true,
+          ),
         ],
       ),
     );
@@ -345,16 +351,17 @@ class _BabaPageEditMenuScreenState extends State<BabaPageEditMenuScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool isDestructive = false,
   }) {
     return ListTile(
       leading: Icon(
         icon,
-        color: AppTheme.primaryColor,
+        color: isDestructive ? AppTheme.errorColor : AppTheme.primaryColor,
       ),
       title: Text(
         label,
-        style: const TextStyle(
-          color: AppTheme.textPrimary,
+        style: TextStyle(
+          color: isDestructive ? AppTheme.errorColor : AppTheme.textPrimary,
           fontFamily: 'Poppins',
         ),
       ),
@@ -495,5 +502,101 @@ class _BabaPageEditMenuScreenState extends State<BabaPageEditMenuScreen> {
         backgroundColor: AppTheme.primaryColor,
       ),
     );
+  }
+
+  Future<void> _deletePage() async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Delete Baba Ji Page',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete "${widget.babaPage.name}"? This action cannot be undone and will permanently remove the page and all its content.',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.errorColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+
+      if (token == null) {
+        throw Exception('Authentication token not found');
+      }
+
+      final response = await BabaPageService.deleteBabaPage(
+        pageId: widget.babaPage.id,
+        token: token,
+      );
+
+      if (response.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.message),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+        // Navigate back to the previous screen (likely the baba pages list)
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.message),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting Baba Ji page: $e'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 }

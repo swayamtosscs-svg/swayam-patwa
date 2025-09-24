@@ -273,15 +273,20 @@ class AddOptionsScreen extends StatelessWidget {
   }
 
   void _navigateToReelUpload(BuildContext context) {
+    print('AddOptionsScreen: Navigating to reel upload');
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.authToken != null) {
+      print('AddOptionsScreen: Auth token exists, navigating...');
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => const ReelUploadScreen(),
         ),
-      );
+      ).then((_) {
+        print('AddOptionsScreen: Returned from reel upload screen');
+      });
     } else {
+      print('AddOptionsScreen: No auth token, showing error');
       _showErrorSnackBar(context, 'Please login to upload reels');
     }
   }

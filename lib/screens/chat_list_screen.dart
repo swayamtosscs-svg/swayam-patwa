@@ -101,104 +101,170 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Messages',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpeg'),
+            fit: BoxFit.cover,
           ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Custom App Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Expanded(
+                      child: Text(
+                        'Messages',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.search, color: Colors.white),
+                      onPressed: () {
+                        // TODO: Implement search functionality
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.more_vert, color: Colors.white),
+                      onPressed: () {
+                        // TODO: Implement more options
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              // Messages Content
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _refreshChats,
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                      : _chatThreads.isEmpty
+                          ? _buildEmptyState()
+                          : _buildChatList(),
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black87),
-            onPressed: () {
-              // TODO: Implement search functionality
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black87),
-            onPressed: () {
-              // TODO: Implement more options
-            },
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshChats,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _chatThreads.isEmpty
-                ? _buildEmptyState()
-                : _buildChatList(),
       ),
     );
   }
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.message_outlined,
-            size: 80,
-            color: Colors.grey[400],
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.2),
+            width: 1,
           ),
-          const SizedBox(height: 16),
-          Text(
-            'No messages yet',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              spreadRadius: 5,
+              offset: const Offset(0, 10),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start a conversation with someone',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[500],
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.message_outlined,
+              size: 80,
+              color: Colors.white.withOpacity(0.8),
             ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              // Navigate to search users screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SearchScreen(),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: const Text(
-              'Find People',
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
               style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
                 color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontFamily: 'Poppins',
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Start a conversation with someone',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.8),
+                fontFamily: 'Poppins',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                // Navigate to search users screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SearchScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.2),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: const Text(
+                'Find People',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildChatList() {
     return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _chatThreads.length,
       itemBuilder: (context, index) {
         final thread = _chatThreads[index];
@@ -208,101 +274,130 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   }
 
   Widget _buildChatTile(ChatThread thread) {
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 25,
-        backgroundColor: Colors.grey[300],
-        child: thread.avatar.isNotEmpty
-            ? ClipOval(
-                child: Image.network(
-                  thread.avatar,
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.person,
-                      size: 30,
-                      color: Colors.grey[600],
-                    );
-                  },
-                ),
-              )
-            : Icon(
-                Icons.person,
-                size: 30,
-                color: Colors.grey[600],
-              ),
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              thread.fullName,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          Text(
-            _getTimeAgo(thread.lastMessageTime),
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[500],
-            ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      subtitle: Row(
-        children: [
-          Expanded(
-            child: Text(
-              thread.lastMessage,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (thread.unreadCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1),
-                borderRadius: BorderRadius.circular(12),
-              ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          radius: 25,
+          backgroundColor: Colors.white.withOpacity(0.2),
+          child: thread.avatar.isNotEmpty
+              ? ClipOval(
+                  child: Image.network(
+                    thread.avatar,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.person,
+                        size: 30,
+                        color: Colors.white.withOpacity(0.8),
+                      );
+                    },
+                  ),
+                )
+              : Icon(
+                  Icons.person,
+                  size: 30,
+                  color: Colors.white.withOpacity(0.8),
+                ),
+        ),
+        title: Row(
+          children: [
+            Expanded(
               child: Text(
-                thread.unreadCount.toString(),
-                style: const TextStyle(
+                thread.fullName,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
                   color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Poppins',
                 ),
               ),
             ),
-        ],
-      ),
-      onTap: () async {
-        // Navigate to chat screen and refresh when returning
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              recipientUserId: thread.userId,
-              recipientUsername: thread.username,
-              recipientFullName: thread.fullName,
-              recipientAvatar: thread.avatar,
-              threadId: thread.id,
+            Text(
+              _getTimeAgo(thread.lastMessageTime),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white.withOpacity(0.7),
+                fontFamily: 'Poppins',
+              ),
             ),
-          ),
-        );
-        
-        // Refresh chat threads when returning from chat
-        _refreshChats();
-      },
+          ],
+        ),
+        subtitle: Row(
+          children: [
+            Expanded(
+              child: Text(
+                thread.lastMessage,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 14,
+                  fontFamily: 'Poppins',
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (thread.unreadCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.4),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  thread.unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+              ),
+          ],
+        ),
+        onTap: () async {
+          // Navigate to chat screen and refresh when returning
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                recipientUserId: thread.userId,
+                recipientUsername: thread.username,
+                recipientFullName: thread.fullName,
+                recipientAvatar: thread.avatar,
+                threadId: thread.id,
+              ),
+            ),
+          );
+          
+          // Refresh chat threads when returning from chat
+          _refreshChats();
+        },
+      ),
     );
   }
 

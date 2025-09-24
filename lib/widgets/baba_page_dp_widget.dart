@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
+// import 'package:image_cropper/image_cropper.dart'; // Commented out for smaller APK
 import '../services/baba_page_dp_service.dart';
 import '../utils/app_theme.dart';
 import '../screens/fullscreen_dp_viewer_screen.dart';
@@ -42,11 +42,9 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
   }
 
   @override
-  void didUpdateWidget(BabaPageDPWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentImageUrl != widget.currentImageUrl) {
-      _localImageUrl = widget.currentImageUrl;
-    }
+  void dispose() {
+    // Clean up any resources
+    super.dispose();
   }
 
   /// Refresh DP from server
@@ -233,32 +231,8 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
 
   Future<void> _cropAndUploadImage(File imageFile) async {
     try {
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: imageFile.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Baba Ji Profile Picture',
-            toolbarColor: AppTheme.primaryColor,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-            aspectRatioPresets: [
-              CropAspectRatioPreset.square,
-            ],
-          ),
-          IOSUiSettings(
-            title: 'Crop Baba Ji Profile Picture',
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
-            aspectRatioPickerButtonHidden: true,
-          ),
-        ],
-      );
-
-      if (croppedFile != null) {
-        await _uploadImage(File(croppedFile.path));
-      }
+      // Image cropping disabled for smaller APK - upload directly
+      await _uploadImage(imageFile);
     } catch (e) {
       print('BabaPageDPWidget: Error cropping image: $e');
       // If cropping fails, upload original image
@@ -390,7 +364,10 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(
+            message,
+            style: const TextStyle(color: Colors.black),
+          ),
           backgroundColor: backgroundColor,
           duration: const Duration(seconds: 3),
         ),
@@ -442,13 +419,35 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
                       ),
                     ),
                   )
-                : _localImageUrl != null && _localImageUrl!.isNotEmpty
+                : _localImageUrl != null && _localImageUrl!.isNotEmpty && _isValidUrl(_localImageUrl!)
                     ? Image.network(
                         _localImageUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           print('BabaPageDPWidget: Error loading image: $error');
+                          // Return default avatar instead of crashing
                           return _buildDefaultAvatar();
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  widget.borderColor.withOpacity(0.1),
+                                  widget.borderColor.withOpacity(0.3),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryColor,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          );
                         },
                       )
                     : _buildDefaultAvatar(),
@@ -533,5 +532,14 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
         color: widget.borderColor,
       ),
     );
+  }
+
+  bool _isValidUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https');
+    } catch (e) {
+      return false;
+    }
   }
 }

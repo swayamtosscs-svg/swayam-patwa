@@ -398,17 +398,58 @@ class ApiService {
     required String targetUserId,
     required String token,
   }) async {
+    // Try main API first
     try {
       final response = await http.post(
         Uri.parse('http://103.14.120.163:8081/api/follow/$targetUserId'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
+          'Authorization': 'Bearer $token',
         },
       );
-      return jsonDecode(response.body);
+      
+      print('Follow API response status: ${response.statusCode}');
+      print('Follow API response body: ${response.body}');
+      
+      // Check if response is JSON
+      if (response.headers['content-type']?.contains('application/json') == true) {
+        return jsonDecode(response.body);
+      } else {
+        // Handle non-JSON response (HTML error page, etc.)
+        if (response.statusCode == 404) {
+          return {'success': false, 'message': 'Follow endpoint not found. Please try again later.'};
+        } else if (response.statusCode == 401) {
+          return {'success': false, 'message': 'Authentication failed. Please login again.'};
+        } else if (response.statusCode == 500) {
+          return {'success': false, 'message': 'Server error. Please try again later.'};
+        } else {
+          return {'success': false, 'message': 'Unexpected response from server. Please try again.'};
+        }
+      }
     } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+      print('Follow API error: $e');
+      
+      // Try alternative endpoint if main one fails
+      try {
+        print('Trying alternative follow endpoint...');
+        final altResponse = await http.post(
+          Uri.parse('$baseUrl/follow-user.php'),
+          headers: _authHeaders(token),
+          body: jsonEncode({'target_user_id': targetUserId}),
+        );
+        
+        print('Alternative follow API response status: ${altResponse.statusCode}');
+        print('Alternative follow API response body: ${altResponse.body}');
+        
+        if (altResponse.headers['content-type']?.contains('application/json') == true) {
+          return jsonDecode(altResponse.body);
+        } else {
+          return {'success': false, 'message': 'Alternative follow endpoint also failed. Please try again later.'};
+        }
+      } catch (altError) {
+        print('Alternative follow API also failed: $altError');
+        return {'success': false, 'message': 'Network error: $e'};
+      }
     }
   }
 
@@ -417,17 +458,58 @@ class ApiService {
     required String targetUserId,
     required String token,
   }) async {
+    // Try main API first
     try {
       final response = await http.delete(
         Uri.parse('http://103.14.120.163:8081/api/follow/$targetUserId'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // Fixed: Use Bearer token format
+          'Authorization': 'Bearer $token',
         },
       );
-      return jsonDecode(response.body);
+      
+      print('Unfollow API response status: ${response.statusCode}');
+      print('Unfollow API response body: ${response.body}');
+      
+      // Check if response is JSON
+      if (response.headers['content-type']?.contains('application/json') == true) {
+        return jsonDecode(response.body);
+      } else {
+        // Handle non-JSON response (HTML error page, etc.)
+        if (response.statusCode == 404) {
+          return {'success': false, 'message': 'Unfollow endpoint not found. Please try again later.'};
+        } else if (response.statusCode == 401) {
+          return {'success': false, 'message': 'Authentication failed. Please login again.'};
+        } else if (response.statusCode == 500) {
+          return {'success': false, 'message': 'Server error. Please try again later.'};
+        } else {
+          return {'success': false, 'message': 'Unexpected response from server. Please try again.'};
+        }
+      }
     } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+      print('Unfollow API error: $e');
+      
+      // Try alternative endpoint if main one fails
+      try {
+        print('Trying alternative unfollow endpoint...');
+        final altResponse = await http.post(
+          Uri.parse('$baseUrl/unfollow-user.php'),
+          headers: _authHeaders(token),
+          body: jsonEncode({'target_user_id': targetUserId}),
+        );
+        
+        print('Alternative unfollow API response status: ${altResponse.statusCode}');
+        print('Alternative unfollow API response body: ${altResponse.body}');
+        
+        if (altResponse.headers['content-type']?.contains('application/json') == true) {
+          return jsonDecode(altResponse.body);
+        } else {
+          return {'success': false, 'message': 'Alternative unfollow endpoint also failed. Please try again later.'};
+        }
+      } catch (altError) {
+        print('Alternative unfollow API also failed: $altError');
+        return {'success': false, 'message': 'Network error: $e'};
+      }
     }
   }
 

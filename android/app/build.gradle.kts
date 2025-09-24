@@ -71,6 +71,21 @@ android {
             // Additional size optimizations for debug APK
             isZipAlignEnabled = true
             isJniDebuggable = false
+            
+            // Aggressive size optimization for debug APK
+            splits {
+                abi {
+                    isEnable = true
+                    reset()
+                    include("arm64-v8a") // Only include ARM64 for smaller size
+                    isUniversalApk = false
+                }
+            }
+            
+            // Additional size optimizations
+            buildConfigField("boolean", "ENABLE_DEBUG_FEATURES", "false")
+            buildConfigField("boolean", "ENABLE_ANALYTICS", "false")
+            buildConfigField("boolean", "ENABLE_CRASH_REPORTING", "false")
         }
     }
     

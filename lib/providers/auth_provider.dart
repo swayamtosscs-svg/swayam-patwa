@@ -710,7 +710,10 @@ class AuthProvider extends ChangeNotifier {
 
   /// Follow a user using R-Gram API
   Future<bool> followUser(String targetUserId) async {
-    if (_authToken == null) return false;
+    if (_authToken == null) {
+      _error = 'Please login to follow users';
+      return false;
+    }
 
     try {
       final response = await ApiService.followRGramUser(
@@ -725,17 +728,22 @@ class AuthProvider extends ChangeNotifier {
         return true;
       } else {
         _error = response['message'] ?? 'Failed to follow user';
+        print('Follow user failed: ${response['message']}');
         return false;
       }
     } catch (e) {
       _error = 'Network error: $e';
+      print('Follow user error: $e');
       return false;
     }
   }
 
   /// Unfollow a user using R-Gram API
   Future<bool> unfollowUser(String targetUserId) async {
-    if (_authToken == null) return false;
+    if (_authToken == null) {
+      _error = 'Please login to unfollow users';
+      return false;
+    }
 
     try {
       final response = await ApiService.unfollowRGramUser(
@@ -750,10 +758,12 @@ class AuthProvider extends ChangeNotifier {
         return true;
       } else {
         _error = response['message'] ?? 'Failed to unfollow user';
+        print('Unfollow user failed: ${response['message']}');
         return false;
       }
     } catch (e) {
       _error = 'Network error: $e';
+      print('Unfollow user error: $e');
       return false;
     }
   }

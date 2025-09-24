@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/user_model.dart';
 
 class UserSearchResult {
   final String id;
@@ -29,7 +28,7 @@ class UserSearchResult {
 
   factory UserSearchResult.fromJson(Map<String, dynamic> json) {
     return UserSearchResult(
-      id: json['id']?.toString() ?? json['user_id']?.toString() ?? '',
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? json['user_id']?.toString() ?? '',
       username: json['username'] ?? json['user_name'] ?? '',
       fullName: json['fullName'] ?? json['full_name'] ?? json['name'] ?? '',
       profileImageUrl: json['avatar'] ?? json['profile_image'] ?? json['profile_picture'] ?? json['profileImageUrl'],
@@ -208,54 +207,12 @@ class UserSearchService {
       );
     }
 
-    // If still no results, create some mock users for testing
+    // Return empty list if no real users found (no mock users)
     if (users.isEmpty) {
-      print('No results from APIs, creating mock users for testing');
-      users = _createMockUsers(query);
+      print('No real users found for query: $query');
     }
 
     return users;
   }
 
-  /// Create mock users for testing when APIs fail
-  static List<UserSearchResult> _createMockUsers(String query) {
-    return [
-      UserSearchResult(
-        id: '1',
-        username: query.toLowerCase(),
-        fullName: '${query} User',
-        profileImageUrl: 'https://via.placeholder.com/400x400?text=${query[0].toUpperCase()}',
-        followersCount: 1500,
-        followingCount: 200,
-        postsCount: 45,
-        isVerified: false,
-        isFollowedByCurrentUser: false,
-        bio: 'Mock user for testing',
-      ),
-      UserSearchResult(
-        id: '2',
-        username: '${query}_spiritual',
-        fullName: '${query} Spiritual',
-        profileImageUrl: 'https://via.placeholder.com/400x400?text=S',
-        followersCount: 2500,
-        followingCount: 150,
-        postsCount: 78,
-        isVerified: true,
-        isFollowedByCurrentUser: true,
-        bio: 'Spiritual content creator',
-      ),
-      UserSearchResult(
-        id: '3',
-        username: '${query}_devotee',
-        fullName: '${query} Devotee',
-        profileImageUrl: 'https://via.placeholder.com/400x400?text=D',
-        followersCount: 800,
-        followingCount: 300,
-        postsCount: 23,
-        isVerified: false,
-        isFollowedByCurrentUser: false,
-        bio: 'Devotee and follower',
-      ),
-    ];
-  }
 }

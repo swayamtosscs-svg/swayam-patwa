@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../models/baba_page_model.dart';
 import '../services/baba_page_service.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
 import '../services/theme_service.dart';
 import 'baba_page_detail_screen.dart';
+import 'baba_profile_ui_demo.dart';
 import 'baba_page_creation_screen.dart';
 import 'baba_page_edit_screen.dart';
 
@@ -317,123 +319,183 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          backgroundColor: themeService.backgroundColor,
-          appBar: AppBar(
-            title: Text(
-              'Baba Ji Pages',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-                color: themeService.onPrimaryColor,
+          body: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/Signup page bg.jpeg'),
+                fit: BoxFit.cover,
               ),
             ),
-            backgroundColor: themeService.primaryColor,
-            foregroundColor: themeService.onPrimaryColor,
-        elevation: 0,
-        leading: Container(
-          margin: const EdgeInsets.all(8.0),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () {
-                print('Back button pressed in BabaPagesScreen');
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  print('Cannot pop - no previous route');
-                  // If we can't pop, try to go to home or dashboard
-                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-                }
-              },
-              child: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              _showSearchDialog();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const BabaPageCreationScreen(),
-                ),
-              ).then((_) {
-                // Refresh the list when returning from creation screen
-                _loadBabaPages(refresh: true);
-              });
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Search and Filter Status Bar
-          if (_searchQuery != null || _selectedReligion != 'All')
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: themeService.primaryColor.withOpacity(0.1),
-              child: Row(
+            child: SafeArea(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_searchQuery != null)
-                          Text(
-                            'Search: "$_searchQuery"',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: themeService.primaryColor,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        if (_selectedReligion != 'All')
-                          Text(
-                            'Religion: $_selectedReligion',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: themeService.primaryColor,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
+                  // White Highlighted Search Bar (Header) - Like second image
+                  Container(
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1), // Translucent white like second image
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.6), // Bright white highlighted border
+                        width: 3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.6), // White glow effect
+                          blurRadius: 20,
+                          spreadRadius: 4,
+                          offset: const Offset(0, 0),
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                          offset: const Offset(0, 4),
+                        ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.clear,
-                      color: themeService.primaryColor,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              // Back button
+                              GestureDetector(
+                                onTap: () {
+                                  print('Back button pressed in BabaPagesScreen');
+                                  if (Navigator.of(context).canPop()) {
+                                    Navigator.of(context).pop();
+                                  } else {
+                                    print('Cannot pop - no previous route');
+                                    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                                  }
+                                },
+                                child: const Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.white, // White like second image
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Title
+                              Expanded(
+                                child: Text(
+                                  'Global Guides for Peace',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white, // White like second image
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Search icon
+                              GestureDetector(
+                                onTap: () {
+                                  _showSearchDialog();
+                                },
+                                child: const Icon(
+                                  Icons.search,
+                                  color: Colors.white, // White like second image
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Add icon
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const BabaPageCreationScreen(),
+                                    ),
+                                  ).then((_) {
+                                    _loadBabaPages(refresh: true);
+                                  });
+                                },
+                                child: const Icon(
+                                  Icons.add,
+                                  color: Colors.white, // White like second image
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    onPressed: _clearSearch,
-                    tooltip: 'Clear filters',
+                  ),
+                  
+                  // Search and Filter Status Bar
+                  if (_searchQuery != null || _selectedReligion != 'All')
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_searchQuery != null)
+                                  Text(
+                                    'Search: "$_searchQuery"',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF4A2C2A),
+                                      fontFamily: 'Poppins',
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                if (_selectedReligion != 'All')
+                                  Text(
+                                    'Religion: $_selectedReligion',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF4A2C2A),
+                                      fontFamily: 'Poppins',
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: _clearSearch,
+                            child: const Icon(
+                              Icons.clear,
+                              color: Color(0xFF4A2C2A),
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  
+                  // Main Content
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () => _loadBabaPages(refresh: true),
+                      child: _buildBody(),
+                    ),
                   ),
                 ],
               ),
             ),
-          // Main Content
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _loadBabaPages(refresh: true),
-              child: _buildBody(),
-            ),
           ),
-        ],
-      ),
         );
       },
     );
@@ -564,232 +626,208 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
   Widget _buildBabaPageCard(BabaPage babaPage) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          elevation: 2,
-          color: themeService.surfaceColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => BabaPageDetailScreen(babaPage: babaPage),
+        return GestureDetector(
+          onTap: () {
+            // Open the new profile UI demo screen for Baba Ji
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BabaProfileUiDemoScreen(babaPage: babaPage),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9), // background हल्का white
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.6), // हल्की semi-transparent white border
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08), // बहुत subtle shadow
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
                 ),
-              );
-            },
-            borderRadius: BorderRadius.circular(12),
+              ],
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
                 children: [
-                  Row(
+                  // Avatar/Profile Photo with Frame
+                  Stack(
                     children: [
-                      // Avatar
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: themeService.primaryColor.withOpacity(0.1),
-                        child: babaPage.avatar.isNotEmpty
-                            ? ClipOval(
-                                child: Image.network(
-                                  babaPage.avatar,
-                                  width: 60,
-                                  height: 60,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Icon(
-                                    Icons.self_improvement,
-                                    size: 30,
-                                    color: themeService.primaryColor,
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                Icons.self_improvement,
-                                size: 30,
-                                color: themeService.primaryColor,
-                              ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Name and Location
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              babaPage.name,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: themeService.onSurfaceColor,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.location_on,
-                                  size: 16,
-                                  color: themeService.onSurfaceColor.withOpacity(0.6),
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    babaPage.location,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: themeService.onSurfaceColor.withOpacity(0.6),
-                                      fontFamily: 'Poppins',
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _getReligionColor(babaPage.religion, themeService).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                babaPage.religion,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: _getReligionColor(babaPage.religion, themeService),
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Follow Button
+                      // Golden Frame Background
                       Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // TODO: Implement follow functionality
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: themeService.primaryColor,
-                            foregroundColor: themeService.onPrimaryColor,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            minimumSize: const Size(80, 32),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text(
-                            'Follow',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Poppins',
-                            ),
+                        width: 80,
+                        height: 80,
+                        decoration: const BoxDecoration(
+                          image: DecorationImage(
+                            image: AssetImage('assets/images/babji_dp_bg_frame.jpg'),
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
-                      // Menu button
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'edit':
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => BabaPageEditScreen(babaPage: babaPage),
-                                ),
-                              ).then((_) {
-                                // Refresh the list when returning from edit screen
-                                _loadBabaPages(refresh: true);
-                              });
-                              break;
-                            case 'delete':
-                              _showDeleteConfirmation(babaPage);
-                              break;
-                          }
-                        },
-                        itemBuilder: (BuildContext context) => [
-                          const PopupMenuItem<String>(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit, size: 20),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ],
-                            ),
+                      // Profile Picture
+                      Positioned(
+                        top: 18,
+                        left: 17,
+                        child: CircleAvatar(
+                          radius: 23,
+                          backgroundColor: Colors.white,
+                          child: CircleAvatar(
+                            radius: 23,
+                            backgroundImage: NetworkImage(babaPage.avatar),
                           ),
-                          const PopupMenuItem<String>(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 20, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Delete', style: TextStyle(color: Colors.red)),
-                              ],
-                            ),
-                          ),
-                        ],
-                        child: Icon(
-                          Icons.more_vert,
-                          color: themeService.onSurfaceColor.withOpacity(0.6),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Description
-                  Text(
-                    babaPage.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: themeService.onSurfaceColor.withOpacity(0.8),
-                      fontFamily: 'Poppins',
-                      height: 1.4,
+                  const SizedBox(width: 12),
+
+                  // Text Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          babaPage.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(
+                              babaPage.location,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5DC), // Creamy beige background
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            babaPage.religion,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFFBD9C7C), // Golden-brown text color
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          babaPage.description,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Statistics Row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildStatItem(Icons.people, babaPage.followersCount.toString(), 'Followers'),
+                            _buildStatItem(Icons.grid_view, babaPage.postsCount.toString(), 'Posts'),
+                            _buildStatItem(Icons.play_circle, babaPage.videosCount.toString(), 'Videos'),
+                            _buildStatItem(Icons.book, babaPage.storiesCount.toString(), 'Stories'),
+                          ],
+                        ),
+                      ],
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 12),
-                  // Stats
-                  Row(
+
+                  // Right side buttons (Follow + Menu)
+                  Column(
                     children: [
-                      _buildStatItem(
-                        Icons.people,
-                        '${babaPage.followersCount}',
-                        'Followers',
-                        themeService,
+                      // Follow Button (gradient + compact, avoids overflow)
+                      FittedBox(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFC2D6D6), Color(0xFFBDD5D3)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: GestureDetector(
+                            onTap: () {
+                              print('Follow button pressed for: ${babaPage.name}');
+                            },
+                            child: const Text(
+                              'Follow',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 16),
-                      _buildStatItem(
-                        Icons.grid_on,
-                        '${babaPage.postsCount}',
-                        'Posts',
-                        themeService,
-                      ),
-                      const SizedBox(width: 16),
-                      _buildStatItem(
-                        Icons.play_circle_outline,
-                        '${babaPage.videosCount}',
-                        'Videos',
-                        themeService,
-                      ),
-                      const SizedBox(width: 16),
-                      _buildStatItem(
-                        Icons.auto_stories,
-                        '${babaPage.storiesCount}',
-                        'Stories',
-                        themeService,
+                      const SizedBox(height: 8),
+                      // 3-dot menu button
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'delete') {
+                            _showDeleteConfirmation(babaPage);
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => [
+                          const PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Delete Page',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.more_vert,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -802,31 +840,31 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
     );
   }
 
-  Widget _buildStatItem(IconData icon, String count, String label, ThemeService themeService) {
+  Widget _buildStatItem(IconData icon, String count, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
           size: 16,
-          color: themeService.onSurfaceColor.withOpacity(0.6),
+          color: const Color(0xFF6B7280), // Muted purple-grey color
         ),
         const SizedBox(width: 4),
         Text(
           count,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: themeService.onSurfaceColor,
+            color: Color(0xFF6B7280), // Muted purple-grey color
             fontFamily: 'Poppins',
           ),
         ),
         const SizedBox(width: 2),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
-            color: themeService.onSurfaceColor.withOpacity(0.6),
+            color: Color(0xFF6B7280), // Muted purple-grey color
             fontFamily: 'Poppins',
           ),
         ),

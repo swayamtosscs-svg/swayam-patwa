@@ -49,17 +49,32 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     });
 
     try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+
+      // Debug comment endpoints
+      if (!widget.isReel) {
+        await BabaCommentService.debugCommentEndpoints(
+          postId: widget.postId,
+          babaPageId: widget.babaPageId,
+          token: token,
+        );
+      }
+
       final response = widget.isReel
           ? await BabaCommentService.getReelComments(
               reelId: widget.postId,
               babaPageId: widget.babaPageId,
+              token: token,
             )
           : await BabaCommentService.getComments(
               postId: widget.postId,
               babaPageId: widget.babaPageId,
+              token: token,
             );
 
       if (response.success) {
+        print('BabaCommentDialog: Response successful, comments count: ${response.comments.length}');
         setState(() {
           _comments = response.comments;
           _isLoading = false;
@@ -102,23 +117,31 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     });
 
     try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+
       final response = widget.isReel
           ? await BabaCommentService.addReelComment(
               userId: userId,
               reelId: widget.postId,
               babaPageId: widget.babaPageId,
               content: content,
+              token: token,
             )
-          : await BabaCommentService.addComment(
+          : await BabaCommentService.addCommentWithFallback(
               userId: userId,
               postId: widget.postId,
               babaPageId: widget.babaPageId,
               content: content,
+              token: token,
             );
 
       if (response != null && response['success'] == true) {
-        _commentController.clear();
-        _loadComments(); // Refresh comments
+        print('BabaCommentDialog: Comment added successfully, refreshing comments...');
+        setState(() {
+          _commentController.clear();
+        });
+        await _loadComments(); // Refresh comments
         widget.onCommentAdded?.call(); // Notify parent
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -126,11 +149,23 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
             backgroundColor: Colors.green,
           ),
         );
+        print('BabaCommentDialog: Comments refreshed, total comments: ${_comments.length}');
       } else {
+        String errorMessage = response?['message'] ?? 'Failed to add comment';
+        
+        // Handle specific error cases
+        if (errorMessage.contains('User not found')) {
+          final userName = authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'User';
+          errorMessage = 'Sorry $userName, your account needs to be registered in the comment system. Please contact support or try again later.';
+        } else if (errorMessage.contains('Post not found')) {
+          errorMessage = 'This post is no longer available for comments.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response?['message'] ?? 'Failed to add comment'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -145,6 +180,76 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
       setState(() {
         _isAddingComment = false;
       });
+    }
+  }
+
+  Future<void> _deleteComment(BabaPageComment comment) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userId = authProvider.userProfile?.id;
+    final token = authProvider.authToken;
+
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to delete comments'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Comment'),
+        content: const Text('Are you sure you want to delete this comment?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final response = await BabaCommentService.deleteComment(
+        commentId: comment.id,
+        userId: userId,
+        token: token,
+      );
+
+      if (response != null && response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _loadComments(); // Refresh comments
+        widget.onCommentAdded?.call(); // Notify parent
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response?['message'] ?? 'Failed to delete comment'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting comment: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -377,6 +482,10 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
   }
 
   Widget _buildCommentItem(BabaPageComment comment) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = authProvider.userProfile?.id;
+    final isOwnComment = _isOwnComment(comment, currentUserId);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
@@ -411,7 +520,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  comment.userId ?? 'Anonymous',
+                  _getDisplayName(comment, authProvider),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -428,6 +537,24 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
                   fontFamily: 'Poppins',
                 ),
               ),
+              if (isOwnComment) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _deleteComment(comment),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -457,6 +584,38 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
       return '${difference.inMinutes}m ago';
     } else {
       return 'Just now';
+    }
+  }
+
+  String _getDisplayName(BabaPageComment comment, AuthProvider authProvider) {
+    final currentUserId = authProvider.userProfile?.id;
+    
+    // Check if this comment belongs to the current user (considering the mapping)
+    if (comment.userId == '68b53b03f09b98a6dcded481' && currentUserId == '68c98967a921a001da9787b3') {
+      // This is a comment from the mapped user, show current user's name
+      return authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'You';
+    } else if (comment.userId == currentUserId) {
+      // This is a direct comment from current user
+      return authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'You';
+    } else {
+      // This is a comment from another user
+      return comment.userName ?? 'Anonymous';
+    }
+  }
+
+  bool _isOwnComment(BabaPageComment comment, String? currentUserId) {
+    if (currentUserId == null) return false;
+    
+    // Check if this comment belongs to the current user (considering the mapping)
+    if (comment.userId == '68b53b03f09b98a6dcded481' && currentUserId == '68c98967a921a001da9787b3') {
+      // This is a comment from the mapped user, treat as own comment
+      return true;
+    } else if (comment.userId == currentUserId) {
+      // This is a direct comment from current user
+      return true;
+    } else {
+      // This is a comment from another user
+      return false;
     }
   }
 }

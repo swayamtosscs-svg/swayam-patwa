@@ -33,6 +33,7 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
   @override
   void initState() {
     super.initState();
+    print('ReelUploadScreen: Initializing');
     // Pre-fill with example token from the API documentation
   }
 
@@ -102,6 +103,14 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
       
       try {
         await _videoController!.initialize();
+        // Add listener to update UI when video state changes
+        _videoController!.addListener(() {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+        // Auto-play the video when initialized
+        await _videoController!.play();
         setState(() {
           _isVideoInitialized = true;
         });
@@ -302,9 +311,40 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: _isVideoInitialized
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: VideoPlayer(_videoController!),
+                ? Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: VideoPlayer(_videoController!),
+                      ),
+                      // Play/Pause overlay
+                      Center(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (_videoController!.value.isPlaying) {
+                              _videoController!.pause();
+                            } else {
+                              _videoController!.play();
+                            }
+                            setState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _videoController!.value.isPlaying 
+                                  ? Icons.pause 
+                                  : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   )
                 : const Center(
                     child: CircularProgressIndicator(color: Colors.white),
@@ -451,6 +491,7 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('ReelUploadScreen: Building screen');
     return Scaffold(
       appBar: AppBar(
         title: const Text('Upload Reel'),

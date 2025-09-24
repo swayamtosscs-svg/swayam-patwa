@@ -15,6 +15,7 @@ class StoryWidget extends StatelessWidget {
   final VoidCallback onTap;
   final String? currentUserId; // Add current user ID to check if story can be deleted
   final VoidCallback? onDelete; // Add delete callback
+  final String? storyType; // Add story type to show video indicator
 
   const StoryWidget({
     super.key,
@@ -27,6 +28,7 @@ class StoryWidget extends StatelessWidget {
     required this.onTap,
     this.currentUserId,
     this.onDelete,
+    this.storyType,
   });
 
   @override
@@ -87,13 +89,35 @@ class StoryWidget extends StatelessWidget {
                     child: storyImage != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(storySize / 2),
-                            child: _buildStoryImage(storyImage!),
+                            child: _buildStoryMedia(storyImage!, storyType),
                           )
                         : _buildDefaultStoryContent(),
                   ),
                 ),
                 
-                
+                // Video indicator overlay
+                if (storyType?.toLowerCase() == 'video')
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 12,
+                      ),
+                    ),
+                  ),
               ],
             ),
             
@@ -117,6 +141,39 @@ class StoryWidget extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryMedia(String mediaUrl, String? mediaType) {
+    print('StoryWidget: Building media for URL: $mediaUrl, type: $mediaType');
+    
+    // Check if this is a video story
+    if (mediaType?.toLowerCase() == 'video') {
+      return _buildVideoThumbnail(mediaUrl);
+    } else {
+      return _buildStoryImage(mediaUrl);
+    }
+  }
+
+  Widget _buildVideoThumbnail(String videoUrl) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF6366F1).withOpacity(0.8),
+            const Color(0xFF8B5CF6).withOpacity(0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.play_circle_outline,
+          color: Colors.white,
+          size: 30,
         ),
       ),
     );

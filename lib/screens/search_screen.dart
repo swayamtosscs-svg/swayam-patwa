@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
+import '../services/chat_service.dart';
 // Removed unused imports
 import '../screens/user_profile_screen.dart';
 import '../screens/chat_screen.dart';
@@ -84,90 +85,122 @@ class _SearchScreenState extends State<SearchScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          backgroundColor: themeService.backgroundColor,
-          appBar: AppBar(
-            title: Text(
-              'Search Users',
-              style: TextStyle(
-                color: themeService.onBackgroundColor,
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
+          body: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/Signup page bg.jpeg'),
+                fit: BoxFit.cover,
               ),
             ),
-            backgroundColor: themeService.surfaceColor,
-            elevation: 0,
-            leading: IconButton(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: Icon(Icons.arrow_back, color: themeService.onBackgroundColor),
-            ),
-          ),
-      body: Column(
-        children: [
-          // Search Bar
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final screenWidth = constraints.maxWidth;
-              final isSmallScreen = screenWidth < 400;
-              
-              return Container(
-                margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
-                decoration: BoxDecoration(
-                  color: themeService.surfaceColor,
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  onSubmitted: _onSearchSubmitted,
-                  onChanged: _onSearchChanged,
-                  decoration: InputDecoration(
-                    hintText: 'Search for users...',
-                    hintStyle: TextStyle(
-                      color: themeService.onSurfaceColor.withOpacity(0.6),
-                      fontFamily: 'Poppins',
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: themeService.primaryColor,
-                    ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchResults = [];
-                                _hasSearched = false;
-                              });
-                            },
-                            icon: const Icon(
-                              Icons.clear,
-                              color: Color(0xFF999999),
-                            ),
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: isSmallScreen ? 16 : 20,
-                      vertical: isSmallScreen ? 12 : 15,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Custom App Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Search Users',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              );
-            },
-          ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // Search Bar
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final screenWidth = constraints.maxWidth;
+                            final isSmallScreen = screenWidth < 400;
+                            
+                            return Container(
+                              margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(25),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                onSubmitted: _onSearchSubmitted,
+                                onChanged: _onSearchChanged,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: 'Search for users...',
+                                  hintStyle: const TextStyle(
+                                    color: Colors.white70,
+                                    fontFamily: 'Poppins',
+                                  ),
+                                  prefixIcon: const Icon(
+                                    Icons.search,
+                                    color: Colors.white,
+                                  ),
+                                  suffixIcon: _searchController.text.isNotEmpty
+                                      ? IconButton(
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() {
+                                              _searchResults = [];
+                                              _hasSearched = false;
+                                            });
+                                          },
+                                          icon: const Icon(
+                                            Icons.clear,
+                                            color: Colors.white70,
+                                          ),
+                                        )
+                                      : null,
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen ? 16 : 20,
+                                    vertical: isSmallScreen ? 12 : 15,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
 
-          // Search Results
-          Expanded(
-            child: _buildSearchResults(),
+                        // Search Results
+                        Expanded(
+                          child: _buildSearchResults(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
-      ),
         );
       },
     );
@@ -192,7 +225,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Icon(
               Icons.search,
               size: 64,
-              color: Colors.grey.withValues(alpha: 0.3),
+              color: Colors.white.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -200,7 +233,7 @@ class _SearchScreenState extends State<SearchScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF666666),
+                color: Colors.white,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -209,7 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
               'Enter a username or name to find other accounts',
               style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF999999),
+                color: Colors.white70,
                 fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
@@ -227,7 +260,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Icon(
               Icons.person_off,
               size: 64,
-              color: Colors.grey[300],
+              color: Colors.white.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -235,7 +268,7 @@ class _SearchScreenState extends State<SearchScreen> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF666666),
+                color: Colors.white,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -244,7 +277,7 @@ class _SearchScreenState extends State<SearchScreen> {
               'No users found for "$_lastQuery"',
               style: const TextStyle(
                 fontSize: 14,
-                color: Color(0xFF999999),
+                color: Colors.white70,
                 fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
@@ -289,16 +322,20 @@ class _SearchScreenState extends State<SearchScreen> {
         return Container(
           margin: EdgeInsets.only(bottom: isSmallScreen ? 8 : 12),
           decoration: BoxDecoration(
-            color: themeService.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
-        ],
-      ),
       child: ListTile(
         contentPadding: EdgeInsets.all(isSmallScreen ? 12 : 16),
         leading: CircleAvatar(
@@ -324,7 +361,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
+                  color: Colors.white,
                   fontFamily: 'Poppins',
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -335,7 +372,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 '@$username',
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF666666),
+                  color: Colors.white70,
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -350,7 +387,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 bio,
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF666666),
+                  color: Colors.white70,
                   fontFamily: 'Poppins',
                 ),
                 maxLines: 2,
@@ -376,7 +413,19 @@ class _SearchScreenState extends State<SearchScreen> {
                 // Message Button
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
+                      // Add conversation to local storage
+                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                      if (authProvider.userProfile != null) {
+                        await ChatService.addConversation(
+                          currentUserId: authProvider.userProfile!.id,
+                          otherUserId: userData['_id'] ?? '',
+                          otherUsername: username,
+                          otherFullName: fullName,
+                          otherAvatar: avatar,
+                        );
+                      }
+                      
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -437,7 +486,7 @@ class _SearchScreenState extends State<SearchScreen> {
         return Icon(
           Icons.person,
           size: 30,
-          color: themeService.primaryColor,
+          color: Colors.white,
         );
       },
     );
@@ -451,7 +500,7 @@ class _SearchScreenState extends State<SearchScreen> {
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
+            color: Colors.white,
             fontFamily: 'Poppins',
           ),
         ),
@@ -459,7 +508,7 @@ class _SearchScreenState extends State<SearchScreen> {
           label,
           style: const TextStyle(
             fontSize: 12,
-            color: Color(0xFF999999),
+            color: Colors.white70,
             fontFamily: 'Poppins',
           ),
         ),

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
+// import 'package:image_cropper/image_cropper.dart'; // Commented out for smaller APK
 import '../services/dp_service.dart';
 import '../utils/app_theme.dart';
 
@@ -179,32 +179,8 @@ class _DPWidgetState extends State<DPWidget> {
 
   Future<void> _cropAndUploadImage(File imageFile) async {
     try {
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: imageFile.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Profile Picture',
-            toolbarColor: AppTheme.primaryColor,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-            aspectRatioPresets: [
-              CropAspectRatioPreset.square,
-            ],
-          ),
-          IOSUiSettings(
-            title: 'Crop Profile Picture',
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
-            aspectRatioPickerButtonHidden: true,
-          ),
-        ],
-      );
-
-      if (croppedFile != null) {
-        await _uploadImage(File(croppedFile.path));
-      }
+      // Image cropping disabled for smaller APK - upload directly
+      await _uploadImage(imageFile);
     } catch (e) {
       print('DPWidget: Error cropping image: $e');
       // If cropping fails, upload original image
@@ -408,7 +384,10 @@ class _DPWidgetState extends State<DPWidget> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(
+            message,
+            style: const TextStyle(color: Colors.black),
+          ),
           backgroundColor: backgroundColor,
           duration: const Duration(seconds: 3),
         ),

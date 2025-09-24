@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import '../models/post_model.dart';
 
 class PostFullViewScreen extends StatefulWidget {
@@ -17,12 +18,79 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
   bool _isLiked = false;
   bool _isSaved = false;
   bool _isFavourite = false;
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+  bool _isPlaying = false;
 
   @override
   void initState() {
     super.initState();
     _isLiked = widget.post.isLiked;
     _isSaved = widget.post.isSaved;
+    // Initialize video after a short delay to ensure UI is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeVideo();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Remove listener before disposing
+    _videoController?.removeListener(_videoListener);
+    // Dispose video controller properly
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeVideo() async {
+    // Check if this is a video/reel post
+    if (widget.post.isReel && widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
+      print('PostFullViewScreen: Initializing video: ${widget.post.videoUrl}');
+      try {
+        _videoController = VideoPlayerController.network(
+          widget.post.videoUrl!,
+          videoPlayerOptions: VideoPlayerOptions(
+            mixWithOthers: true,
+            allowBackgroundPlayback: false,
+          ),
+        );
+        
+        await _videoController!.initialize();
+        await _videoController!.setLooping(true);
+        
+        // Add listener for video state changes
+        _videoController!.addListener(_videoListener);
+        
+        if (mounted) {
+          setState(() {
+            _isVideoInitialized = true;
+          });
+        }
+        
+        // Auto-play the video with a delay to ensure UI is ready
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted && _videoController != null) {
+          await _videoController!.play();
+          print('PostFullViewScreen: Video started playing');
+          
+          // Retry if video doesn't start playing
+          await Future.delayed(const Duration(milliseconds: 1000));
+          if (mounted && _videoController != null && !_videoController!.value.isPlaying) {
+            print('PostFullViewScreen: Retrying video play');
+            await _videoController!.play();
+          }
+        }
+      } catch (e) {
+        print('PostFullViewScreen: Error initializing video: $e');
+        if (mounted) {
+          setState(() {
+            _isVideoInitialized = false;
+          });
+        }
+      }
+    } else {
+      print('PostFullViewScreen: Not a video post or no video URL');
+    }
   }
 
   @override
@@ -46,6 +114,119 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
         ),
       ),
     );
+  }
+
+  void _videoListener() {
+    if (mounted && _videoController != null) {
+      setState(() {
+        _isPlaying = _videoController!.value.isPlaying;
+      });
+      
+      // If video stopped unexpectedly, restart it
+      if (!_videoController!.value.isPlaying && _videoController!.value.position.inMilliseconds > 0) {
+        print('PostFullViewScreen: Video stopped unexpectedly, restarting...');
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted && _videoController != null) {
+            _videoController!.play();
+          }
+        });
+      }
+    }
+  }
+
+  Widget _buildMediaContent() {
+    // Check if this is a video/reel post
+    if (widget.post.isReel && widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
+      print('PostFullViewScreen: Building video content, initialized: $_isVideoInitialized');
+      
+      if (_isVideoInitialized && _videoController != null) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            VideoPlayer(_videoController!),
+            // Play/Pause overlay - only show when not playing
+            if (!_isPlaying)
+              Center(
+                child: GestureDetector(
+                  onTap: () {
+                    print('PostFullViewScreen: Play button tapped');
+                    if (_videoController!.value.isPlaying) {
+                      _videoController!.pause();
+                    } else {
+                      _videoController!.play();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      } else {
+        // Show loading or thumbnail while video initializes
+        return Container(
+          color: Colors.black,
+          child: Stack(
+            children: [
+              // Show thumbnail if available
+              if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty)
+                Image.network(
+                  widget.post.imageUrl!,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: Icon(
+                          Icons.video_library,
+                          size: 64,
+                          color: Colors.white54,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              // Loading indicator
+              const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } else {
+      // Handle image posts
+      return Image.network(
+        widget.post.imageUrl ?? 'https://via.placeholder.com/400x600/6366F1/FFFFFF?text=Post',
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: const Color(0xFF1A1A1A),
+            child: const Center(
+              child: Icon(
+                Icons.image_not_supported,
+                size: 64,
+                color: Colors.white54,
+              ),
+            ),
+          );
+        },
+      );
+    }
   }
 
   Widget _buildTopBar() {
@@ -211,22 +392,7 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
             width: double.infinity,
             height: MediaQuery.of(context).size.height * 0.6,
             child: ClipRRect(
-              child: Image.network(
-                widget.post.imageUrl ?? 'https://via.placeholder.com/400x600/6366F1/FFFFFF?text=Post',
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: const Color(0xFF1A1A1A),
-                    child: const Center(
-                      child: Icon(
-                        Icons.image_not_supported,
-                        size: 64,
-                        color: Colors.white54,
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: _buildMediaContent(),
             ),
           ),
           

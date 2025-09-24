@@ -54,7 +54,21 @@ class BabaPagePost {
         likes: (json['likes'] as List<dynamic>?)
                 ?.map((likeJson) {
                   try {
-                    return BabaPagePostLike.fromJson(likeJson);
+                    // Handle both string (user ID) and object formats
+                    if (likeJson is String) {
+                      // If it's just a user ID string, create a basic like object
+                      return BabaPagePostLike(
+                        id: likeJson,
+                        username: '',
+                        fullName: '',
+                        avatar: '',
+                      );
+                    } else if (likeJson is Map<String, dynamic>) {
+                      // If it's an object, parse it normally
+                      return BabaPagePostLike.fromJson(likeJson);
+                    } else {
+                      return null;
+                    }
                   } catch (e) {
                     print('BabaPagePost: Error parsing like: $e');
                     return null;

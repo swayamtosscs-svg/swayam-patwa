@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
+// import 'package:video_thumbnail/video_thumbnail.dart'; // Commented out for smaller APK
 import 'package:provider/provider.dart';
 import '../services/baba_page_reel_service.dart';
 import '../utils/app_theme.dart';
@@ -755,17 +755,9 @@ class _BabaPageReelUploadScreenState extends State<BabaPageReelUploadScreen> {
     });
 
     try {
-      final thumbnailPath = await VideoThumbnail.thumbnailFile(
-        video: _videoFile!.path,
-        thumbnailPath: '/tmp',
-        imageFormat: ImageFormat.JPEG,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        quality: 85,
-      );
-
-      if (thumbnailPath != null) {
-        final thumbnailFile = File(thumbnailPath);
+      // Video thumbnail generation disabled for smaller APK - use placeholder
+      final thumbnailFile = _videoFile; // Use video file as placeholder
+      if (thumbnailFile != null) {
         final fileSize = await thumbnailFile.length();
         
         if (fileSize > 10 * 1024 * 1024) { // 10MB
@@ -840,6 +832,7 @@ class _BabaPageReelUploadScreenState extends State<BabaPageReelUploadScreen> {
           message,
           style: const TextStyle(
             fontFamily: 'Poppins',
+            color: Colors.black,
           ),
         ),
         backgroundColor: backgroundColor,

@@ -43,12 +43,16 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   bool _isPlaying = false;
   bool _hasError = false;
   bool _isCaptionExpanded = false;
+  int _likeCount = 0;
 
   @override
   void initState() {
     super.initState();
     print('EnhancedPostWidget: Initializing post widget for post: ${widget.post.id}');
     print('EnhancedPostWidget: Post type: ${widget.post.type}, isReel: ${widget.post.isReel}, videoUrl: ${widget.post.videoUrl}');
+    
+    // Initialize like count from post data
+    _likeCount = widget.post.likes;
     
     if (widget.post.isBabaJiPost) {
       _loadLikeStatus();
@@ -212,6 +216,10 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       if (response != null && response['success'] == true && mounted) {
         setState(() {
           _isLiked = response?['data']?['isLiked'] ?? false;
+          // Update like count from server response if available
+          if (response?['data']?['likesCount'] != null) {
+            _likeCount = response?['data']?['likesCount'] ?? _likeCount;
+          }
         });
       }
     } catch (e) {
@@ -245,9 +253,6 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           
           // Post Actions
           _buildPostActions(),
-          
-          // Post Stats
-          _buildPostStats(),
         ],
       ),
     );
@@ -626,6 +631,18 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
                         fontFamily: 'Poppins',
                       ),
                     ),
+                    if (_likeCount > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '$_likeCount',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w400,
+                          color: _isLiked ? Colors.red : const Color(0xFF666666),
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -749,6 +766,12 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
         if (mounted) {
           setState(() {
             _isLiked = !_isLiked;
+            // Update like count based on like/unlike action
+            if (_isLiked) {
+              _likeCount++;
+            } else {
+              _likeCount--;
+            }
           });
         }
         
@@ -804,52 +827,6 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       // For regular posts, just call the callback
       widget.onComment();
     }
-  }
-
-  Widget _buildPostStats() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-      child: Row(
-        children: [
-          // Likes count
-          Text(
-            '${widget.post.likes} likes',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-              fontFamily: 'Poppins',
-            ),
-          ),
-          
-          const SizedBox(width: 16),
-          
-          // Comments count
-          Text(
-            '${widget.post.comments} comments',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-              fontFamily: 'Poppins',
-            ),
-          ),
-          
-          const Spacer(),
-          
-          // Hashtags
-          if (widget.post.hashtags.isNotEmpty)
-            Text(
-              '#${widget.post.hashtags.first}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6366F1),
-                fontFamily: 'Poppins',
-              ),
-            ),
-        ],
-      ),
-    );
   }
 
   void _handleMenuSelection(String value) {
