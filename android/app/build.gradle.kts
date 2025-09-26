@@ -52,7 +52,7 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
-            // Optimize debug builds for smaller APK size
+            // Balanced debug build with all features enabled
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = true
@@ -72,20 +72,25 @@ android {
             isZipAlignEnabled = true
             isJniDebuggable = false
             
-            // Aggressive size optimization for debug APK
+            // Balanced size optimization for debug APK
             splits {
                 abi {
                     isEnable = true
                     reset()
-                    include("arm64-v8a") // Only include ARM64 for smaller size
+                    include("arm64-v8a", "armeabi-v7a") // Include both ARM architectures
                     isUniversalApk = false
                 }
             }
             
-            // Additional size optimizations
-            buildConfigField("boolean", "ENABLE_DEBUG_FEATURES", "false")
+            // Feature flags - all enabled
+            buildConfigField("boolean", "ENABLE_DEBUG_FEATURES", "true")
             buildConfigField("boolean", "ENABLE_ANALYTICS", "false")
             buildConfigField("boolean", "ENABLE_CRASH_REPORTING", "false")
+            
+            // All features enabled
+            buildConfigField("boolean", "ENABLE_VIDEO_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_CAMERA_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_STORY_FEATURES", "true")
         }
     }
     

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:media_kit/media_kit.dart';
 import 'providers/auth_provider.dart';
 import 'services/theme_service.dart';
+import 'utils/responsive_utils.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -16,6 +18,7 @@ import 'screens/google_signin_screen.dart';
 import 'screens/religion_selection_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/otp_verification_screen.dart';
+import 'screens/video_test_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -23,6 +26,9 @@ import 'screens/otp_verification_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize media_kit
+  MediaKit.ensureInitialized();
   
   // Memory optimization: Set image cache size
   PaintingBinding.instance.imageCache.maximumSize = 100;
@@ -79,6 +85,7 @@ class DivineConnectApp extends StatelessWidget {
                 );
               },
               '/notifications': (context) => const NotificationsScreen(),
+              '/video-test': (context) => const VideoTestScreen(),
             },
           );
         },
@@ -153,9 +160,9 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
           print('AuthWrapper: User is authenticated, showing home screen');
           return const HomeScreen();
         } else {
-          print('AuthWrapper: User not authenticated, showing signup screen as requested');
-          // Show signup screen instead of login when user is not authenticated
-          return const SignupScreen();
+          print('AuthWrapper: User not authenticated, showing login screen');
+          // Show login screen when user is not authenticated (first time or after logout)
+          return const LoginScreen();
         }
       },
     );

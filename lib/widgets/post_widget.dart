@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'video_player_widget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
+import '../services/user_like_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
 import '../screens/post_full_view_screen.dart';
 import 'image_slider_widget.dart';
+import 'user_comment_dialog.dart';
 
 class PostWidget extends StatefulWidget {
   final Post post;
@@ -31,121 +34,124 @@ class PostWidget extends StatefulWidget {
 }
 
 class _PostWidgetState extends State<PostWidget> {
-  VideoPlayerController? _videoController;
+  // Video player is now handled by VideoPlayerWidget
   bool _isVideoInitialized = false;
   bool _isPlaying = false;
   bool _hasError = false;
   bool _isCaptionExpanded = false;
+  bool _isLiked = false;
+  int _likeCount = 0;
 
   @override
   void initState() {
     super.initState();
-    if (widget.post.type == PostType.reel || widget.post.isReel) {
-      _initializeVideo();
+    // Initialize like count and status from post data
+    _likeCount = widget.post.likes;
+    _isLiked = widget.post.isLiked;
+    
+    // Load like status from local storage for persistent likes
+    _loadLikeStatus();
+  }
+
+  Future<void> _loadLikeStatus() async {
+    try {
+      final isLikedLocally = await UserLikeService.isPostLiked(widget.post.id);
+      if (mounted) {
+        setState(() {
+          _isLiked = isLikedLocally;
+          // Keep the original like count from post data
+          _likeCount = widget.post.likes;
+        });
+      }
+    } catch (e) {
+      print('Error loading like status: $e');
     }
   }
 
   @override
   void dispose() {
-    _videoController?.dispose();
     super.dispose();
   }
 
-  Future<void> _initializeVideo() async {
-    if (widget.post.videoUrl == null) return;
-    
-    try {
-      print('PostWidget: Initializing reel video: ${widget.post.videoUrl}');
-      
-      _videoController = VideoPlayerController.network(
-        widget.post.videoUrl!,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
-      
-      // Set video player configuration
-      _videoController!.setVolume(1.0);
-      _videoController!.setLooping(true);
-      
-      await _videoController!.initialize();
-      
-      if (mounted) {
-        setState(() {
-          _isVideoInitialized = true;
-        });
-        
-        // Add listener for video state changes
-        _videoController!.addListener(() {
-          if (mounted) {
-            setState(() {
-              _isPlaying = _videoController!.value.isPlaying;
-            });
-          }
-        });
-        
-        // Auto-play reels
-        print('PostWidget: Starting reel autoplay...');
-        await _startAutoplayWithRetry();
-      }
-    } catch (e) {
-      print('PostWidget: Error initializing reel video: $e');
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _isVideoInitialized = false;
-        });
-      }
-    }
+  void _togglePlayPause() {
+    // Play/pause is handled by VideoPlayerWidget
+    setState(() {
+      _isPlaying = !_isPlaying;
+    });
   }
 
-  Future<void> _startAutoplayWithRetry() async {
-    int retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries && mounted && !_isPlaying) {
-      try {
-        await _videoController!.play();
+  Future<void> _handleLike() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      final token = authProvider.authToken;
+      
+      if (userId == null || token == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to like posts'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      Map<String, dynamic>? response;
+      
+      if (_isLiked) {
+        response = await ApiService.unlikePost(
+          postId: widget.post.id,
+          token: token,
+        );
+      } else {
+        response = await ApiService.likePost(
+          postId: widget.post.id,
+          token: token,
+        );
+      }
+
+      if (response != null && response['success'] == true) {
         if (mounted) {
           setState(() {
-            _isPlaying = true;
+            _isLiked = !_isLiked;
+            // Update like count based on like/unlike action
+            if (_isLiked) {
+              _likeCount++;
+            } else {
+              _likeCount--;
+            }
           });
         }
-        print('PostWidget: Reel autoplay started successfully (attempt ${retryCount + 1})');
-        break;
-      } catch (playError) {
-        retryCount++;
-        print('PostWidget: Reel autoplay attempt $retryCount failed: $playError');
         
-        if (retryCount < maxRetries) {
-          // Wait before retrying, with increasing delay
-          await Future.delayed(Duration(milliseconds: 300 * retryCount));
-        } else {
-          print('PostWidget: All reel autoplay attempts failed');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response?['message'] ?? 'Failed to like post'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       }
-    }
-  }
-
-  void _togglePlayPause() async {
-    if (_hasError) return;
-    
-    // If video is not initialized yet, try to initialize it
-    if (!_isVideoInitialized && widget.post.videoUrl != null) {
-      await _initializeVideo();
-      return;
-    }
-    
-    if (_videoController != null && _isVideoInitialized) {
-      if (_isPlaying) {
-        await _videoController!.pause();
-      } else {
-        await _videoController!.play();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error liking post: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-      setState(() {
-        _isPlaying = !_isPlaying;
-      });
     }
   }
 
@@ -470,11 +476,13 @@ class _PostWidgetState extends State<PostWidget> {
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
               child: Stack(
                 children: [
-                  // Video Player or Thumbnail
-                  if (_isVideoInitialized && _videoController != null && !_hasError)
-                    VideoPlayer(_videoController!)
-                  else
-                    _buildVideoThumbnail(),
+                  // Video Player
+                  VideoPlayerWidget(
+                    videoUrl: widget.post.videoUrl ?? '',
+                    autoPlay: false,
+                    looping: true,
+                    muted: true,
+                  ),
                   
                   // Play/Pause Overlay - always show when video is not playing
                   if (!_isPlaying || _hasError)
@@ -512,12 +520,33 @@ class _PostWidgetState extends State<PostWidget> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced horizontal padding
       child: Row(
         children: [
+          // Like Button
+          _buildActionButton(
+            icon: _isLiked ? Icons.favorite : Icons.favorite_border,
+            label: '$_likeCount',
+            onTap: _handleLike,
+            color: _isLiked ? Colors.red : const Color(0xFF666666),
+          ),
+          
+          const SizedBox(width: 24),
           
           // Comment Button
           _buildActionButton(
             icon: Icons.chat_bubble_outline,
             label: '${widget.post.comments}',
-            onTap: widget.onComment,
+            onTap: () {
+              // Show comment dialog for user posts
+              showDialog(
+                context: context,
+                builder: (context) => UserCommentDialog(
+                  postId: widget.post.id,
+                  onCommentAdded: () {
+                    // Call the callback to notify parent
+                    widget.onComment();
+                  },
+                ),
+              );
+            },
           ),
           
           const SizedBox(width: 24),
@@ -733,42 +762,58 @@ class _PostWidgetState extends State<PostWidget> {
       // Show loading
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Deleting post...'),
-          duration: Duration(seconds: 1),
+          content: Text('Deleting post permanently...'),
+          duration: Duration(seconds: 2),
         ),
       );
 
-      // Call delete API
-      final response = await ApiService.deleteMedia(
+      print('PostWidget: Starting permanent deletion for post ID: ${widget.post.id}');
+
+      // Call enhanced deletion API with verification
+      final response = await ApiService.deleteMediaWithVerification(
         mediaId: widget.post.id,
         token: token,
       );
 
+      print('PostWidget: Delete response: $response');
+
       if (response['success'] == true) {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post deleted successfully'),
+          SnackBar(
+            content: Text(response['message'] ?? 'Post permanently deleted successfully'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
         
+        // Clear from local storage only after successful API deletion
+        await LocalStorageService.deletePost(widget.post.id);
+        
         // Call the delete callback if provided
         widget.onDelete?.call();
+        
+        // Force a rebuild to remove the post from UI
+        if (mounted) {
+          setState(() {});
+        }
       } else {
-        // Show error message
+        // Show error message with more details
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(response['message'] ?? 'Failed to delete post'),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
       }
     } catch (e) {
+      print('PostWidget: Delete error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error deleting post: $e'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
         ),
       );
     }

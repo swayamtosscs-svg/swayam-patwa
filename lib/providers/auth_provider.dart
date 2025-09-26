@@ -508,10 +508,10 @@ class AuthProvider extends ChangeNotifier {
     print('AuthProvider: Logout completed (local state cleared)');
   }
 
-  /// Logout and show signup screen
+  /// Logout and show login screen
   Future<void> logoutAndShowSignup() async {
     await logout();
-    // The AuthWrapper will automatically show the signup screen
+    // The AuthWrapper will automatically show the login screen
     // since isAuthenticated is now false
   }
 

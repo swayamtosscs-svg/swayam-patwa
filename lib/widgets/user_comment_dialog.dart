@@ -1,33 +1,29 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import '../models/baba_page_comment_model.dart';
-import '../services/baba_comment_service.dart';
+import '../models/user_comment_model.dart';
+import '../services/user_comment_service.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
 import '../utils/responsive_utils.dart';
 import 'package:provider/provider.dart';
 
-class BabaCommentDialog extends StatefulWidget {
+class UserCommentDialog extends StatefulWidget {
   final String postId;
-  final String babaPageId;
-  final bool isReel;
   final VoidCallback? onCommentAdded;
 
-  const BabaCommentDialog({
+  const UserCommentDialog({
     super.key,
     required this.postId,
-    required this.babaPageId,
-    this.isReel = false,
     this.onCommentAdded,
   });
 
   @override
-  State<BabaCommentDialog> createState() => _BabaCommentDialogState();
+  State<UserCommentDialog> createState() => _UserCommentDialogState();
 }
 
-class _BabaCommentDialogState extends State<BabaCommentDialog> {
+class _UserCommentDialogState extends State<UserCommentDialog> {
   final TextEditingController _commentController = TextEditingController();
-  List<BabaPageComment> _comments = [];
+  List<UserComment> _comments = [];
   bool _isLoading = false;
   bool _isAddingComment = false;
   String? _errorMessage;
@@ -54,40 +50,24 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
 
-      // Skip debug for faster loading
-      // if (!widget.isReel) {
-      //   await BabaCommentService.debugCommentEndpoints(
-      //     postId: widget.postId,
-      //     babaPageId: widget.babaPageId,
-      //     token: token,
-      //   );
-      // }
-
-      final response = widget.isReel
-          ? await BabaCommentService.getReelComments(
-              reelId: widget.postId,
-              babaPageId: widget.babaPageId,
-              token: token,
-            )
-          : await BabaCommentService.getComments(
-              postId: widget.postId,
-              babaPageId: widget.babaPageId,
-              token: token,
-            );
+      final response = await UserCommentService.getComments(
+        postId: widget.postId,
+        token: token ?? '',
+      );
 
       if (response.success) {
-        print('BabaCommentDialog: Response successful, comments count: ${response.comments.length}');
+        print('UserCommentDialog: Response successful, comments count: ${response.comments.length}');
         setState(() {
           _comments = response.comments;
           _isLoading = false;
         });
-        print('BabaCommentDialog: Successfully loaded ${_comments.length} comments');
+        print('UserCommentDialog: Successfully loaded ${_comments.length} comments');
       } else {
         setState(() {
           _errorMessage = response.message;
           _isLoading = false;
         });
-        print('BabaCommentDialog: Failed to load comments: ${response.message}');
+        print('UserCommentDialog: Failed to load comments: ${response.message}');
       }
     } catch (e) {
       setState(() {
@@ -122,24 +102,15 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
 
-      final response = widget.isReel
-          ? await BabaCommentService.addReelComment(
-              userId: userId,
-              reelId: widget.postId,
-              babaPageId: widget.babaPageId,
-              content: content,
-              token: token,
-            )
-          : await BabaCommentService.addCommentWithFallback(
-              userId: userId,
-              postId: widget.postId,
-              babaPageId: widget.babaPageId,
-              content: content,
-              token: token,
-            );
+      final response = await UserCommentService.addComment(
+        postId: widget.postId,
+        userId: userId,
+        content: content,
+        token: token ?? '',
+      );
 
       if (response != null && response['success'] == true) {
-        print('BabaCommentDialog: Comment added successfully, refreshing comments...');
+        print('UserCommentDialog: Comment added successfully, refreshing comments...');
         setState(() {
           _commentController.clear();
         });
@@ -185,7 +156,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     }
   }
 
-  Future<void> _deleteComment(BabaPageComment comment) async {
+  Future<void> _deleteComment(UserComment comment) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userId = authProvider.userProfile?.id;
     final token = authProvider.authToken;
@@ -222,10 +193,11 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     if (confirmed != true) return;
 
     try {
-      final response = await BabaCommentService.deleteComment(
+      final response = await UserCommentService.deleteComment(
         commentId: comment.id,
         userId: userId,
-        token: token,
+        postId: widget.postId,
+        token: token ?? '',
       );
 
       if (response != null && response['success'] == true) {
@@ -725,7 +697,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     );
   }
 
-  Widget _buildCommentItem(BabaPageComment comment) {
+  Widget _buildCommentItem(UserComment comment) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final currentUserId = authProvider.userProfile?.id;
     final isOwnComment = _isOwnComment(comment, currentUserId);
@@ -882,42 +854,29 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     }
   }
 
-  String _getDisplayName(BabaPageComment comment, AuthProvider authProvider) {
+  String _getDisplayName(UserComment comment, AuthProvider authProvider) {
     final currentUserId = authProvider.userProfile?.id;
     
-    // Check if this comment belongs to the current user (considering the mapping)
-    if (comment.userId == '68b53b03f09b98a6dcded481' && currentUserId == '68c98967a921a001da9787b3') {
-      // This is a comment from the mapped user, show current user's name
-      return authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'You';
-    } else if (comment.userId == currentUserId) {
-      // This is a direct comment from current user
+    if (comment.userId == currentUserId) {
+      // This is a comment from current user
       return authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'You';
     } else {
       // This is a comment from another user - show their name or generate a display name
-      if (comment.userName != null && comment.userName!.isNotEmpty && comment.userName != 'Anonymous') {
-        return comment.userName!;
-      } else if (comment.userId != null && comment.userId!.isNotEmpty) {
+      if (comment.username.isNotEmpty && comment.username != 'Unknown') {
+        return comment.username;
+      } else if (comment.userId.isNotEmpty) {
         // Generate a display name based on user ID for better identification
-        return 'User ${comment.userId!.substring(0, 6)}';
+        return 'User ${comment.userId.substring(0, 6)}';
       } else {
         return 'Anonymous User';
       }
     }
   }
 
-  bool _isOwnComment(BabaPageComment comment, String? currentUserId) {
+  bool _isOwnComment(UserComment comment, String? currentUserId) {
     if (currentUserId == null) return false;
     
-    // Check if this comment belongs to the current user (considering the mapping)
-    if (comment.userId == '68b53b03f09b98a6dcded481' && currentUserId == '68c98967a921a001da9787b3') {
-      // This is a comment from the mapped user, treat as own comment
-      return true;
-    } else if (comment.userId == currentUserId) {
-      // This is a direct comment from current user
-      return true;
-    } else {
-      // This is a comment from another user
-      return false;
-    }
+    // Check if this comment belongs to the current user
+    return comment.userId == currentUserId;
   }
 }

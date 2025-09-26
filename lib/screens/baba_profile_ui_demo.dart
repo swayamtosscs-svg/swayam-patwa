@@ -2,11 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 import '../models/baba_page_model.dart';
 import '../models/baba_page_post_model.dart';
 import '../services/baba_page_post_service.dart';
 import '../services/baba_page_service.dart';
+import '../services/follow_state_service.dart';
+import '../services/media_upload_service.dart';
+import '../services/local_storage_service.dart';
+import '../services/baba_page_dp_service.dart';
+import '../services/baba_page_reel_service.dart';
+import '../models/baba_page_reel_model.dart';
 import '../providers/auth_provider.dart';
+import '../utils/avatar_utils.dart';
+import '../utils/responsive_utils.dart';
 import 'baba_page_post_creation_screen.dart';
 import 'baba_pages_screen.dart';
 import 'baba_page_reel_upload_screen.dart';
@@ -19,20 +30,100 @@ class BabaProfileUiDemoScreen extends StatefulWidget {
   State<BabaProfileUiDemoScreen> createState() => _BabaProfileUiDemoScreenState();
 }
 
-class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
+class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with AutomaticKeepAliveClientMixin {
   int selectedSegment = 0;
 
   List<BabaPagePost> _posts = [];
   bool _loadingPosts = false;
+  bool _postsLoaded = false; // Prevent multiple loads
+  
+  List<MediaData> _videos = [];
+  bool _loadingVideos = false;
+  bool _videosLoaded = false; // Prevent multiple loads
+  
+  // Local state for current avatar URL
+  String? _currentAvatarUrl;
+
+  @override
+  bool get wantKeepAlive => true; // Keep the page alive to prevent rebuilds
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize avatar URL from the BabaPage if available
+    if (widget.babaPage != null) {
+      _currentAvatarUrl = widget.babaPage!.avatar;
+      // Load posts with delay to improve initial page load
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // Add small delay to let UI render first
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              _fetchPosts(widget.babaPage!);
+            }
+          });
+        }
+      });
+    }
+  }
+
+  String _getDisplayAvatarUrl() {
+    // Priority: Local state > BabaPage avatar > Default
+    if (_currentAvatarUrl != null && _currentAvatarUrl!.isNotEmpty) {
+      return AvatarUtils.getAbsoluteAvatarUrl(_currentAvatarUrl);
+    }
+    
+    final page = widget.babaPage;
+    if (page != null && page.avatar.isNotEmpty) {
+      return AvatarUtils.getAbsoluteAvatarUrl(page.avatar);
+    }
+    
+    return AvatarUtils.getDefaultAvatarUrl() ?? '';
+  }
+
+  @override
+  void dispose() {
+    // Clean up resources to prevent memory leaks
+    super.dispose();
+  }
+  
+  // Method to reset loaded state when needed
+  void _resetLoadedState() {
+    _postsLoaded = false;
+    _videosLoaded = false;
+    _posts.clear();
+    _videos.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     final screenW = MediaQuery.of(context).size.width;
     final page = widget.babaPage;
     final hasRealData = page != null;
-    // Load posts when bound to real page
-    if (hasRealData && !_loadingPosts && _posts.isEmpty) {
-      _fetchPosts(page!);
+    
+    // Load posts when bound to real page - ensure posts load automatically
+    if (hasRealData && !_loadingPosts) {
+      // Always try to load posts if we don't have any or haven't loaded yet
+      if (_posts.isEmpty || !_postsLoaded) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _postsLoaded = true;
+            _fetchPosts(page!);
+          }
+        });
+      }
+    }
+    
+    // Load videos when bound to real page (only once)
+    if (hasRealData && !_loadingVideos && !_videosLoaded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _videosLoaded = true;
+          _fetchVideos(page!);
+        }
+      });
     }
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -40,15 +131,17 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
       body: SafeArea(
         child: DefaultTextStyle.merge(
           style: GoogleFonts.poppins(),
-          child: Column(
-            children: [
-              // Header (avatar, gradient background, name, tags)
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                // Header (avatar, gradient background, name, tags)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
                   // rounded gradient card
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    margin: ResponsiveUtils.getResponsivePadding(context, horizontal: 4.5, vertical: 1.5),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFEBF6FF), Color(0xFFF5E9FF)],
@@ -64,53 +157,63 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.only(top: 72, bottom: 18, left: 18, right: 18),
+                    padding: EdgeInsets.only(
+                      top: ResponsiveUtils.getResponsiveHeight(context, 9),
+                      bottom: ResponsiveUtils.getResponsiveHeight(context, 2.25),
+                      left: ResponsiveUtils.getResponsiveWidth(context, 4.5),
+                      right: ResponsiveUtils.getResponsiveWidth(context, 4.5),
+                    ),
                     child: Column(
                       children: [
-                        const SizedBox(height: 48),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 6.0)),
                         Text(
                           hasRealData ? page.name : 'Baba Sayam',
                           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                         ),
-                        const SizedBox(height: 6),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 0.75)),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.location_on_outlined, size: 16, color: Colors.grey),
-                            const SizedBox(width: 4),
+                            SizedBox(width: ResponsiveUtils.getResponsiveWidth(context, 1.0)),
                             Text(hasRealData ? page.location : 'Haridwar, India', style: TextStyle(color: Colors.grey[700])),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.5)),
                         // tags
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            _buildTag('[ ${hasRealData ? page.religion : 'Hindsium'} ]', Colors.orange.shade100, Colors.orange.shade700),
-                            _buildTag('[ Yoga ]', Colors.blue.shade100, Colors.blue.shade700),
-                            _buildTag('Spiritual Leader', Colors.green.shade100, Colors.green.shade800),
-                          ],
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (constraints.maxWidth < 300) {
+                              // For small screens, use smaller tags and tighter spacing
+                              return Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  _buildTag(hasRealData ? page.religion : 'Hinduism', Colors.orange.shade100, Colors.orange.shade700, isSmall: true),
+                                  _buildTag('Yoga', Colors.blue.shade100, Colors.blue.shade700, isSmall: true),
+                                  _buildTag('Spiritual Leader', Colors.green.shade100, Colors.green.shade800, isSmall: true),
+                                ],
+                              );
+                            } else {
+                              // For normal screens, use regular tags
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  _buildTag(hasRealData ? page.religion : 'Hinduism', Colors.orange.shade100, Colors.orange.shade700),
+                                  _buildTag('Yoga', Colors.blue.shade100, Colors.blue.shade700),
+                                  _buildTag('Spiritual Leader', Colors.green.shade100, Colors.green.shade800),
+                                ],
+                              );
+                            }
+                          },
                         ),
                         const SizedBox(height: 16),
-                        // pills (Follow / Message) inside header card
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _FollowButton(page: page),
-                            const SizedBox(width: 12),
-                            OutlinedButton(
-                              onPressed: () {},
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                side: BorderSide(color: Colors.grey.shade300),
-                                backgroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 10),
-                              ),
-                              child: Text('Message', style: TextStyle(color: Colors.grey.shade800)),
-                            ),
-                          ],
+                        // Follow button inside header card
+                        Center(
+                          child: _FollowButton(page: page),
                         ),
                       ],
                     ),
@@ -134,72 +237,96 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
                       child: const Icon(Icons.arrow_back_ios_new, size: 20),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     right: 30,
                     top: 16,
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings_outlined, size: 20),
-                        SizedBox(width: 10),
-                        Icon(Icons.edit_outlined, size: 20),
-                      ],
+                    child: GestureDetector(
+                      onTap: () => _showDPUploadOptions(context),
+                      child: const Icon(Icons.edit_outlined, size: 20),
                     ),
                   ),
 
-                  // Circular avatar with glow (overlapping)
+                  // Circular avatar with glow (overlapping) - No DP upload functionality
                   Positioned(
                     top: -14,
                     left: (screenW / 2) - 62,
                     child: _glowingAvatar(
-                      imageUrl: hasRealData && page.avatar.isNotEmpty
-                          ? page.avatar
-                          : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&q=80&auto=format&fit=crop',
+                      imageUrl: _getDisplayAvatarUrl(),
                       size: 124,
                     ),
                   ),
-                ],
-              ),
+                  ],
+                ),
 
-              // White card content below header
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 18),
-                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))
-                      ],
-                    ),
+                // White card content below header
+                Container(
+                  margin: ResponsiveUtils.getResponsivePadding(context, horizontal: 4.5),
+                  padding: EdgeInsets.fromLTRB(
+                    ResponsiveUtils.getResponsiveWidth(context, 4.5),
+                    ResponsiveUtils.getResponsiveHeight(context, 2.25),
+                    ResponsiveUtils.getResponsiveWidth(context, 4.5),
+                    ResponsiveUtils.getResponsiveHeight(context, 11.25),
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))
+                    ],
+                  ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('About', style: TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 8),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.0)),
                         Text(
                           'Yoga guru and spiritual leader. Guiding people to peace & balance.\n✨ "Peace begins with you."',
                           style: TextStyle(color: Colors.grey[700], height: 1.4),
                         ),
-                        const SizedBox(height: 18),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 2.25)),
 
                         const Text('Statistics', style: TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _smallStatCard(icon: Icons.person, value: hasRealData ? '${page.followersCount}' : '2', label: 'Followers', color: Colors.orange.shade100),
-                            _smallStatCard(icon: Icons.article_outlined, value: hasRealData ? '${page.postsCount}' : '3', label: 'Posts', color: Colors.blue.shade100),
-                            _smallStatCard(icon: Icons.videocam_outlined, value: hasRealData ? '${page.videosCount}' : '0', label: 'Videos', color: Colors.green.shade100),
-                            _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${page.storiesCount}' : '0', label: 'Stories', color: Colors.purple.shade100),
-                          ],
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.25)),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            // Use responsive layout based on screen width
+                            if (constraints.maxWidth < 350) {
+                              // For very small screens, use 2x2 grid
+                              return Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: _smallStatCard(icon: Icons.person, value: hasRealData ? '${page.followersCount}' : '2', label: 'Followers', color: Colors.orange.shade100)),
+                                      Expanded(child: _smallStatCard(icon: Icons.article_outlined, value: hasRealData ? '${_posts.length}' : '3', label: 'Posts', color: Colors.blue.shade100)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(child: _smallStatCard(icon: Icons.videocam_outlined, value: hasRealData ? '${_videos.length}' : '0', label: 'Videos', color: Colors.green.shade100)),
+                                      Expanded(child: _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${page.storiesCount}' : '0', label: 'Stories', color: Colors.purple.shade100)),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            } else {
+                              // For normal screens, use horizontal layout with proper spacing
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  Flexible(child: _smallStatCard(icon: Icons.person, value: hasRealData ? '${page.followersCount}' : '2', label: 'Followers', color: Colors.orange.shade100)),
+                                  Flexible(child: _smallStatCard(icon: Icons.article_outlined, value: hasRealData ? '${_posts.length}' : '3', label: 'Posts', color: Colors.blue.shade100)),
+                                  Flexible(child: _smallStatCard(icon: Icons.videocam_outlined, value: hasRealData ? '${_videos.length}' : '0', label: 'Videos', color: Colors.green.shade100)),
+                                  Flexible(child: _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${page.storiesCount}' : '0', label: 'Stories', color: Colors.purple.shade100)),
+                                ],
+                              );
+                            }
+                          },
                         ),
-                        const SizedBox(height: 18),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 2.25)),
 
                         const Text('Website', style: TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 8),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.0)),
                         GestureDetector(
                           onTap: () => _launchUrl(hasRealData && (page.website.isNotEmpty) ? page.website : 'https://baba-ramdev.com'),
                           child: Container(
@@ -218,57 +345,189 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 2.25)),
 
                         _segmentControl(),
 
-                        const SizedBox(height: 12),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.5)),
 
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                            childAspectRatio: 1,
-                          ),
-                          itemCount: _loadingPosts ? 6 : (hasRealData ? _posts.length : 8),
-                          itemBuilder: (context, i) {
-                            if (_loadingPosts) {
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              );
-                            }
-                            if (hasRealData && i < _posts.length) {
-                              final post = _posts[i];
-                              final mediaUrl = post.media.isNotEmpty ? post.media.first.url : null;
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: mediaUrl != null
-                                    ? Image.network(mediaUrl, fit: BoxFit.cover)
-                                    : Container(color: Colors.grey.shade200),
-                              );
-                            }
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network('https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800&q=80&auto=format&fit=crop', fit: BoxFit.cover),
-                            );
-                          },
+                        // Show content based on selected tab
+                        IndexedStack(
+                          index: selectedSegment,
+                          children: [
+                            // Posts tab
+                            hasRealData && _posts.isEmpty && !_loadingPosts
+                                ? Container(
+                                    padding: const EdgeInsets.all(32),
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Icons.image_outlined,
+                                          size: 64,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'No posts uploaded yet',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.grey.shade600,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Upload your first post to get started',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        ElevatedButton.icon(
+                                          onPressed: () => _openCreateBottomSheet(context),
+                                          icon: const Icon(Icons.add),
+                                          label: const Text('Create Post'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.orange.shade400,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : _loadingPosts
+                                    ? _buildPostsSkeleton()
+                                    : GridView.builder(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      mainAxisSpacing: ResponsiveUtils.getResponsiveWidth(context, 2.5),
+                                      crossAxisSpacing: ResponsiveUtils.getResponsiveWidth(context, 2.5),
+                                      childAspectRatio: 1,
+                                    ),
+                                    itemCount: _loadingPosts ? 6 : (hasRealData ? _posts.length : 8),
+                                    itemBuilder: (context, i) {
+                                      if (_loadingPosts) {
+                                        return Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade200,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        );
+                                      }
+                                      if (hasRealData && i < _posts.length) {
+                                        final post = _posts[i];
+                                        final mediaUrl = post.media.isNotEmpty ? post.media.first.url : null;
+                                        return GestureDetector(
+                                          onTap: () => _showPostFullScreen(post),
+                                          onLongPress: () => _showDeletePostDialog(post),
+                                          child: Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: mediaUrl != null
+                                                    ? Image.network(
+                                                        mediaUrl, 
+                                                        fit: BoxFit.cover,
+                                                        loadingBuilder: (context, child, loadingProgress) {
+                                                          if (loadingProgress == null) return child;
+                                                          return Container(
+                                                            color: Colors.grey.shade200,
+                                                            child: const Center(
+                                                              child: CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                        errorBuilder: (context, error, stackTrace) {
+                                                          return Container(
+                                                            color: Colors.grey.shade200,
+                                                            child: const Icon(
+                                                              Icons.image_not_supported,
+                                                              color: Colors.grey,
+                                                              size: 32,
+                                                            ),
+                                                          );
+                                                        },
+                                                      )
+                                                    : Container(color: Colors.grey.shade200),
+                                              ),
+                                              // Delete button overlay
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: GestureDetector(
+                                                  onTap: () => _showDeletePostDialog(post),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.red.withOpacity(0.8),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.delete_outline,
+                                                      color: Colors.white,
+                                                      size: 16,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.network(
+                                          'https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800&q=80&auto=format&fit=crop', 
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (context, child, loadingProgress) {
+                                            if (loadingProgress == null) return child;
+                                            return Container(
+                                              color: Colors.grey.shade200,
+                                              child: const Center(
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              color: Colors.grey.shade200,
+                                              child: const Icon(
+                                                Icons.image_not_supported,
+                                                color: Colors.grey,
+                                                size: 32,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                            // Videos tab
+                            _buildVideosList(),
+                            // Stories tab
+                            _buildStoriesList(),
+                            // Events/Live Sessions tab
+                            _buildEventsList(),
+                          ],
                         ),
                         const SizedBox(height: 20),
                       ],
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
 
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openCreateBottomSheet(context),
@@ -277,66 +536,170 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
         child: const Icon(Icons.add, size: 28),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  Widget _buildTag(String text, Color bg, Color textColor) {
+  Widget _buildTag(String text, Color bg, Color textColor, {bool isSmall = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmall ? 8 : 12, 
+        vertical: isSmall ? 4 : 6
+      ),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(text, style: TextStyle(color: textColor, fontWeight: FontWeight.w600)),
+      child: Text(
+        text, 
+        style: TextStyle(
+          color: textColor, 
+          fontWeight: FontWeight.w600,
+          fontSize: isSmall ? 11 : 12,
+        ),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
+    );
+  }
+
+  Widget _buildPostsSkeleton() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: ResponsiveUtils.getResponsiveWidth(context, 2.5),
+        crossAxisSpacing: ResponsiveUtils.getResponsiveWidth(context, 2.5),
+        childAspectRatio: 1,
+      ),
+      itemCount: 6,
+      itemBuilder: (context, i) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+            ),
+          ),
+        );
+      },
     );
   }
 
   static Widget _glowingAvatar({required String imageUrl, double size = 100}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Colors.white.withOpacity(0.9), blurRadius: 18, spreadRadius: 6),
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: CircleAvatar(
-        radius: size / 2,
-        backgroundColor: Colors.white,
-        backgroundImage: NetworkImage(imageUrl),
-      ),
+    final isValidUrl = AvatarUtils.isValidAvatarUrl(imageUrl);
+    
+    return Stack(
+      children: [
+        // Frame background (same as Baba pages)
+        Container(
+          width: size,
+          height: size,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/babji_dp_bg_frame.jpg'),
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        
+        // Profile picture positioned within the frame
+        Positioned(
+          left: size * 0.2, // More centered positioning
+          top: size * 0.2,
+          child: Container(
+            width: size * 0.6, // Smaller size to show more frame
+            height: size * 0.6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8, spreadRadius: 1),
+              ],
+            ),
+            child: ClipOval(
+              child: isValidUrl
+                  ? Image.network(
+                      imageUrl,
+                      width: size * 0.6,
+                      height: size * 0.6,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback to gradient if image fails to load
+                        return Container(
+                          width: size * 0.6,
+                          height: size * 0.6,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.orange.withOpacity(0.1),
+                                Colors.orange.withOpacity(0.3),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  : Container(
+                      width: size * 0.6,
+                      height: size * 0.6,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.orange.withOpacity(0.1),
+                            Colors.orange.withOpacity(0.3),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _smallStatCard({required IconData icon, required String value, required String label, required Color color}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 18),
-                const Spacer(),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(label, style: const TextStyle(fontSize: 12)),
-              ],
-            )
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  value, 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label, 
+            style: const TextStyle(fontSize: 11),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ],
       ),
     );
   }
@@ -346,87 +709,118 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Row(
-            children: List.generate(labels.length, (i) {
-              final isSelected = i == selectedSegment;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => selectedSegment = i),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: isSelected
-                          ? [BoxShadow(color: Colors.black12, blurRadius: 8, offset: const Offset(0, 4))]
-                          : null,
-                    ),
-                    child: Center(
-                      child: Text(
-                        labels[i],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          fontSize: 13,
-                          color: isSelected ? Colors.black87 : Colors.grey[600],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 350) {
+              // For small screens, use a scrollable horizontal list
+              return Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: labels.length,
+                  itemBuilder: (context, i) {
+                    final isSelected = i == selectedSegment;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => selectedSegment = i);
+                        // Auto-load posts when Posts tab is selected
+                        if (i == 0 && widget.babaPage != null) {
+                          _fetchPosts(widget.babaPage!);
+                        }
+                        // Auto-load videos when Videos tab is selected
+                        if (i == 1 && widget.babaPage != null) {
+                          _fetchVideos(widget.babaPage!);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: isSelected
+                              ? [BoxShadow(color: Colors.black12, blurRadius: 8, offset: const Offset(0, 4))]
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            labels[i],
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              fontSize: 11,
+                              color: isSelected ? Colors.black87 : Colors.grey[600],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               );
-            }),
-          ),
+            } else {
+              // For normal screens, use the original layout
+              return Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  children: List.generate(labels.length, (i) {
+                    final isSelected = i == selectedSegment;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => selectedSegment = i);
+                          // Auto-load posts when Posts tab is selected
+                          if (i == 0 && widget.babaPage != null) {
+                            _fetchPosts(widget.babaPage!);
+                          }
+                          // Auto-load videos when Videos tab is selected
+                          if (i == 1 && widget.babaPage != null) {
+                            _fetchVideos(widget.babaPage!);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          margin: const EdgeInsets.symmetric(horizontal: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: isSelected
+                                ? [BoxShadow(color: Colors.black12, blurRadius: 8, offset: const Offset(0, 4))]
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              labels[i],
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                fontSize: 12,
+                                color: isSelected ? Colors.black87 : Colors.grey[600],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              );
+            }
+          },
         ),
       ],
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return BottomAppBar(
-      color: Colors.white,
-      elevation: 12,
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
-      child: SizedBox(
-        height: 62,
-        child: Row(
-          children: [
-            const SizedBox(width: 12),
-            _navItem(icon: Icons.home_outlined, label: 'Posts', onTap: () {}),
-            _navItem(icon: Icons.dashboard_outlined, label: 'Dupeos', onTap: () {}),
-            const Spacer(),
-            _navItem(icon: Icons.calendar_today_outlined, label: 'Chirghunt', onTap: () {}),
-            _navItem(icon: Icons.person_outline, label: 'Profile', onTap: () {}),
-            const SizedBox(width: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _navItem({required IconData icon, required String label, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 68,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(height: 4),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 11)),
-          ],
-        ),
-      ),
     );
   }
 
@@ -556,28 +950,1159 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> {
   }
 
   Future<void> _fetchPosts(BabaPage page) async {
+    // Always allow fetching posts to ensure they show permanently
+    if (_loadingPosts) return; // Only prevent if already loading
+    
     try {
       setState(() => _loadingPosts = true);
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final token = auth.authToken;
       if (token == null) {
+        print('BabaProfileUiDemo: No auth token found');
         setState(() => _loadingPosts = false);
         return;
       }
+      
+      print('BabaProfileUiDemo: Fetching posts for page ${page.id} (${page.name})');
+      print('BabaProfileUiDemo: Using token: ${token.substring(0, 20)}...');
+      
+      // Load more posts to ensure we get all uploaded posts
       final resp = await BabaPagePostService.getBabaPagePosts(
         babaPageId: page.id,
         token: token,
         page: 1,
-        limit: 12,
+        limit: 20, // Increased limit to get more posts
       );
+      
+      print('BabaProfileUiDemo: API Response - Success: ${resp.success}');
+      print('BabaProfileUiDemo: API Response - Message: ${resp.message}');
+      print('BabaProfileUiDemo: API Response - Posts count: ${resp.posts.length}');
+      
       if (!mounted) return;
       setState(() {
         _posts = resp.posts;
         _loadingPosts = false;
+        _postsLoaded = true;
       });
+      
+      print('BabaProfileUiDemo: Loaded ${resp.posts.length} posts');
+      if (resp.posts.isNotEmpty) {
+        print('BabaProfileUiDemo: Posts data: ${resp.posts.map((p) => '${p.id}: "${p.content.substring(0, p.content.length > 20 ? 20 : p.content.length)}..." (${p.media.length} media)').join(', ')}');
+        
+        // Debug each post
+        for (int i = 0; i < resp.posts.length; i++) {
+          final post = resp.posts[i];
+          print('BabaProfileUiDemo: Post $i - ID: ${post.id}, Content: "${post.content}", Media: ${post.media.length}');
+          for (int j = 0; j < post.media.length; j++) {
+            print('BabaProfileUiDemo:   Media $j - URL: ${post.media[j].url}');
+          }
+        }
+      } else {
+        print('BabaProfileUiDemo: No posts returned from API');
+      }
     } catch (e) {
+      print('BabaProfileUiDemo: Error fetching posts: $e');
+      print('BabaProfileUiDemo: Error stack trace: ${StackTrace.current}');
       if (!mounted) return;
-      setState(() => _loadingPosts = false);
+      setState(() {
+        _loadingPosts = false;
+        _postsLoaded = true; // Mark as loaded even on error to prevent retry
+      });
+    }
+  }
+
+  Future<void> _fetchVideos(BabaPage page) async {
+    if (_loadingVideos) return; // Prevent multiple simultaneous calls
+    
+    try {
+      if (mounted) {
+        setState(() => _loadingVideos = true);
+      }
+      
+      List<MediaData> videos = [];
+      
+      // Get videos from server for this specific Baba page
+      try {
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        final token = auth.authToken;
+        if (token != null) {
+          print('BabaProfileUiDemo: Fetching videos from server for page ${page.id}');
+          
+          // Fetch videos from server using BabaPageReelService
+          final reelsResponse = await BabaPageReelService.getBabaPageReels(
+            babaPageId: page.id,
+            token: token,
+            page: 1,
+            limit: 8, // Reduced from 20 to 8 for faster loading
+          );
+          
+          if (reelsResponse['success'] == true) {
+            final reelsData = reelsResponse['data']['videos'] as List<dynamic>? ?? [];
+            print('BabaProfileUiDemo: Server returned ${reelsData.length} videos');
+            
+            // Convert server videos to MediaData format
+            for (final reelData in reelsData) {
+              final reel = BabaPageReel.fromJson(reelData);
+              if (reel.video.url.isNotEmpty) {
+                videos.add(MediaData(
+                  mediaId: reel.id,
+                  publicId: '',
+                  secureUrl: reel.video.url,
+                  folderPath: '',
+                  fileName: reel.title.isNotEmpty ? reel.title : '${reel.babaPageId}_${reel.id}',
+                  fileType: 'video',
+                  fileSize: 0,
+                  dimensions: {},
+                  duration: 0,
+                  uploadedBy: reel.babaPageId,
+                  username: page.name,
+                  uploadedAt: reel.createdAt,
+                ));
+              }
+            }
+          } else {
+            print('BabaProfileUiDemo: Server returned error: ${reelsResponse['message']}');
+          }
+        }
+      } catch (e) {
+        print('Error fetching server videos: $e');
+      }
+      
+      // Also get videos from local storage (reels) as backup
+      try {
+        final localReels = await LocalStorageService.getUserReels();
+        
+        // Convert local reels to MediaData format for consistency
+        for (final reel in localReels) {
+          if (reel.videoUrl != null && reel.videoUrl!.isNotEmpty) {
+            // Check if this video is already added from server
+            final alreadyExists = videos.any((v) => v.secureUrl == reel.videoUrl);
+            if (!alreadyExists) {
+              videos.add(MediaData(
+                mediaId: reel.id,
+                publicId: '',
+                secureUrl: reel.videoUrl!,
+                folderPath: '',
+                fileName: (reel.caption?.isNotEmpty == true) ? reel.caption! : '${reel.username}_${reel.id}',
+                fileType: 'video',
+                fileSize: 0,
+                dimensions: {},
+                duration: 0,
+                uploadedBy: reel.userId,
+                username: reel.username,
+                uploadedAt: reel.createdAt,
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        print('Error fetching local reels: $e');
+      }
+      
+      // Update UI with videos
+      if (mounted) {
+        setState(() {
+          _videos = videos;
+          _loadingVideos = false;
+        });
+      }
+      print('BabaProfileUiDemo: Loaded ${videos.length} videos');
+      print('BabaProfileUiDemo: Videos data: ${videos.map((v) => '${v.mediaId}: ${v.secureUrl}').join(', ')}');
+      
+    } catch (e) {
+      print('Error fetching videos: $e');
+      if (mounted) {
+        setState(() => _loadingVideos = false);
+      }
+    }
+  }
+
+  Widget _buildVideosList() {
+    if (_loadingVideos) {
+      return Column(
+        children: List.generate(3, (index) => _buildVideoItemSkeleton()),
+      );
+    }
+
+    if (_videos.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Icon(
+              Icons.video_library_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No videos uploaded yet',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Upload your first video to get started',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _videos.length,
+      itemBuilder: (context, index) {
+        return _buildVideoItem(_videos[index]);
+      },
+    );
+  }
+
+  Widget _buildVideoItem(MediaData video) {
+    return Container(
+      key: ValueKey('video_${video.mediaId}'), // Add key to prevent unnecessary rebuilds
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          
+          // Video bar (dark grey like third image)
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D2D2D), // Dark grey like third image
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  // Video thumbnail/icon
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade700,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.video_file,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  
+                  // Video info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          video.fileName.isNotEmpty ? video.fileName : 'Video ${video.mediaId.substring(0, 8)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Uploaded ${_formatDate(video.uploadedAt)}',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          video.fileType.toUpperCase(),
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Play button (like third image) - simplified
+                  GestureDetector(
+                    onTap: () {
+                      // Simple tap handler without complex interactions
+                      print('Play video: ${video.fileName}');
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.black,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(width: 12),
+                  
+                  // Delete button - simplified
+                  GestureDetector(
+                    onTap: () {
+                      // Simple delete without complex dialog
+                      _deleteVideoDirectly(video);
+                    },
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVideoItemSkeleton() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Caption skeleton
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Container(
+              height: 16,
+              width: 120,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          
+          // Video bar skeleton
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          height: 16,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.0)),
+                        Container(
+                          height: 12,
+                          width: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoriesList() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.auto_stories_outlined,
+            size: 64,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No stories yet',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Create your first story',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventsList() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.event_outlined,
+            size: 64,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No events scheduled',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Schedule your first live session',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  String _getVideoCaption(MediaData video) {
+    // Generate caption similar to "demo by dhani"
+    final username = video.username.isNotEmpty ? video.username : 'User';
+    
+    // Sample captions for different video types
+    final captions = [
+      'spiritual moment by $username',
+      'peaceful thoughts by $username',
+      'meditation by $username',
+      'wisdom by $username',
+      'blessing by $username',
+      'guidance by $username',
+      'inspiration by $username',
+    ];
+    
+    // Use video ID to consistently pick the same caption for the same video
+    final index = video.mediaId.hashCode.abs() % captions.length;
+    return captions[index];
+  }
+
+  void _showDeleteVideoDialog(MediaData video) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Video'),
+          content: Text('Are you sure you want to delete "${video.fileName}"? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteVideo(video);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteVideoDirectly(MediaData video) async {
+    try {
+      // Show confirmation dialog first
+      final bool? shouldDelete = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Delete Video'),
+            content: Text('Are you sure you want to delete "${video.fileName}"? This action cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldDelete != true) return;
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Delete from server first
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final token = auth.authToken;
+      
+      if (token != null && widget.babaPage != null) {
+        try {
+          // Use BabaPageReelService to delete the video
+          final response = await BabaPageReelService.deleteBabaPageReel(
+            reelId: video.mediaId,
+            babaPageId: widget.babaPage!.id,
+            token: token,
+          );
+
+          // Close loading dialog
+          if (mounted) Navigator.pop(context);
+
+          if (response['success'] == true) {
+            // Remove from current list
+            setState(() {
+              _videos.removeWhere((v) => v.mediaId == video.mediaId);
+            });
+            
+            // Also delete from local storage
+            try {
+              await LocalStorageService.deleteReel(video.mediaId);
+            } catch (e) {
+              print('Error deleting from local storage: $e');
+            }
+            
+            // Show success message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Video deleted successfully'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          } else {
+            // Show error message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(response['message'] ?? 'Failed to delete video'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          // Close loading dialog
+          if (mounted) Navigator.pop(context);
+          
+          print('Error deleting video from server: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error deleting video: $e'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } else {
+        // Close loading dialog
+        if (mounted) Navigator.pop(context);
+        
+        // Fallback: delete from local storage only
+        setState(() {
+          _videos.removeWhere((v) => v.mediaId == video.mediaId);
+        });
+        
+        try {
+          await LocalStorageService.deleteReel(video.mediaId);
+        } catch (e) {
+          print('Error deleting from local storage: $e');
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Video deleted from local storage'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      print('Error in delete video: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting video: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteVideo(MediaData video) async {
+    try {
+      // Delete from local storage
+      await LocalStorageService.deleteReel(video.mediaId);
+      
+      // Remove from current list
+      setState(() {
+        _videos.removeWhere((v) => v.mediaId == video.mediaId);
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video deleted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting video: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showDPUploadOptions(BuildContext context) {
+    final page = widget.babaPage;
+    if (page == null) {
+      _showSnackBar('Please select a Baba Ji page first', Colors.orange);
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Change Profile Picture',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.camera_alt, color: Colors.blue),
+              ),
+              title: const Text('Take Photo'),
+              subtitle: const Text('Use camera to take a new photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromCamera();
+              },
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.photo_library, color: Colors.green),
+              ),
+              title: const Text('Choose from Gallery'),
+              subtitle: const Text('Select photo from your gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromGallery();
+              },
+            ),
+            if ((_currentAvatarUrl != null && _currentAvatarUrl!.isNotEmpty) || page.avatar.isNotEmpty)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.delete_outline, color: Colors.red),
+                ),
+                title: const Text('Remove Current Photo'),
+                subtitle: const Text('Delete your current profile picture'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteCurrentDP();
+                },
+              ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _uploadDP(File(image.path));
+      }
+    } catch (e) {
+      _showSnackBar('Error taking photo: $e', Colors.red);
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        await _uploadDP(File(image.path));
+      }
+    } catch (e) {
+      _showSnackBar('Error selecting image: $e', Colors.red);
+    }
+  }
+
+  Future<void> _uploadDP(File imageFile) async {
+    final page = widget.babaPage;
+    if (page == null) {
+      _showSnackBar('Please select a Baba Ji page first', Colors.orange);
+      return;
+    }
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final token = auth.authToken;
+    if (token == null || token.isEmpty) {
+      _showSnackBar('Please login first', Colors.red);
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      print('BabaProfileUiDemoScreen: Starting DP upload for page ${page.id}');
+      
+      final response = await BabaPageDPService.uploadBabaPageDP(
+        imageFile: imageFile,
+        babaPageId: page.id,
+        token: token,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (response['success'] == true) {
+        final data = response['data'];
+        final avatarUrl = data['avatarUrl'] as String?;
+        
+        if (avatarUrl != null && avatarUrl.isNotEmpty) {
+          // Update local state with new avatar URL
+          setState(() {
+            _currentAvatarUrl = avatarUrl;
+          });
+          
+          // The local state will handle the display, and the server has the updated avatar
+          // The parent screens will get the updated avatar when they refresh their data
+          
+          _showSnackBar('Baba Ji page display picture uploaded successfully!', Colors.green);
+        } else {
+          _showSnackBar('Upload successful but no image URL returned', Colors.orange);
+        }
+      } else {
+        _showSnackBar(
+          response['message'] ?? 'Failed to upload display picture',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      print('BabaProfileUiDemoScreen: DP upload error: $e');
+      _showSnackBar('Error uploading display picture: $e', Colors.red);
+    }
+  }
+
+  Future<void> _deleteCurrentDP() async {
+    final page = widget.babaPage;
+    if (page == null) {
+      _showSnackBar('Please select a Baba Ji page first', Colors.orange);
+      return;
+    }
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final token = auth.authToken;
+    if (token == null || token.isEmpty) {
+      _showSnackBar('Please login first', Colors.red);
+      return;
+    }
+
+    // Show confirmation dialog
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Display Picture'),
+          content: const Text('Are you sure you want to delete this display picture? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      print('BabaProfileUiDemoScreen: Starting DP delete for page ${page.id}');
+      
+      final response = await BabaPageDPService.deleteBabaPageDP(
+        babaPageId: page.id,
+        token: token,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (response['success'] == true) {
+        // Update local state
+        setState(() {
+          _currentAvatarUrl = '';
+        });
+        
+        _showSnackBar('Display picture deleted successfully!', Colors.green);
+      } else {
+        _showSnackBar(
+          response['message'] ?? 'Failed to delete display picture',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      print('BabaProfileUiDemoScreen: DP delete error: $e');
+      _showSnackBar('Error deleting display picture: $e', Colors.red);
+    }
+  }
+
+  void _showSnackBar(String message, Color backgroundColor) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showPostFullScreen(BabaPagePost post) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            iconTheme: const IconThemeData(color: Colors.white),
+            title: Text(
+              'Post',
+              style: TextStyle(color: Colors.white),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showDeletePostDialog(post);
+                },
+              ),
+            ],
+          ),
+          body: Center(
+            child: post.media.isNotEmpty
+                ? InteractiveViewer(
+                    child: Image.network(
+                      post.media.first.url,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(
+                          child: Text(
+                            'Failed to load image',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                : const Center(
+                    child: Text(
+                      'No media available',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDeletePostDialog(BabaPagePost post) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Post'),
+          content: Text('Are you sure you want to delete this post? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deletePost(post);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deletePost(BabaPagePost post) async {
+    final page = widget.babaPage;
+    if (page == null) {
+      _showSnackBar('Please select a Baba Ji page first', Colors.orange);
+      return;
+    }
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final token = auth.authToken;
+    if (token == null || token.isEmpty) {
+      _showSnackBar('Please login first', Colors.red);
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      print('BabaProfileUiDemoScreen: Starting post delete for post ${post.id}');
+      
+      final response = await BabaPagePostService.deleteBabaPagePost(
+        postId: post.id,
+        babaPageId: page.id,
+        token: token,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (response.success) {
+        // Remove from current list
+        setState(() {
+          _posts.removeWhere((p) => p.id == post.id);
+        });
+        
+        _showSnackBar('Post deleted successfully!', Colors.green);
+      } else {
+        _showSnackBar(
+          response.message ?? 'Failed to delete post',
+          Colors.red,
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      print('BabaProfileUiDemoScreen: Post delete error: $e');
+      _showSnackBar('Error deleting post: $e', Colors.red);
     }
   }
 }
@@ -600,25 +2125,203 @@ class _FollowButtonState extends State<_FollowButton> {
     super.initState();
     final page = widget.page;
     if (page != null) {
-      _isFollowing = page.isFollowing;
       _followers = page.followersCount;
+      print('_FollowButton: Initial followers count: $_followers');
+      
+      // Load follow state from SharedPreferences first, then check server
+      _loadFollowStateFromPrefs();
+    }
+  }
+
+  /// Load follow state from SharedPreferences
+  Future<void> _loadFollowStateFromPrefs() async {
+    final page = widget.page;
+    if (page == null) return;
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      
+      if (userId != null) {
+        final isFollowing = await FollowStateService.getFollowState(
+          userId: userId,
+          pageId: page.id,
+          serverState: page.isFollowing,
+        );
+        
+        if (mounted) {
+          setState(() {
+            _isFollowing = isFollowing;
+          });
+          print('_FollowButton: Loaded follow state from prefs: $_isFollowing');
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isFollowing = page.isFollowing;
+          });
+        }
+      }
+      
+      // Also check follow status from server to ensure consistency
+      _checkFollowStatus();
+    } catch (e) {
+      print('_FollowButton: Error loading follow state from preferences: $e');
+      if (mounted) {
+        setState(() {
+          _isFollowing = page.isFollowing;
+        });
+      }
+      _checkFollowStatus();
+    }
+  }
+
+  /// Save follow state to SharedPreferences
+  Future<void> _saveFollowState(bool isFollowing) async {
+    final page = widget.page;
+    if (page == null) return;
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      
+      if (userId != null) {
+        await FollowStateService.saveFollowState(
+          userId: userId,
+          pageId: page.id,
+          isFollowing: isFollowing,
+        );
+      }
+    } catch (e) {
+      print('_FollowButton: Error saving follow state: $e');
+    }
+  }
+
+  Future<void> _checkFollowStatus() async {
+    final page = widget.page;
+    if (page == null) return;
+    
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final token = auth.authToken;
+    
+    if (token == null) return;
+    
+    try {
+      print('_FollowButton: Checking follow status for page ${page.id}');
+      
+      // Get the current Baba page data to check follow status
+      final response = await BabaPageService.getBabaPages(token: token, page: 1, limit: 50);
+      if (response.success) {
+        final currentPage = response.pages.firstWhere(
+          (p) => p.id == page.id,
+          orElse: () => page,
+        );
+        
+        // Use FollowStateService to get the correct follow state
+        final userId = auth.userProfile?.id;
+        bool serverFollowState = currentPage.isFollowing;
+        
+        if (userId != null) {
+          serverFollowState = await FollowStateService.getFollowState(
+            userId: userId,
+            pageId: page.id,
+            serverState: currentPage.isFollowing,
+          );
+        }
+        
+        if (mounted) {
+          setState(() {
+            _isFollowing = serverFollowState;
+            _followers = currentPage.followersCount;
+          });
+          print('_FollowButton: Updated follow status: $_isFollowing, followers: $_followers');
+        }
+      } else {
+        print('_FollowButton: Failed to get pages list: ${response.message}');
+        // If we can't get the pages list, try to get individual page
+        try {
+          final individualResponse = await BabaPageService.getBabaPageById(
+            pageId: page.id,
+            token: token,
+          );
+          if (individualResponse.success && individualResponse.data != null) {
+            // Use FollowStateService to get the correct follow state
+            final userId = auth.userProfile?.id;
+            bool serverFollowState = individualResponse.data!.isFollowing;
+            
+            if (userId != null) {
+              serverFollowState = await FollowStateService.getFollowState(
+                userId: userId,
+                pageId: page.id,
+                serverState: individualResponse.data!.isFollowing,
+              );
+            }
+            
+            if (mounted) {
+              setState(() {
+                _isFollowing = serverFollowState;
+                _followers = individualResponse.data!.followersCount;
+              });
+              print('_FollowButton: Updated follow status from individual page: $_isFollowing, followers: $_followers');
+            }
+          }
+        } catch (e) {
+          print('_FollowButton: Error getting individual page: $e');
+        }
+      }
+    } catch (e) {
+      print('_FollowButton: Error checking follow status: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final hasRealData = widget.page != null;
-    return ElevatedButton(
-      onPressed: !_loading && hasRealData ? _toggleFollow : null,
-      style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        side: BorderSide(color: Colors.blue.shade200),
-        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 10),
-      ),
-      child: Text(_isFollowing ? 'Following ($_followers)' : 'Follow ($_followers)',
-          style: TextStyle(color: Colors.blue.shade800)),
+    
+    // Determine button colors based on follow state
+    final backgroundColor = _isFollowing ? Colors.blue.shade600 : Colors.white;
+    final textColor = _isFollowing ? Colors.white : Colors.blue.shade800;
+    final borderColor = _isFollowing ? Colors.blue.shade600 : Colors.blue.shade200;
+    
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Adjust padding and font size based on available width
+        final horizontalPadding = constraints.maxWidth < 200 ? 16.0 : 20.0;
+        final fontSize = constraints.maxWidth < 200 ? 12.0 : 14.0;
+        
+        return ElevatedButton(
+          onPressed: !_loading && hasRealData ? _toggleFollow : null,
+          style: ElevatedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            backgroundColor: backgroundColor,
+            elevation: _isFollowing ? 2 : 0,
+            side: BorderSide(color: borderColor, width: 1.5),
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 10),
+            animationDuration: const Duration(milliseconds: 200),
+          ),
+          child: _loading 
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                ),
+              )
+            : Flexible(
+                child: Text(
+                  _isFollowing ? 'Following ($_followers)' : 'Follow ($_followers)',
+                  style: TextStyle(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: fontSize,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+        );
+      },
     );
   }
 
@@ -626,30 +2329,126 @@ class _FollowButtonState extends State<_FollowButton> {
     final page = widget.page!;
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final token = auth.authToken;
+    
     if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login first')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login first'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
+    
     setState(() => _loading = true);
+    
     try {
+      print('_FollowButton: Toggling follow status. Current: $_isFollowing');
       if (_isFollowing) {
+        // Unfollow the Baba Ji page
+        print('_FollowButton: Unfollowing page ${page.id}');
         final resp = await BabaPageService.unfollowBabaPage(pageId: page.id, token: token);
+        print('_FollowButton: Unfollow response: ${resp.success}, ${resp.message}');
+        
         if (resp.success) {
+          // Save follow state to SharedPreferences
+          await _saveFollowState(false);
+          
           setState(() {
             _isFollowing = false;
             _followers = (_followers - 1).clamp(0, 1 << 31);
           });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Unfollowed ${page.name}'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          // Handle specific error cases
+          String errorMessage = resp.message;
+          if (errorMessage.toLowerCase().contains('not following') || 
+              errorMessage.toLowerCase().contains('not found')) {
+            // If we're not actually following, update UI to reflect this
+            await _saveFollowState(false);
+            setState(() {
+              _isFollowing = false;
+            });
+            errorMessage = 'You are not following this page';
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to unfollow: $errorMessage'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       } else {
+        // Follow the Baba Ji page
+        print('_FollowButton: Following page ${page.id}');
         final resp = await BabaPageService.followBabaPage(pageId: page.id, token: token);
+        print('_FollowButton: Follow response: ${resp.success}, ${resp.message}');
+        
         if (resp.success) {
+          // Save follow state to SharedPreferences
+          await _saveFollowState(true);
+          
           setState(() {
             _isFollowing = true;
             _followers = _followers + 1;
           });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Following ${page.name}'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          // Handle specific error cases
+          String errorMessage = resp.message;
+          if (errorMessage.toLowerCase().contains('already following')) {
+            // If we're already following, update UI to reflect this
+            await _saveFollowState(true);
+            setState(() {
+              _isFollowing = true;
+            });
+            errorMessage = 'You are already following this page';
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to follow: $errorMessage'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       }
-    } catch (_) {
+    } catch (e) {
+      print('Follow/Unfollow error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

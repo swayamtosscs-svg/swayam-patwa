@@ -105,34 +105,40 @@ class BabaCommentService {
     }
   }
 
-  /// Get comments for a Baba Ji post using new API
+  /// Get comments for a Baba Ji post using new API with optimized loading
   static Future<BabaPageCommentResponse> getComments({
     required String postId,
     required String babaPageId,
     int page = 1,
-    int limit = 20,
+    int limit = 50, // Increased limit for better performance
     String? token,
   }) async {
     try {
-      // Use the new comment receive API
-      final url = Uri.parse('$_baseUrl/comments/receive?postId=$postId&sortBy=createdAt&sortOrder=asc&limit=$limit');
+      // Use the new comment receive API with optimized parameters
+      final url = Uri.parse('$_baseUrl/comments/receive?postId=$postId&sortBy=createdAt&sortOrder=desc&limit=$limit&page=$page');
       
       final headers = <String, String>{
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache', // Ensure fresh data
       };
       
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
       }
       
+      // Add timeout for faster failure detection
       final response = await http.get(
         url,
         headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout - please check your internet connection');
+        },
       );
 
       print('BabaCommentService: Get comments - URL: $url');
       print('BabaCommentService: Get comments response status: ${response.statusCode}');
-      print('BabaCommentService: Get comments response body: ${response.body}');
 
       if (response.statusCode == 200) {
         try {
@@ -177,34 +183,40 @@ class BabaCommentService {
     }
   }
 
-  /// Get comments for a Baba Ji reel using new API
+  /// Get comments for a Baba Ji reel using new API with optimized loading
   static Future<BabaPageCommentResponse> getReelComments({
     required String reelId,
     required String babaPageId,
     int page = 1,
-    int limit = 20,
+    int limit = 50, // Increased limit for better performance
     String? token,
   }) async {
     try {
-      // Use the new comment receive API for reels
-      final url = Uri.parse('$_baseUrl/comments/receive?postId=$reelId&sortBy=createdAt&sortOrder=asc&limit=$limit');
+      // Use the new comment receive API for reels with optimized parameters
+      final url = Uri.parse('$_baseUrl/comments/receive?postId=$reelId&sortBy=createdAt&sortOrder=desc&limit=$limit&page=$page');
       
       final headers = <String, String>{
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache', // Ensure fresh data
       };
       
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
       }
       
+      // Add timeout for faster failure detection
       final response = await http.get(
         url,
         headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout - please check your internet connection');
+        },
       );
 
       print('BabaCommentService: Get reel comments - URL: $url');
       print('BabaCommentService: Get reel comments response status: ${response.statusCode}');
-      print('BabaCommentService: Get reel comments response body: ${response.body}');
 
       if (response.statusCode == 200) {
         try {

@@ -379,78 +379,90 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Main DP container
-        GestureDetector(
-          onTap: _isLoading ? null : _handleDPTap,
-          child: Container(
-            width: widget.size,
-            height: widget.size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: widget.borderColor,
-                width: 4,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.borderColor.withOpacity(0.3),
-                  blurRadius: 15,
-                  spreadRadius: 2,
-                ),
-              ],
+        // Ornate golden frame background
+        Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/babji_dp_bg_frame.jpg'),
+              fit: BoxFit.cover,
             ),
-            child: ClipOval(
-            child: _isLoading
-                ? Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          widget.borderColor.withOpacity(0.1),
-                          widget.borderColor.withOpacity(0.3),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.primaryColor,
-                        strokeWidth: 3,
-                      ),
-                    ),
-                  )
-                : _localImageUrl != null && _localImageUrl!.isNotEmpty && _isValidUrl(_localImageUrl!)
-                    ? Image.network(
-                        _localImageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          print('BabaPageDPWidget: Error loading image: $error');
-                          // Return default avatar instead of crashing
-                          return _buildDefaultAvatar();
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  widget.borderColor.withOpacity(0.1),
-                                  widget.borderColor.withOpacity(0.3),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                color: AppTheme.primaryColor,
-                                strokeWidth: 2,
-                              ),
-                            ),
-                          );
-                        },
+          ),
+        ),
+        
+        // Main DP container positioned within the frame
+        Positioned(
+          left: widget.size * 0.15, // Adjust positioning to fit within frame
+          top: widget.size * 0.15,
+          child: GestureDetector(
+            onTap: _isLoading ? null : _handleDPTap,
+            child: Container(
+              width: widget.size * 0.7, // Smaller size to fit within frame
+              height: widget.size * 0.7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: _isLoading
+                    ? Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              widget.borderColor.withOpacity(0.1),
+                              widget.borderColor.withOpacity(0.3),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryColor,
+                            strokeWidth: 3,
+                          ),
+                        ),
                       )
-                    : _buildDefaultAvatar(),
+                    : _localImageUrl != null && _localImageUrl!.isNotEmpty && _isValidUrl(_localImageUrl!)
+                        ? Image.network(
+                            _localImageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('BabaPageDPWidget: Error loading image: $error');
+                              // Return default avatar instead of crashing
+                              return _buildDefaultAvatar();
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      widget.borderColor.withOpacity(0.1),
+                                      widget.borderColor.withOpacity(0.3),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppTheme.primaryColor,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        : _buildDefaultAvatar(),
+              ),
             ),
           ),
         ),
@@ -458,8 +470,8 @@ class _BabaPageDPWidgetState extends State<BabaPageDPWidget> {
         // Action buttons (only show if there's an image)
         if (_localImageUrl != null && _localImageUrl!.isNotEmpty)
           Positioned(
-            bottom: 8,
-            right: 8,
+            bottom: widget.size * 0.05,
+            right: widget.size * 0.05,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

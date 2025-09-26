@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'video_player_widget.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 import '../services/baba_like_service.dart';
+import '../services/user_like_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
 import '../screens/post_full_view_screen.dart';
 import 'baba_comment_dialog.dart';
+import 'user_comment_dialog.dart';
 import 'image_slider_widget.dart';
 
 class EnhancedPostWidget extends StatefulWidget {
   final Post post;
-  final VoidCallback? onLike; // Optional - only for Baba Ji posts
+  final VoidCallback? onLike; // Optional callback for like actions
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onUserTap;
@@ -22,7 +25,7 @@ class EnhancedPostWidget extends StatefulWidget {
   const EnhancedPostWidget({
     super.key,
     required this.post,
-    this.onLike, // Optional - only for Baba Ji posts
+    this.onLike, // Optional callback for like actions
     required this.onComment,
     required this.onShare,
     required this.onUserTap,
@@ -38,10 +41,7 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   bool _isLiked = false;
   bool _isSaved = false;
   bool _isFavourite = false;
-  VideoPlayerController? _videoController;
-  bool _isVideoInitialized = false;
   bool _isPlaying = false;
-  bool _hasError = false;
   bool _isCaptionExpanded = false;
   int _likeCount = 0;
 
@@ -51,12 +51,13 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
     print('EnhancedPostWidget: Initializing post widget for post: ${widget.post.id}');
     print('EnhancedPostWidget: Post type: ${widget.post.type}, isReel: ${widget.post.isReel}, videoUrl: ${widget.post.videoUrl}');
     
-    // Initialize like count from post data
+    // Initialize like count and status from post data
     _likeCount = widget.post.likes;
+    _isLiked = widget.post.isLiked;
     
-    if (widget.post.isBabaJiPost) {
-      _loadLikeStatus();
-    }
+    // Load like status for both Baba Ji posts and regular user posts
+    _loadLikeStatus();
+    
     if (widget.post.type == PostType.reel || widget.post.isReel) {
       print('EnhancedPostWidget: This is a reel, initializing video...');
       _initializeVideo();
@@ -67,7 +68,6 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
 
   @override
   void dispose() {
-    _videoController?.dispose();
     super.dispose();
   }
 
@@ -81,144 +81,70 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       print('EnhancedPostWidget: Initializing reel video: ${widget.post.videoUrl}');
       print('EnhancedPostWidget: Post type: ${widget.post.type}, isReel: ${widget.post.isReel}');
       
-      _videoController = VideoPlayerController.network(
-        widget.post.videoUrl!,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
-      
-      // Set video player configuration
-      _videoController!.setVolume(1.0);
-      _videoController!.setLooping(true);
-      
-      print('EnhancedPostWidget: Video controller created, initializing...');
-      await _videoController!.initialize();
-      print('EnhancedPostWidget: Video controller initialized successfully');
-      
-      if (mounted) {
-        setState(() {
-          _isVideoInitialized = true;
-        });
-        
-        // Add listener for video state changes
-        _videoController!.addListener(() {
-          if (mounted) {
-            setState(() {
-              _isPlaying = _videoController!.value.isPlaying;
-            });
-          }
-        });
-        
-        // Auto-play reels
-        print('EnhancedPostWidget: Starting reel autoplay...');
-        await _startAutoplayWithRetry();
-      }
+      // Video player is now handled by VideoPlayerWidget
+      print('EnhancedPostWidget: Video will be handled by VideoPlayerWidget');
     } catch (e) {
-      print('EnhancedPostWidget: Error initializing reel video: $e');
-      print('EnhancedPostWidget: Video URL was: ${widget.post.videoUrl}');
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _isVideoInitialized = false;
-        });
-      }
+      print('EnhancedPostWidget: Error: $e');
     }
   }
 
-  Future<void> _startAutoplayWithRetry() async {
-    int retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries && mounted && !_isPlaying) {
-      try {
-        await _videoController!.play();
-        if (mounted) {
-          setState(() {
-            _isPlaying = true;
-          });
-        }
-        print('EnhancedPostWidget: Reel autoplay started successfully (attempt ${retryCount + 1})');
-        break;
-      } catch (playError) {
-        retryCount++;
-        print('EnhancedPostWidget: Reel autoplay attempt $retryCount failed: $playError');
-        
-        if (retryCount < maxRetries) {
-          // Wait before retrying, with increasing delay
-          await Future.delayed(Duration(milliseconds: 300 * retryCount));
-        } else {
-          print('EnhancedPostWidget: All reel autoplay attempts failed');
-        }
-      }
-    }
-  }
-
-  void _togglePlayPause() async {
-    print('EnhancedPostWidget: Toggle play/pause called');
-    print('EnhancedPostWidget: _hasError: $_hasError, _isVideoInitialized: $_isVideoInitialized, _isPlaying: $_isPlaying');
-    
-    if (_hasError) return;
-    
-    // If video is not initialized yet, try to initialize it
-    if (!_isVideoInitialized && widget.post.videoUrl != null) {
-      print('EnhancedPostWidget: Video not initialized, attempting to initialize...');
-      await _initializeVideo();
-      return;
-    }
-    
-    if (_videoController != null && _isVideoInitialized) {
-      if (_isPlaying) {
-        print('EnhancedPostWidget: Pausing video...');
-        await _videoController!.pause();
-      } else {
-        print('EnhancedPostWidget: Playing video...');
-        await _videoController!.play();
-      }
-      setState(() {
-        _isPlaying = !_isPlaying;
-      });
-    } else {
-      print('EnhancedPostWidget: Cannot toggle - video controller is null or not initialized');
-    }
+  void _togglePlayPause() {
+    // Play/pause is handled by VideoPlayerWidget
+    setState(() {
+      _isPlaying = !_isPlaying;
+    });
   }
 
   Future<void> _loadLikeStatus() async {
-    if (!widget.post.isBabaJiPost) return;
-    
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.userProfile?.id;
+      final token = authProvider.authToken;
       
-      if (userId == null) return;
+      if (userId == null || token == null) return;
 
       Map<String, dynamic>? response;
 
-      if (widget.post.isReel) {
-        // This is a Baba Ji reel
-        final reelId = widget.post.id.replaceFirst('baba_reel_', '');
-        response = await BabaLikeService.getBabaReelLikeStatus(
-          userId: userId,
-          reelId: reelId,
-          babaPageId: widget.post.babaPageId ?? '',
-        );
+      if (widget.post.isBabaJiPost) {
+        // Handle Baba Ji posts
+        if (widget.post.isReel) {
+          // This is a Baba Ji reel
+          final reelId = widget.post.id.replaceFirst('baba_reel_', '');
+          response = await BabaLikeService.getBabaReelLikeStatus(
+            userId: userId,
+            reelId: reelId,
+            babaPageId: widget.post.babaPageId ?? '',
+          );
+        } else {
+          // This is a Baba Ji post
+          final postId = widget.post.id.replaceFirst('baba_', '');
+          response = await BabaLikeService.getBabaPostLikeStatus(
+            userId: userId,
+            postId: postId,
+            babaPageId: widget.post.babaPageId ?? '',
+          );
+        }
       } else {
-        // This is a Baba Ji post
-        final postId = widget.post.id.replaceFirst('baba_', '');
-        response = await BabaLikeService.getBabaPostLikeStatus(
-          userId: userId,
-          postId: postId,
-          babaPageId: widget.post.babaPageId ?? '',
-        );
+        // Handle regular user posts - use local storage for persistent likes
+        final isLikedLocally = await UserLikeService.isPostLiked(widget.post.id);
+        if (mounted) {
+          setState(() {
+            _isLiked = isLikedLocally;
+            // Keep the original like count from post data
+            _likeCount = widget.post.likes;
+          });
+        }
+        return; // Skip server response handling for user posts
       }
 
       if (response != null && response['success'] == true && mounted) {
         setState(() {
-          _isLiked = response?['data']?['isLiked'] ?? false;
+          _isLiked = response?['data']?['isLiked'] ?? response?['isLiked'] ?? false;
           // Update like count from server response if available
           if (response?['data']?['likesCount'] != null) {
             _likeCount = response?['data']?['likesCount'] ?? _likeCount;
+          } else if (response?['likeCount'] != null) {
+            _likeCount = response?['likeCount'] ?? _likeCount;
           }
         });
       }
@@ -478,7 +404,7 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       if (widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
         // Use consistent height for videos like second image
         return Container(
-          height: 400, // Fixed height for consistent display
+          height: 300, // Reduced height to match images and prevent stretching
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -489,33 +415,18 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
             child: Stack(
               children: [
                 // Video Player or Thumbnail
-                if (_isVideoInitialized && _videoController != null && !_hasError)
-                  VideoPlayer(_videoController!)
-                else
-                  Image.network(
-                    widget.post.thumbnailUrl ?? widget.post.imageUrl ?? 'https://via.placeholder.com/400x400/6366F1/FFFFFF?text=Video',
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: const Color(0xFFF0F0F0),
-                        child: const Center(
-                          child: Icon(
-                            Icons.video_library,
-                            size: 64,
-                            color: Color(0xFFCCCCCC),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                VideoPlayerWidget(
+                  videoUrl: widget.post.videoUrl ?? '',
+                  autoPlay: false,
+                  looping: true,
+                  muted: true,
+                ),
                 
                 // Play/Pause Overlay - always show when video is not playing
-                if (!_isPlaying || _hasError)
+                if (!_isPlaying)
                   Center(
                     child: GestureDetector(
-                      onTap: _hasError ? null : _togglePlayPause,
+                      onTap: _togglePlayPause,
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -523,7 +434,7 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          _hasError ? Icons.error : Icons.play_arrow,
+                          Icons.play_arrow,
                           color: Colors.white,
                           size: 32,
                         ),
@@ -572,7 +483,7 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           children: [
             ImageSliderWidget(
               imageUrls: imagesToShow.cast<String>(),
-              height: 400, // Fixed height for consistent display
+              height: 300, // Reduced height to prevent stretching and show more content
               showCounter: true,
               onTap: () {
                 // Navigate to full screen image viewer
@@ -608,45 +519,44 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Distribute buttons evenly
         children: [
-          // Like Button - Only for Baba Ji posts
-          if (widget.post.isBabaJiPost && widget.onLike != null)
-            Expanded(
-              child: GestureDetector(
-                onTap: _handleLike,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isLiked ? Icons.favorite : Icons.favorite_border,
+          // Like Button - For all posts
+          Expanded(
+            child: GestureDetector(
+              onTap: _handleLike,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: _isLiked ? Colors.red : const Color(0xFF666666),
+                    size: 24, // Reduced size
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Like',
+                    style: TextStyle(
+                      fontSize: 12, // Reduced font size
+                      fontWeight: FontWeight.w500,
                       color: _isLiked ? Colors.red : const Color(0xFF666666),
-                      size: 24, // Reduced size
+                      fontFamily: 'Poppins',
                     ),
-                    const SizedBox(height: 4),
+                  ),
+                  if (_likeCount > 0) ...[
+                    const SizedBox(height: 2),
                     Text(
-                      'Like',
+                      '$_likeCount',
                       style: TextStyle(
-                        fontSize: 12, // Reduced font size
-                        fontWeight: FontWeight.w500,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
                         color: _isLiked ? Colors.red : const Color(0xFF666666),
                         fontFamily: 'Poppins',
                       ),
                     ),
-                    if (_likeCount > 0) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        '$_likeCount',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w400,
-                          color: _isLiked ? Colors.red : const Color(0xFF666666),
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             ),
+          ),
           
           // Comment Button
           Expanded(
@@ -708,13 +618,12 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
 
 
   Future<void> _handleLike() async {
-    if (!widget.post.isBabaJiPost || widget.onLike == null) return;
-    
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final userId = authProvider.userProfile?.id;
+      final token = authProvider.authToken;
       
-      if (userId == null) {
+      if (userId == null || token == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -728,36 +637,52 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
 
       Map<String, dynamic>? response;
 
-      if (widget.post.isReel) {
-        // This is a Baba Ji reel
-        final reelId = widget.post.id.replaceFirst('baba_reel_', '');
-        if (_isLiked) {
-          response = await BabaLikeService.unlikeBabaReel(
-            userId: userId,
-            reelId: reelId,
-            babaPageId: widget.post.babaPageId ?? '',
-          );
+      if (widget.post.isBabaJiPost) {
+        // Handle Baba Ji posts
+        if (widget.post.isReel) {
+          // This is a Baba Ji reel
+          final reelId = widget.post.id.replaceFirst('baba_reel_', '');
+          if (_isLiked) {
+            response = await BabaLikeService.unlikeBabaReel(
+              userId: userId,
+              reelId: reelId,
+              babaPageId: widget.post.babaPageId ?? '',
+            );
+          } else {
+            response = await BabaLikeService.likeBabaReel(
+              userId: userId,
+              reelId: reelId,
+              babaPageId: widget.post.babaPageId ?? '',
+            );
+          }
         } else {
-          response = await BabaLikeService.likeBabaReel(
-            userId: userId,
-            reelId: reelId,
-            babaPageId: widget.post.babaPageId ?? '',
-          );
+          // This is a Baba Ji post
+          final postId = widget.post.id.replaceFirst('baba_', '');
+          if (_isLiked) {
+            response = await BabaLikeService.unlikeBabaPost(
+              userId: userId,
+              postId: postId,
+              babaPageId: widget.post.babaPageId ?? '',
+            );
+          } else {
+            response = await BabaLikeService.likeBabaPost(
+              userId: userId,
+              postId: postId,
+              babaPageId: widget.post.babaPageId ?? '',
+            );
+          }
         }
       } else {
-        // This is a Baba Ji post
-        final postId = widget.post.id.replaceFirst('baba_', '');
+        // Handle regular user posts using API service
         if (_isLiked) {
-          response = await BabaLikeService.unlikeBabaPost(
-            userId: userId,
-            postId: postId,
-            babaPageId: widget.post.babaPageId ?? '',
+          response = await ApiService.unlikePost(
+            postId: widget.post.id,
+            token: token,
           );
         } else {
-          response = await BabaLikeService.likeBabaPost(
-            userId: userId,
-            postId: postId,
-            babaPageId: widget.post.babaPageId ?? '',
+          response = await ApiService.likePost(
+            postId: widget.post.id,
+            token: token,
           );
         }
       }
@@ -775,8 +700,10 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           });
         }
         
-        // Call the callback to notify parent
-        widget.onLike!();
+        // Call the callback to notify parent if provided
+        if (widget.onLike != null) {
+          widget.onLike!();
+        }
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -824,8 +751,17 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
         ),
       );
     } else {
-      // For regular posts, just call the callback
-      widget.onComment();
+      // Show comment dialog for regular user posts
+      showDialog(
+        context: context,
+        builder: (context) => UserCommentDialog(
+          postId: widget.post.id,
+          onCommentAdded: () {
+            // Call the callback to notify parent
+            widget.onComment();
+          },
+        ),
+      );
     }
   }
 
@@ -975,42 +911,58 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
       // Show loading
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Deleting post...'),
-          duration: Duration(seconds: 1),
+          content: Text('Deleting post permanently...'),
+          duration: Duration(seconds: 2),
         ),
       );
 
-      // Call delete API
-      final response = await ApiService.deleteMedia(
+      print('EnhancedPostWidget: Starting permanent deletion for post ID: ${widget.post.id}');
+
+      // Call enhanced deletion API with verification
+      final response = await ApiService.deleteMediaWithVerification(
         mediaId: widget.post.id,
         token: token,
       );
 
+      print('EnhancedPostWidget: Delete response: $response');
+
       if (response['success'] == true) {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post deleted successfully'),
+          SnackBar(
+            content: Text(response['message'] ?? 'Post permanently deleted successfully'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
         
+        // Clear from local storage only after successful API deletion
+        await LocalStorageService.deletePost(widget.post.id);
+        
         // Call the delete callback if provided
         widget.onDelete?.call();
+        
+        // Force a rebuild to remove the post from UI
+        if (mounted) {
+          setState(() {});
+        }
       } else {
-        // Show error message
+        // Show error message with more details
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(response['message'] ?? 'Failed to delete post'),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
       }
     } catch (e) {
+      print('EnhancedPostWidget: Delete error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error deleting post: $e'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
         ),
       );
     }

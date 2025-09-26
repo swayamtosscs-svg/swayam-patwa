@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 // import 'package:image_cropper/image_cropper.dart'; // Commented out for smaller APK
 import '../services/dp_service.dart';
 import '../utils/app_theme.dart';
+import '../utils/avatar_utils.dart';
 
 class DPWidget extends StatefulWidget {
   final String? currentImageUrl;
@@ -14,6 +15,7 @@ class DPWidget extends StatefulWidget {
   final double size;
   final Color borderColor;
   final bool showEditButton;
+  final String? userName; // Add user name for default avatar
 
   const DPWidget({
     Key? key,
@@ -24,6 +26,7 @@ class DPWidget extends StatefulWidget {
     this.size = 120,
     this.borderColor = AppTheme.primaryColor,
     this.showEditButton = true,
+    this.userName, // Add user name parameter
   }) : super(key: key);
 
   @override
@@ -57,6 +60,7 @@ class _DPWidgetState extends State<DPWidget> {
     }
 
     print('DPWidget: Loading DP for user ${widget.userId}');
+    print('DPWidget: Current image URL from props: ${widget.currentImageUrl}');
     setState(() {
       _isLoading = true;
     });
@@ -81,6 +85,8 @@ class _DPWidgetState extends State<DPWidget> {
           });
           print('DPWidget: DP loaded: $_localImageUrl');
           print('DPWidget: File name: $_fileName');
+          print('DPWidget: Absolute URL: ${AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!)}');
+          print('DPWidget: Is valid URL: ${AvatarUtils.isValidAvatarUrl(_localImageUrl)}');
           
           // Notify parent about the change if we got a new image
           if (widget.currentImageUrl != _localImageUrl) {
@@ -88,20 +94,41 @@ class _DPWidgetState extends State<DPWidget> {
           }
         } else {
           print('DPWidget: No DP data in response');
+          // Check if we have a valid URL from props
+          if (widget.currentImageUrl != null && widget.currentImageUrl!.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.currentImageUrl)) {
+            print('DPWidget: Using currentImageUrl from props: ${widget.currentImageUrl}');
+            setState(() {
+              _localImageUrl = widget.currentImageUrl;
+              _fileName = null; // We don't have fileName from props
+              _isLoading = false;
+            });
+          } else {
+            setState(() {
+              _localImageUrl = null;
+              _fileName = null;
+              _isLoading = false;
+            });
+          }
+        }
+      } else {
+        print('DPWidget: Failed to load DP: ${response['message']}');
+        print('DPWidget: Error details: ${response['error']}');
+        
+        // Check if we have a valid URL from props as fallback
+        if (widget.currentImageUrl != null && widget.currentImageUrl!.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.currentImageUrl)) {
+          print('DPWidget: Using currentImageUrl from props as fallback: ${widget.currentImageUrl}');
+          setState(() {
+            _localImageUrl = widget.currentImageUrl;
+            _fileName = null; // We don't have fileName from props
+            _isLoading = false;
+          });
+        } else {
           setState(() {
             _localImageUrl = null;
             _fileName = null;
             _isLoading = false;
           });
         }
-      } else {
-        print('DPWidget: Failed to load DP: ${response['message']}');
-        print('DPWidget: Error details: ${response['error']}');
-        setState(() {
-          _localImageUrl = null;
-          _fileName = null;
-          _isLoading = false;
-        });
         
         // Don't show error message for "No display picture found" - this is normal
         if (response['message'] != 'No display picture found for this user.' && mounted) {
@@ -113,12 +140,23 @@ class _DPWidgetState extends State<DPWidget> {
       }
     } catch (e) {
       print('DPWidget: Error loading DP: $e');
-      setState(() {
-        _localImageUrl = null;
-        _fileName = null;
-        _isLoading = false;
-      });
-      _showSnackBar('Error loading display picture: $e', Colors.red);
+      
+      // Check if we have a valid URL from props as fallback
+      if (widget.currentImageUrl != null && widget.currentImageUrl!.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.currentImageUrl)) {
+        print('DPWidget: Using currentImageUrl from props as fallback after error: ${widget.currentImageUrl}');
+        setState(() {
+          _localImageUrl = widget.currentImageUrl;
+          _fileName = null; // We don't have fileName from props
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _localImageUrl = null;
+          _fileName = null;
+          _isLoading = false;
+        });
+        _showSnackBar('Error loading display picture: $e', Colors.red);
+      }
     }
   }
 
@@ -403,6 +441,8 @@ class _DPWidgetState extends State<DPWidget> {
     print('DPWidget: _fileName: $_fileName');
     print('DPWidget: showEditButton: ${widget.showEditButton}');
     print('DPWidget: Should show delete button: ${widget.showEditButton && _localImageUrl != null && _localImageUrl!.isNotEmpty && _fileName != null && _fileName!.isNotEmpty}');
+    print('DPWidget: Is valid URL: ${_localImageUrl != null ? AvatarUtils.isValidAvatarUrl(_localImageUrl) : false}');
+    print('DPWidget: Absolute URL: ${_localImageUrl != null ? AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!) : 'null'}');
     
     return Stack(
       children: [
@@ -446,13 +486,35 @@ class _DPWidgetState extends State<DPWidget> {
                       ),
                     ),
                   )
-                : _localImageUrl != null && _localImageUrl!.isNotEmpty
+                : _localImageUrl != null && _localImageUrl!.isNotEmpty && AvatarUtils.isValidAvatarUrl(_localImageUrl)
                     ? Image.network(
-                        _localImageUrl!,
+                        AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           print('DPWidget: Error loading image: $error');
+                          print('DPWidget: Failed URL: ${AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!)}');
                           return _buildDefaultAvatar();
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  widget.borderColor.withOpacity(0.1),
+                                  widget.borderColor.withOpacity(0.3),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.primaryColor,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          );
                         },
                       )
                     : _buildDefaultAvatar(),
@@ -530,18 +592,11 @@ class _DPWidgetState extends State<DPWidget> {
   }
 
   Widget _buildDefaultAvatar() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            widget.borderColor.withOpacity(0.1),
-            widget.borderColor.withOpacity(0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      // Removed the person icon - now shows empty gradient background
+    return AvatarUtils.buildGradientDefaultAvatar(
+      name: widget.userName,
+      size: widget.size,
+      borderColor: widget.borderColor,
+      borderWidth: 4,
     );
   }
 }

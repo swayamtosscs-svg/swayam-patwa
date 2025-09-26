@@ -542,17 +542,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   void _changeProfilePicture() {
-    // Implement profile picture change functionality using DPWidget
+    // Show DP management modal with DPWidget
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
         decoration: const BoxDecoration(
           color: Color(0xFFF0EBE1),
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 40,
@@ -566,7 +567,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'Change Profile Picture',
+                'Manage Profile Picture',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -574,29 +575,48 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                 ),
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: Color(0xFF4A2C2A)),
-              title: const Text(
-                'Take Photo',
-                style: TextStyle(color: Color(0xFF4A2C2A)),
+            Expanded(
+              child: Center(
+                child: DPWidget(
+                  currentImageUrl: _editingUser.profileImageUrl,
+                  userId: _editingUser.id,
+                  token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+                  userName: _editingUser.fullName, // Pass user name for default avatar
+                  onImageChanged: (String newImageUrl) async {
+                    print('ProfileEditScreen: DP changed to: $newImageUrl');
+                    // Update the editing user with new image URL
+                    setState(() {
+                      _editingUser = _editingUser.copyWith(
+                        profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                      );
+                    });
+                    
+                    // Also update the auth provider
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    if (authProvider.userProfile != null) {
+                      final updatedUser = authProvider.userProfile!.copyWith(
+                        profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                      );
+                      authProvider.updateLocalUserProfile(updatedUser);
+                    }
+                  },
+                  size: 150,
+                  borderColor: const Color(0xFF4A2C2A),
+                  showEditButton: true,
+                ),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                // Implement camera functionality
-              },
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Color(0xFF4A2C2A)),
-              title: const Text(
-                'Choose from Gallery',
-                style: TextStyle(color: Color(0xFF4A2C2A)),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Tap the camera icon to upload a new picture or the X icon to delete current picture',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                // Implement gallery functionality
-              },
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),

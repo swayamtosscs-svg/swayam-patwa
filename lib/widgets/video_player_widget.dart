@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 class VideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
   final bool autoPlay;
   final bool looping;
   final bool muted;
+  final bool showControls;
 
   const VideoPlayerWidget({
     Key? key,
     required this.videoUrl,
     this.autoPlay = true,
     this.looping = true,
-    this.muted = true,
+    this.muted = false, // Changed default to false for audio
+    this.showControls = true, // Added controls option
   }) : super(key: key);
 
   @override
@@ -21,117 +23,121 @@ class VideoPlayerWidget extends StatefulWidget {
 }
 
 class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
-  VideoPlayerController? _controller;
+  late final Player player;
+  late final VideoController videoController;
   bool _isInitialized = false;
-  bool _isPlaying = false;
   bool _hasError = false;
+  String _errorMessage = '';
+  bool _isPlaying = false;
+  bool _isDisposed = false;
+  bool _showControls = true;
 
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
+    _showControls = widget.showControls;
+    _initializePlayer();
+  }
+
+  @override
+  void didUpdateWidget(VideoPlayerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl && !_isDisposed) {
+      _loadNewVideo();
+    }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _isDisposed = true;
+    if (_isInitialized) {
+      player.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _initializeVideo() async {
+  Future<void> _initializePlayer() async {
     try {
-      print('VideoPlayerWidget: Initializing video: ${widget.videoUrl}');
+      player = Player();
+      videoController = VideoController(player);
       
-      _controller = VideoPlayerController.network(
-        widget.videoUrl,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
+      // Set up event listeners
+      player.stream.playing.listen((playing) {
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _isPlaying = playing;
+          });
+        }
+      });
+
+      player.stream.error.listen((error) {
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _hasError = true;
+            _errorMessage = error.toString();
+          });
+        }
+      });
+
+      await player.open(Media(widget.videoUrl));
       
-      // Set video player configuration
-      if (widget.muted) {
-        await _controller!.setVolume(0.0);
-      }
-      await _controller!.setLooping(widget.looping);
-      
-      await _controller!.initialize();
-      
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _isInitialized = true;
         });
         
-        // Add listener for video state changes
-        _controller!.addListener(() {
-          if (mounted) {
-            setState(() {
-              _isPlaying = _controller!.value.isPlaying;
-            });
-          }
-        });
-        
-        // Auto-play if enabled
         if (widget.autoPlay) {
-          print('VideoPlayerWidget: Starting autoplay...');
-          await _startAutoplayWithRetry();
+          player.play();
         }
       }
     } catch (e) {
-      print('VideoPlayerWidget: Error initializing video: $e');
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _hasError = true;
-          _isInitialized = false;
+          _errorMessage = e.toString();
         });
       }
     }
   }
 
-  Future<void> _startAutoplayWithRetry() async {
-    int retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries && mounted && _controller != null) {
-      try {
-        print('VideoPlayerWidget: Autoplay attempt ${retryCount + 1}');
-        await _controller!.play();
+  Future<void> _loadNewVideo() async {
+    try {
+      await player.open(Media(widget.videoUrl));
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _hasError = false;
+          _errorMessage = '';
+        });
         
-        // Wait a bit to see if it actually started playing
-        await Future.delayed(const Duration(milliseconds: 500));
-        
-        if (_controller!.value.isPlaying) {
-          print('VideoPlayerWidget: Autoplay successful');
-          break;
-        } else {
-          retryCount++;
-          if (retryCount < maxRetries) {
-            print('VideoPlayerWidget: Autoplay failed, retrying...');
-            await Future.delayed(const Duration(milliseconds: 1000));
-          }
-        }
-      } catch (e) {
-        print('VideoPlayerWidget: Autoplay error: $e');
-        retryCount++;
-        if (retryCount < maxRetries) {
-          await Future.delayed(const Duration(milliseconds: 1000));
+        if (widget.autoPlay) {
+          player.play();
         }
       }
-    }
-    
-    if (retryCount >= maxRetries) {
-      print('VideoPlayerWidget: Autoplay failed after $maxRetries attempts');
+    } catch (e) {
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = e.toString();
+        });
+      }
     }
   }
 
   void _togglePlayPause() {
-    if (_controller != null && _isInitialized) {
-      if (_isPlaying) {
-        _controller!.pause();
-      } else {
-        _controller!.play();
-      }
+    if (!_isInitialized || _isDisposed) return;
+    
+    if (_isPlaying) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }
+
+  void _toggleControls() {
+    if (!_isDisposed) {
+      setState(() {
+        _showControls = !_showControls;
+      });
     }
   }
 
@@ -139,33 +145,36 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   Widget build(BuildContext context) {
     if (_hasError) {
       return Container(
-        color: Colors.black,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(
-                Icons.play_circle_outline,
-                color: Colors.white,
-                size: 80,
+                Icons.error_outline,
+                color: Colors.red,
+                size: 48,
               ),
               const SizedBox(height: 16),
               const Text(
-                'Video Story',
+                'Video Error',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Error loading video',
+                _errorMessage,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 14,
                 ),
-                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -175,40 +184,72 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 
     if (!_isInitialized) {
       return Container(
-        color: Colors.black,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            color: Colors.white,
           ),
         ),
       );
     }
 
     return GestureDetector(
-      onTap: _togglePlayPause,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Video Player
-          VideoPlayer(_controller!),
-          
-          // Play/Pause overlay - only show when not playing
-          if (!_isPlaying)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
-                  size: 60,
-                ),
+      onTap: _toggleControls,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Stack(
+          children: [
+            // Video player
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Video(
+                controller: videoController,
+                controls: _showControls ? AdaptiveVideoControls : NoVideoControls,
+                fill: Colors.black,
               ),
             ),
-        ],
+            
+            // Custom controls overlay
+            if (_showControls)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        onPressed: _togglePlayPause,
+                        icon: Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

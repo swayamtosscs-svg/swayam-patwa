@@ -586,37 +586,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
       width: double.infinity,
       height: double.infinity,
       color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Video Player
-          VideoPlayerWidget(
-            videoUrl: story.media,
-            autoPlay: true,
-            looping: true,
-          ),
-          
-          // Play/Pause overlay
-          Center(
-            child: GestureDetector(
-              onTap: () {
-                // Toggle play/pause - this will be handled by the VideoPlayerWidget
-              },
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
-                  size: 60,
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: VideoPlayerWidget(
+        videoUrl: story.media,
+        autoPlay: true,
+        looping: true,
+        muted: false, // Allow sound for stories
       ),
     );
   }

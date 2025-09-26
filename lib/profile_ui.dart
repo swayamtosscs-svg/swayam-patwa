@@ -11,11 +11,13 @@ import 'screens/post_full_view_screen.dart';
 import 'utils/snackbar_helper.dart';
 import 'services/user_media_service.dart';
 import 'services/api_service.dart';
+import 'services/local_storage_service.dart';
 import 'screens/search_screen.dart';
 import 'screens/add_options_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/baba_pages_screen.dart';
 import 'screens/live_stream_screen.dart';
+import 'widgets/dp_widget.dart';
 
 class ProfileUI extends StatefulWidget {
   const ProfileUI({super.key});
@@ -67,40 +69,46 @@ class _ProfileUIState extends State<ProfileUI> {
             child: SafeArea(
               child: Column(
                 children: [
-                  // Top Bar
+                  // Custom App Bar (Messages screen style)
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
+                      ),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Icon(Icons.spa, color: Colors.white, size: 20),
-                        Text(
-                          'Pilgrim of Peace',
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.black),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const Expanded(
+                          child: Text(
+                            'Account',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              fontSize: 20,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
-                        GestureDetector(
-                          onTap: () => _showLogoutDialog(context),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.logout,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.search, color: Colors.black),
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen()));
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.more_vert, color: Colors.black),
+                          onPressed: () => _showLogoutDialog(context),
                         ),
                       ],
                     ),
@@ -134,16 +142,23 @@ class _ProfileUIState extends State<ProfileUI> {
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                                 child: Column(
                                   children: [
-                                    // Avatar
-                                    CircleAvatar(
-                                      radius: 44,
-                                      backgroundColor: Colors.grey.shade300,
-                                      backgroundImage: (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty)
-                                          ? NetworkImage(user.profileImageUrl!)
-                                          : null,
-                                      child: (user.profileImageUrl == null || user.profileImageUrl!.isEmpty)
-                                          ? const Icon(Icons.person, color: Colors.white, size: 40)
-                                          : null,
+                                    // Avatar with DP upload functionality
+                                    DPWidget(
+                                      currentImageUrl: user.profileImageUrl,
+                                      userId: user.id,
+                                      token: auth.authToken ?? '',
+                                      userName: user.fullName, // Pass user name for default avatar
+                                      onImageChanged: (String newImageUrl) async {
+                                        print('ProfileUI: DP changed to: $newImageUrl');
+                                        // Update the user profile with new image URL
+                                        final updatedUser = user.copyWith(
+                                          profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                                        );
+                                        auth.updateLocalUserProfile(updatedUser);
+                                      },
+                                      size: 88, // 44 * 2 for radius to diameter
+                                      borderColor: Colors.white,
+                                      showEditButton: true,
                                     ),
                                     const SizedBox(height: 12),
 
@@ -163,19 +178,32 @@ class _ProfileUIState extends State<ProfileUI> {
                                     ),
                                     const SizedBox(height: 18),
 
-                                    // Stats row
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                      children: [
-                                        _StatItem(value: '${user.postsCount}', label: 'Posts', onTap: () {}),
-                                        _StatItem(value: '3', label: 'Reels', onTap: () { setState(() { _selectedTab = 1; }); _scrollToGrid(); }),
-                                        _StatItem(value: '${user.followersCount}', label: 'Followers', onTap: () {
-                                          Navigator.push(context, MaterialPageRoute(builder: (_) => FollowersScreen(userId: user.id)));
-                                        }),
-                                        _StatItem(value: '${user.followingCount}', label: 'Following', onTap: () {
-                                          Navigator.push(context, MaterialPageRoute(builder: (_) => FollowingScreen(userId: user.id)));
-                                        }),
-                                      ],
+                                    // Stats row with real data
+                                    FutureBuilder<UserMediaResponse>(
+                                      future: _mediaFuture,
+                                      builder: (context, snapshot) {
+                                        int postsCount = 0;
+                                        int reelsCount = 0;
+                                        
+                                        if (snapshot.hasData && snapshot.data!.success) {
+                                          postsCount = snapshot.data!.posts.length;
+                                          reelsCount = snapshot.data!.reels.length;
+                                        }
+                                        
+                                        return Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                          children: [
+                                            _StatItem(value: postsCount.toString(), label: 'Posts', onTap: () {}),
+                                            _StatItem(value: reelsCount.toString(), label: 'Reels', onTap: () { setState(() { _selectedTab = 1; }); _scrollToGrid(); }),
+                                            _StatItem(value: '${user.followersCount}', label: 'Followers', onTap: () {
+                                              Navigator.push(context, MaterialPageRoute(builder: (_) => FollowersScreen(userId: user.id)));
+                                            }),
+                                            _StatItem(value: '${user.followingCount}', label: 'Following', onTap: () {
+                                              Navigator.push(context, MaterialPageRoute(builder: (_) => FollowingScreen(userId: user.id)));
+                                            }),
+                                          ],
+                                        );
+                                      },
                                     ),
                                     const SizedBox(height: 18),
 
@@ -465,25 +493,58 @@ class _ProfileUIState extends State<ProfileUI> {
         _deletedMediaIds.add(post.id);
       });
 
-      // Post.id is mediaId for user uploads
-      final resp = await ApiService.deleteMedia(mediaId: post.id, token: token);
+      print('ProfileUI: Starting permanent deletion for post ID: ${post.id}');
+
+      // Call enhanced deletion API with verification
+      final resp = await ApiService.deleteMediaWithVerification(mediaId: post.id, token: token);
+      
+      print('ProfileUI: Delete response: $resp');
+      
       if (resp['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted successfully')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(resp['message'] ?? 'Post permanently deleted successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        // Clear from local storage only after successful API deletion
+        await LocalStorageService.deletePost(post.id);
+        
+        // Also mark as deleted in the deleted posts list
+        await LocalStorageService.markPostAsDeleted(post.id);
+        
         // Refresh the media data to get updated counts
         _refreshMedia();
       } else {
-        // If API call failed, remove from deleted set
+        // Remove from deleted set if deletion failed
         setState(() {
           _deletedMediaIds.remove(post.id);
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Delete failed')));
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(resp['message'] ?? 'Failed to delete post'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
       }
     } catch (e) {
-      // If error occurred, remove from deleted set
+      // Remove from deleted set if deletion failed
       setState(() {
         _deletedMediaIds.remove(post.id);
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      
+      print('ProfileUI: Delete error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting post: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -510,11 +571,11 @@ class _ProfileUIState extends State<ProfileUI> {
                 },
               ),
               _buildNavItem(
-                icon: Icons.search,
-                label: 'Search',
+                icon: Icons.live_tv,
+                label: 'Live Darshan',
                 isSelected: false,
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen()));
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen()));
                 },
               ),
               _buildNavItem(
@@ -531,14 +592,6 @@ class _ProfileUIState extends State<ProfileUI> {
                 isSelected: false,
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const BabaPagesScreen()));
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.live_tv,
-                label: 'Live Darshan',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen()));
                 },
               ),
               _buildNavItem(
@@ -658,9 +711,9 @@ class _ProfileUIState extends State<ProfileUI> {
       // Perform logout immediately (no loading dialog)
       await authProvider.logout();
 
-      // Navigate to signup screen immediately
+      // Navigate to login screen immediately
       if (context.mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/signup', (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
       }
     } catch (e) {
       // Show error message
@@ -694,7 +747,7 @@ class _StatItem extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(label, style: const TextStyle(color: Colors.black)),
         ],
       ),
     );

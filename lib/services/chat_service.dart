@@ -326,6 +326,12 @@ class ChatService {
     try {
       print('ChatService: Getting messages for thread: $threadId');
       
+      // Try to get cached messages first
+      final cachedMessages = await _getCachedMessages(threadId);
+      if (cachedMessages.isNotEmpty) {
+        print('ChatService: Found ${cachedMessages.length} cached messages');
+      }
+      
       final response = await http.get(
         Uri.parse('$baseUrl/quick-message?threadId=$threadId&limit=50'),
         headers: {
@@ -378,9 +384,18 @@ class ChatService {
           // Sort messages by creation time (oldest first)
           messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
           
+          // Cache the messages
+          await _cacheMessages(threadId, messages);
+          
           print('ChatService: Successfully loaded ${messages.length} messages');
           return messages;
         }
+      }
+      
+      // If API fails, return cached messages if available
+      if (cachedMessages.isNotEmpty) {
+        print('ChatService: API failed, returning ${cachedMessages.length} cached messages');
+        return cachedMessages;
       }
       
       print('ChatService: Failed to get messages for thread: $threadId');
@@ -388,6 +403,14 @@ class ChatService {
       
     } catch (e) {
       print('ChatService: Error getting messages by thread ID: $e');
+      
+      // Try to return cached messages on error
+      final cachedMessages = await _getCachedMessages(threadId);
+      if (cachedMessages.isNotEmpty) {
+        print('ChatService: Error occurred, returning ${cachedMessages.length} cached messages');
+        return cachedMessages;
+      }
+      
       return [];
     }
   }
@@ -481,24 +504,33 @@ class ChatService {
     try {
       print('ChatService: Creating/getting thread between $currentUserId and $otherUserId');
       
-      // Try to send a message to create the thread
-      final response = await sendMessage(
-        toUserId: otherUserId,
-        content: 'Hello', // Initial message to create thread
-        messageType: 'text',
-        token: token,
-        currentUserId: currentUserId,
-      );
-      
-      print('ChatService: Thread creation response: $response');
-      
-      if (response['success'] == true && response['data']?['threadId'] != null) {
-        print('ChatService: Thread created with ID: ${response['data']['threadId']}');
-        return response['data']['threadId'];
+      // Try to get existing thread by checking if there are any messages between users
+      // First, try to get messages for a potential existing thread
+      try {
+        // Check if we have a stored conversation with thread ID
+        final prefs = await SharedPreferences.getInstance();
+        final key = 'conversation_${currentUserId}_$otherUserId';
+        final existingData = prefs.getString(key);
+        
+        if (existingData != null) {
+          final conversationData = jsonDecode(existingData);
+          final threadId = conversationData['id'];
+          if (threadId != null && threadId.isNotEmpty && !threadId.startsWith('temp_')) {
+            print('ChatService: Found existing thread ID: $threadId');
+            return threadId;
+          }
+        }
+        
+        // If no existing thread, create a temporary one that will be replaced when first message is sent
+        final tempThreadId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+        print('ChatService: Created temporary thread ID: $tempThreadId');
+        return tempThreadId;
+        
+      } catch (e) {
+        print('ChatService: Error checking for existing thread: $e');
+        // Return temporary thread ID as fallback
+        return 'temp_${DateTime.now().millisecondsSinceEpoch}';
       }
-      
-      print('ChatService: Failed to create thread - response: $response');
-      return null;
     } catch (e) {
       print('ChatService: Error creating thread: $e');
       return null;
@@ -650,6 +682,100 @@ class ChatService {
     } catch (e) {
       print('ChatService: Error marking messages as read: $e');
       return false;
+    }
+  }
+
+  /// Cache messages locally for offline access
+  static Future<void> _cacheMessages(String threadId, List<Message> messages) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'messages_$threadId';
+      final messagesJson = messages.map((message) => {
+        'id': message.id,
+        'threadId': message.threadId,
+        'sender': {
+          'id': message.sender.id,
+          'username': message.sender.username,
+          'fullName': message.sender.fullName,
+          'avatar': message.sender.avatar,
+        },
+        'recipient': message.recipient,
+        'content': message.content,
+        'messageType': message.messageType,
+        'isRead': message.isRead,
+        'isDeleted': message.isDeleted,
+        'reactions': message.reactions,
+        'createdAt': message.createdAt.toIso8601String(),
+        'updatedAt': message.updatedAt.toIso8601String(),
+      }).toList();
+      
+      await prefs.setString(key, jsonEncode(messagesJson));
+      print('ChatService: Cached ${messages.length} messages for thread: $threadId');
+    } catch (e) {
+      print('ChatService: Error caching messages: $e');
+    }
+  }
+
+  /// Get cached messages for a thread
+  static Future<List<Message>> _getCachedMessages(String threadId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'messages_$threadId';
+      final messagesJson = prefs.getString(key);
+      
+      if (messagesJson != null) {
+        final List<dynamic> messagesData = jsonDecode(messagesJson);
+        final List<Message> messages = [];
+        
+        for (final messageData in messagesData) {
+          try {
+            final sender = messageData['sender'] ?? {};
+            final message = Message(
+              id: messageData['id'] ?? '',
+              threadId: messageData['threadId'] ?? '',
+              sender: MessageSender(
+                id: sender['id'] ?? '',
+                username: sender['username'] ?? '',
+                fullName: sender['fullName'] ?? '',
+                avatar: sender['avatar'] ?? '',
+              ),
+              recipient: messageData['recipient'] ?? '',
+              content: messageData['content'] ?? '',
+              messageType: messageData['messageType'] ?? 'text',
+              isRead: messageData['isRead'] ?? false,
+              isDeleted: messageData['isDeleted'] ?? false,
+              reactions: messageData['reactions'] ?? [],
+              createdAt: DateTime.parse(messageData['createdAt']),
+              updatedAt: DateTime.parse(messageData['updatedAt']),
+            );
+            messages.add(message);
+          } catch (e) {
+            print('ChatService: Error creating cached message: $e');
+          }
+        }
+        
+        // Sort messages by creation time (oldest first)
+        messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        
+        return messages;
+      }
+      
+      return [];
+    } catch (e) {
+      print('ChatService: Error getting cached messages: $e');
+      return [];
+    }
+  }
+
+  /// Clear cached messages for a thread
+  static Future<void> clearCachedMessages(String threadId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'messages_$threadId';
+      await prefs.remove(key);
+      print('ChatService: Cleared cached messages for thread: $threadId');
+    } catch (e) {
+      print('ChatService: Error clearing cached messages: $e');
     }
   }
 }

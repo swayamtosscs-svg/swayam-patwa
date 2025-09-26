@@ -33,11 +33,20 @@ class UserMediaService {
       if (apiResponse.success && apiResponse.data.isNotEmpty) {
         print('UserMediaService: API returned ${apiResponse.data.length} media items for userId: $userId');
         
+        // Get list of deleted post IDs from local storage
+        final deletedPostIds = await LocalStorageService.getDeletedPostIds();
+        print('UserMediaService: Found ${deletedPostIds.length} deleted post IDs in local storage');
+        
         List<Story> stories = [];
         List<Post> posts = [];
         List<Post> reels = [];
         
         for (var mediaData in apiResponse.data) {
+          // Skip deleted posts
+          if (deletedPostIds.contains(mediaData.mediaId)) {
+            print('UserMediaService: Skipping deleted post: ${mediaData.mediaId}');
+            continue;
+          }
           print('UserMediaService: Processing media item: ${mediaData.mediaId}');
           print('UserMediaService: File type: ${mediaData.fileType}');
           print('UserMediaService: Secure URL: ${mediaData.secureUrl}');

@@ -381,6 +381,127 @@ class BabaPageReelService {
     }
   }
 
+  /// Delete reel/video for Baba Ji page
+  static Future<Map<String, dynamic>> deleteBabaPageReel({
+    required String reelId,
+    required String babaPageId,
+    required String token,
+  }) async {
+    try {
+      print('BabaPageReelService: Starting Baba Ji page reel delete for reel $reelId');
+      
+      if (token.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Authentication token is required',
+          'error': 'Missing Token',
+        };
+      }
+
+      if (reelId.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Reel ID is required',
+          'error': 'Missing Reel ID',
+        };
+      }
+
+      if (babaPageId.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Baba Ji page ID is required',
+          'error': 'Missing Page ID',
+        };
+      }
+
+      final url = '$baseUrl/$babaPageId/videos/$reelId';
+      print('BabaPageReelService: Delete URL: $url');
+      
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Delete request timed out');
+        },
+      );
+
+      print('BabaPageReelService: Delete response status: ${response.statusCode}');
+      print('BabaPageReelService: Delete response body: ${response.body}');
+
+      Map<String, dynamic> jsonResponse;
+      try {
+        jsonResponse = jsonDecode(response.body);
+      } catch (e) {
+        print('BabaPageReelService: Failed to parse JSON response: $e');
+        print('BabaPageReelService: Response body: ${response.body}');
+        
+        // Handle HTML responses (like 404 pages)
+        if (response.body.contains('<!DOCTYPE html>') || response.body.contains('<html')) {
+          return {
+            'success': false,
+            'message': 'API endpoint not found. The video may have already been deleted.',
+            'error': 'Endpoint Not Found',
+          };
+        }
+        
+        return {
+          'success': false,
+          'message': 'Invalid response format from server',
+          'error': 'JSON Parse Error',
+        };
+      }
+
+      if (response.statusCode == 200) {
+        print('BabaPageReelService: Delete successful');
+        return {
+          'success': true,
+          'message': 'Reel deleted successfully',
+          'data': jsonResponse['data'],
+        };
+      } else if (response.statusCode == 401) {
+        print('BabaPageReelService: Unauthorized - invalid token');
+        return {
+          'success': false,
+          'message': 'Authentication failed. Please login again.',
+          'error': 'Unauthorized',
+        };
+      } else if (response.statusCode == 403) {
+        print('BabaPageReelService: Forbidden - insufficient permissions');
+        return {
+          'success': false,
+          'message': 'You do not have permission to delete this reel.',
+          'error': 'Forbidden',
+        };
+      } else if (response.statusCode == 404) {
+        print('BabaPageReelService: Reel not found');
+        return {
+          'success': false,
+          'message': 'Reel not found or already deleted.',
+          'error': 'Not Found',
+        };
+      } else {
+        print('BabaPageReelService: Delete failed with status ${response.statusCode}');
+        return {
+          'success': false,
+          'message': jsonResponse['message'] ?? 'Failed to delete reel',
+          'error': 'Delete Failed',
+        };
+      }
+    } catch (e) {
+      print('BabaPageReelService: Delete error: $e');
+      return {
+        'success': false,
+        'message': 'Error deleting reel: $e',
+        'error': 'Delete Error',
+      };
+    }
+  }
+
   /// Test API connection
   static Future<Map<String, dynamic>> testConnection() async {
     try {

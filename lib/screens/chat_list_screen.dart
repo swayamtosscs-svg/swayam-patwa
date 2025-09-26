@@ -5,6 +5,7 @@ import '../models/message_model.dart';
 import '../models/user_model.dart';
 import '../models/chat_thread_model.dart';
 import '../services/chat_service.dart';
+import '../widgets/user_avatar_widget.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
 
@@ -17,7 +18,10 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObserver {
   List<ChatThread> _chatThreads = [];
+  List<ChatThread> _filteredChatThreads = [];
   bool _isLoading = false;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -29,6 +33,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -67,6 +72,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
         if (mounted) {
           setState(() {
             _chatThreads = threads;
+            _filteredChatThreads = threads;
             _isLoading = false;
           });
           print('ChatListScreen: Loaded ${threads.length} chat threads');
@@ -98,6 +104,32 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
     await _loadChatThreads();
   }
 
+  /// Filter chat threads based on search query
+  void _filterChats(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredChatThreads = _chatThreads;
+      } else {
+        _filteredChatThreads = _chatThreads.where((thread) {
+          return thread.fullName.toLowerCase().contains(query.toLowerCase()) ||
+                 thread.username.toLowerCase().contains(query.toLowerCase()) ||
+                 thread.lastMessage.toLowerCase().contains(query.toLowerCase());
+        }).toList();
+      }
+    });
+  }
+
+  /// Toggle search mode
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchController.clear();
+        _filteredChatThreads = _chatThreads;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,45 +157,15 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
                     width: 1,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'Messages',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontSize: 20,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white),
-                      onPressed: () {
-                        // TODO: Implement search functionality
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.more_vert, color: Colors.white),
-                      onPressed: () {
-                        // TODO: Implement more options
-                      },
-                    ),
-                  ],
-                ),
+                child: _isSearching ? _buildSearchBar() : _buildNormalHeader(),
               ),
               // Messages Content
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _refreshChats,
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                      : _chatThreads.isEmpty
+                      ? const Center(child: CircularProgressIndicator(color: Colors.black))
+                      : _filteredChatThreads.isEmpty
                           ? _buildEmptyState()
                           : _buildChatList(),
                 ),
@@ -202,7 +204,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
             Icon(
               Icons.message_outlined,
               size: 80,
-              color: Colors.white.withOpacity(0.8),
+              color: Colors.black.withOpacity(0.8),
             ),
             const SizedBox(height: 16),
             Text(
@@ -210,7 +212,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -219,7 +221,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               'Start a conversation with someone',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.black.withOpacity(0.8),
                 fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
@@ -249,7 +251,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               child: const Text(
                 'Find People',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Colors.black,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   fontFamily: 'Poppins',
@@ -265,9 +267,9 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   Widget _buildChatList() {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _chatThreads.length,
+      itemCount: _filteredChatThreads.length,
       itemBuilder: (context, index) {
-        final thread = _chatThreads[index];
+        final thread = _filteredChatThreads[index];
         return _buildChatTile(thread);
       },
     );
@@ -294,30 +296,12 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          radius: 25,
-          backgroundColor: Colors.white.withOpacity(0.2),
-          child: thread.avatar.isNotEmpty
-              ? ClipOval(
-                  child: Image.network(
-                    thread.avatar,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.person,
-                        size: 30,
-                        color: Colors.white.withOpacity(0.8),
-                      );
-                    },
-                  ),
-                )
-              : Icon(
-                  Icons.person,
-                  size: 30,
-                  color: Colors.white.withOpacity(0.8),
-                ),
+        leading: UserAvatarWidget(
+          avatarUrl: thread.avatar,
+          userName: thread.username,
+          size: 50,
+          borderColor: Colors.white.withOpacity(0.2),
+          borderWidth: 2,
         ),
         title: Row(
           children: [
@@ -327,7 +311,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
-                  color: Colors.white,
+                  color: Colors.black,
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -336,7 +320,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               _getTimeAgo(thread.lastMessageTime),
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.black.withOpacity(0.7),
                 fontFamily: 'Poppins',
               ),
             ),
@@ -348,7 +332,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               child: Text(
                 thread.lastMessage,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.black.withOpacity(0.8),
                   fontSize: 14,
                   fontFamily: 'Poppins',
                 ),
@@ -370,7 +354,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
                 child: Text(
                   thread.unreadCount.toString(),
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Colors.black,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Poppins',
@@ -414,6 +398,70 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
     } else {
       return 'now';
     }
+  }
+
+  Widget _buildNormalHeader() {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        const Expanded(
+          child: Text(
+            'Messages',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+              fontSize: 20,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.search, color: Colors.black),
+          onPressed: _toggleSearch,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: _toggleSearch,
+        ),
+        Expanded(
+          child: TextField(
+            controller: _searchController,
+            autofocus: true,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 16,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Search messages...',
+              hintStyle: TextStyle(
+                color: Colors.black.withOpacity(0.6),
+                fontSize: 16,
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            onChanged: _filterChats,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.clear, color: Colors.black),
+          onPressed: () {
+            _searchController.clear();
+            _filterChats('');
+          },
+        ),
+      ],
+    );
   }
 }
 

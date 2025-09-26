@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/baba_page_model.dart';
 import '../services/baba_page_service.dart';
+import '../services/follow_state_service.dart';
 import '../providers/auth_provider.dart';
-import '../utils/app_theme.dart';
 import '../services/theme_service.dart';
-import 'baba_page_detail_screen.dart';
+import '../utils/avatar_utils.dart';
 import 'baba_profile_ui_demo.dart';
 import 'baba_page_creation_screen.dart';
-import 'baba_page_edit_screen.dart';
 
 class BabaPagesScreen extends StatefulWidget {
   const BabaPagesScreen({super.key});
@@ -28,6 +28,12 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedReligion = 'All';
   String? _searchQuery;
+  
+  // Performance optimizations
+  static const int _initialLoadLimit = 5; // Load fewer items initially
+  static const int _paginationLimit = 10;
+  DateTime? _lastLoadTime;
+  static const Duration _cacheTimeout = Duration(minutes: 5); // Cache for 5 minutes
 
   @override
   void initState() {
@@ -53,7 +59,17 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
   }
 
   Future<void> _loadBabaPages({bool refresh = false}) async {
+    // Check cache timeout for non-refresh requests
+    if (!refresh && _lastLoadTime != null && 
+        DateTime.now().difference(_lastLoadTime!) < _cacheTimeout &&
+        _babaPages.isNotEmpty) {
+      print('BabaPagesScreen: Using cached data');
+      return;
+    }
+
     if (refresh) {
+      // Clear service cache on refresh
+      BabaPageService.clearCache();
       setState(() {
         _currentPage = 1;
         _babaPages.clear();
@@ -78,27 +94,34 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
         return;
       }
 
+      // Use smaller limit for initial load
+      final limit = _currentPage == 1 ? _initialLoadLimit : _paginationLimit;
+
       final response = await BabaPageService.getBabaPages(
         token: token,
         page: _currentPage,
-        limit: 10,
+        limit: limit,
         search: _searchQuery,
         religion: _selectedReligion == 'All' ? null : _selectedReligion,
       );
 
       if (response.success) {
+        // Load follow states from SharedPreferences and update the pages
+        final updatedPages = await _loadFollowStatesFromPrefs(response.pages);
+        
         setState(() {
           if (refresh) {
-            _babaPages = response.pages;
+            _babaPages = updatedPages;
           } else {
-            _babaPages.addAll(response.pages);
+            _babaPages.addAll(updatedPages);
           }
           _isLoading = false;
+          _lastLoadTime = DateTime.now();
           
           if (response.pagination != null) {
             _hasMorePages = _currentPage < response.pagination!.totalPages;
           } else {
-            _hasMorePages = response.pages.length >= 10;
+            _hasMorePages = response.pages.length >= limit;
           }
         });
       } else {
@@ -156,6 +179,239 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
       _hasMorePages = true;
     });
     _loadBabaPages(refresh: true);
+  }
+
+  /// Load follow states from SharedPreferences and update BabaPage objects
+  Future<List<BabaPage>> _loadFollowStatesFromPrefs(List<BabaPage> pages) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      
+      if (userId == null) {
+        return pages; // Return original pages if no user ID
+      }
+
+      return await FollowStateService.updatePagesWithFollowStates(
+        pages: pages,
+        userId: userId,
+      );
+    } catch (e) {
+      print('Error loading follow states from preferences: $e');
+      return pages; // Return original pages on error
+    }
+  }
+
+  /// Save follow state to SharedPreferences
+  Future<void> _saveFollowState(String pageId, bool isFollowing) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      
+      if (userId != null) {
+        await FollowStateService.saveFollowState(
+          userId: userId,
+          pageId: pageId,
+          isFollowing: isFollowing,
+        );
+      }
+    } catch (e) {
+      print('Error saving follow state: $e');
+    }
+  }
+
+  Future<void> _handleFollowBabaPage(BabaPage babaPage) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final token = authProvider.authToken;
+    
+    if (token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login first'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      print('BabaPagesScreen: Toggling follow status for ${babaPage.name}. Current: ${babaPage.isFollowing}');
+      
+      if (babaPage.isFollowing) {
+        // Unfollow
+        print('BabaPagesScreen: Unfollowing page ${babaPage.id}');
+        final resp = await BabaPageService.unfollowBabaPage(pageId: babaPage.id, token: token);
+        print('BabaPagesScreen: Unfollow response: ${resp.success}, ${resp.message}');
+        
+        if (resp.success) {
+          // Save follow state to SharedPreferences
+          await _saveFollowState(babaPage.id, false);
+          
+          setState(() {
+            // Update the local list
+            final index = _babaPages.indexWhere((page) => page.id == babaPage.id);
+            if (index != -1) {
+              _babaPages[index] = BabaPage(
+                id: babaPage.id,
+                name: babaPage.name,
+                description: babaPage.description,
+                avatar: babaPage.avatar,
+                coverImage: babaPage.coverImage,
+                location: babaPage.location,
+                religion: babaPage.religion,
+                website: babaPage.website,
+                followersCount: (babaPage.followersCount - 1).clamp(0, 1 << 31),
+                postsCount: babaPage.postsCount,
+                videosCount: babaPage.videosCount,
+                storiesCount: babaPage.storiesCount,
+                isActive: babaPage.isActive,
+                isFollowing: false,
+                createdAt: babaPage.createdAt,
+                updatedAt: babaPage.updatedAt,
+              );
+            }
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unfollowed ${babaPage.name}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // Handle specific error cases
+          String errorMessage = resp.message;
+          if (errorMessage.toLowerCase().contains('not following') || 
+              errorMessage.toLowerCase().contains('not found')) {
+            // If we're not actually following, update UI to reflect this
+            await _saveFollowState(babaPage.id, false);
+            setState(() {
+              final index = _babaPages.indexWhere((page) => page.id == babaPage.id);
+              if (index != -1) {
+                _babaPages[index] = BabaPage(
+                  id: babaPage.id,
+                  name: babaPage.name,
+                  description: babaPage.description,
+                  avatar: babaPage.avatar,
+                  coverImage: babaPage.coverImage,
+                  location: babaPage.location,
+                  religion: babaPage.religion,
+                  website: babaPage.website,
+                  followersCount: babaPage.followersCount,
+                  postsCount: babaPage.postsCount,
+                  videosCount: babaPage.videosCount,
+                  storiesCount: babaPage.storiesCount,
+                  isActive: babaPage.isActive,
+                  isFollowing: false,
+                  createdAt: babaPage.createdAt,
+                  updatedAt: babaPage.updatedAt,
+                );
+              }
+            });
+            errorMessage = 'You are not following this page';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to unfollow: $errorMessage'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        // Follow
+        print('BabaPagesScreen: Following page ${babaPage.id}');
+        final resp = await BabaPageService.followBabaPage(pageId: babaPage.id, token: token);
+        print('BabaPagesScreen: Follow response: ${resp.success}, ${resp.message}');
+        
+        if (resp.success) {
+          // Save follow state to SharedPreferences
+          await _saveFollowState(babaPage.id, true);
+          
+          setState(() {
+            // Update the local list
+            final index = _babaPages.indexWhere((page) => page.id == babaPage.id);
+            if (index != -1) {
+              _babaPages[index] = BabaPage(
+                id: babaPage.id,
+                name: babaPage.name,
+                description: babaPage.description,
+                avatar: babaPage.avatar,
+                coverImage: babaPage.coverImage,
+                location: babaPage.location,
+                religion: babaPage.religion,
+                website: babaPage.website,
+                followersCount: babaPage.followersCount + 1,
+                postsCount: babaPage.postsCount,
+                videosCount: babaPage.videosCount,
+                storiesCount: babaPage.storiesCount,
+                isActive: babaPage.isActive,
+                isFollowing: true,
+                createdAt: babaPage.createdAt,
+                updatedAt: babaPage.updatedAt,
+              );
+            }
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Following ${babaPage.name}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // Handle specific error cases
+          String errorMessage = resp.message;
+          if (errorMessage.toLowerCase().contains('already following')) {
+            // If we're already following, update UI to reflect this
+            await _saveFollowState(babaPage.id, true);
+            setState(() {
+              final index = _babaPages.indexWhere((page) => page.id == babaPage.id);
+              if (index != -1) {
+                _babaPages[index] = BabaPage(
+                  id: babaPage.id,
+                  name: babaPage.name,
+                  description: babaPage.description,
+                  avatar: babaPage.avatar,
+                  coverImage: babaPage.coverImage,
+                  location: babaPage.location,
+                  religion: babaPage.religion,
+                  website: babaPage.website,
+                  followersCount: babaPage.followersCount,
+                  postsCount: babaPage.postsCount,
+                  videosCount: babaPage.videosCount,
+                  storiesCount: babaPage.storiesCount,
+                  isActive: babaPage.isActive,
+                  isFollowing: true,
+                  createdAt: babaPage.createdAt,
+                  updatedAt: babaPage.updatedAt,
+                );
+              }
+            });
+            errorMessage = 'You are already following this page';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to follow: $errorMessage'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('BabaPagesScreen: Follow/Unfollow error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteBabaPage(BabaPage babaPage) async {
@@ -375,7 +631,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                                 },
                                 child: const Icon(
                                   Icons.arrow_back,
-                                  color: Colors.white, // White like second image
+                                  color: Colors.black, // Changed to black as requested
                                   size: 24,
                                 ),
                               ),
@@ -387,7 +643,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white, // White like second image
+                                    color: Colors.black, // Changed to black as requested
                                     fontFamily: 'Poppins',
                                   ),
                                   textAlign: TextAlign.center,
@@ -401,7 +657,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                                 },
                                 child: const Icon(
                                   Icons.search,
-                                  color: Colors.white, // White like second image
+                                  color: Colors.black, // Changed to black as requested
                                   size: 24,
                                 ),
                               ),
@@ -420,7 +676,7 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                                 },
                                 child: const Icon(
                                   Icons.add,
-                                  color: Colors.white, // White like second image
+                                  color: Colors.black, // Changed to black as requested
                                   size: 24,
                                 ),
                               ),
@@ -629,12 +885,16 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
         return GestureDetector(
           onTap: () {
             // Open the new profile UI demo screen for Baba Ji
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => BabaProfileUiDemoScreen(babaPage: babaPage),
-              ),
-            );
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => BabaProfileUiDemoScreen(babaPage: babaPage),
+                          ),
+                        ).then((_) {
+                          // Refresh the Baba pages list when returning from profile screen
+                          // This ensures any DP changes are reflected
+                          _loadBabaPages(refresh: true);
+                        });
           },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -663,8 +923,8 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                     children: [
                       // Golden Frame Background
                       Container(
-                        width: 80,
-                        height: 80,
+                        width: 70, // Reduced size to save space
+                        height: 70,
                         decoration: const BoxDecoration(
                           image: DecorationImage(
                             image: AssetImage('assets/images/babji_dp_bg_frame.jpg'),
@@ -674,20 +934,29 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                       ),
                       // Profile Picture
                       Positioned(
-                        top: 18,
-                        left: 17,
+                        top: 16, // Adjusted positioning
+                        left: 15,
                         child: CircleAvatar(
-                          radius: 23,
+                          radius: 20, // Reduced radius
                           backgroundColor: Colors.white,
                           child: CircleAvatar(
-                            radius: 23,
-                            backgroundImage: NetworkImage(babaPage.avatar),
+                            radius: 20,
+                            backgroundImage: AvatarUtils.isValidAvatarUrl(babaPage.avatar)
+                                ? NetworkImage(AvatarUtils.getAbsoluteAvatarUrl(babaPage.avatar))
+                                : null,
+                            child: AvatarUtils.isValidAvatarUrl(babaPage.avatar)
+                                ? null
+                                : const Icon(
+                                    Icons.temple_hindu,
+                                    color: Colors.orange,
+                                    size: 20, // Reduced icon size
+                                  ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8), // Reduced spacing
 
                   // Text Details
                   Expanded(
@@ -697,100 +966,165 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                         Text(
                           babaPage.name,
                           style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 16, // Reduced font size
                             fontWeight: FontWeight.bold,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Row(
                           children: [
-                            Icon(Icons.location_on, size: 14, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text(
-                              babaPage.location,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
+                            Icon(Icons.location_on, size: 12, color: Colors.grey),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                babaPage.location,
+                                style: const TextStyle(
+                                  fontSize: 12, // Reduced font size
+                                  color: Colors.grey,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 3),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF5F5DC), // Creamy beige background
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             babaPage.religion,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 10, // Reduced font size
                               color: Color(0xFFBD9C7C), // Golden-brown text color
                               fontWeight: FontWeight.w500,
                             ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           babaPage.description,
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 12, // Reduced font size
                             color: Colors.black87,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2, // Allow 2 lines for description
                         ),
                         const SizedBox(height: 8),
-                        // Statistics Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildStatItem(Icons.people, babaPage.followersCount.toString(), 'Followers'),
-                            _buildStatItem(Icons.grid_view, babaPage.postsCount.toString(), 'Posts'),
-                            _buildStatItem(Icons.play_circle, babaPage.videosCount.toString(), 'Videos'),
-                            _buildStatItem(Icons.book, babaPage.storiesCount.toString(), 'Stories'),
-                          ],
+                        // Statistics Row - Improved responsive layout to prevent overflow
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            if (constraints.maxWidth < 180) {
+                              // For very small cards, use 2x2 grid
+                              return Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: _buildStatItem(Icons.people, babaPage.followersCount.toString(), 'Followers')),
+                                      Expanded(child: _buildStatItem(Icons.grid_view, babaPage.postsCount.toString(), 'Posts')),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Expanded(child: _buildStatItem(Icons.play_circle, babaPage.videosCount.toString(), 'Videos')),
+                                      Expanded(child: _buildStatItem(Icons.book, babaPage.storiesCount.toString(), 'Stories')),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            } else if (constraints.maxWidth < 250) {
+                              // For medium cards, use 2x2 grid with more spacing
+                              return Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: _buildStatItem(Icons.people, babaPage.followersCount.toString(), 'Followers')),
+                                      Expanded(child: _buildStatItem(Icons.grid_view, babaPage.postsCount.toString(), 'Posts')),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Expanded(child: _buildStatItem(Icons.play_circle, babaPage.videosCount.toString(), 'Videos')),
+                                      Expanded(child: _buildStatItem(Icons.book, babaPage.storiesCount.toString(), 'Stories')),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            } else {
+                              // For normal cards, use horizontal layout with proper constraints
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  Expanded(child: _buildStatItem(Icons.people, babaPage.followersCount.toString(), 'Followers')),
+                                  Expanded(child: _buildStatItem(Icons.grid_view, babaPage.postsCount.toString(), 'Posts')),
+                                  Expanded(child: _buildStatItem(Icons.play_circle, babaPage.videosCount.toString(), 'Videos')),
+                                  Expanded(child: _buildStatItem(Icons.book, babaPage.storiesCount.toString(), 'Stories')),
+                                ],
+                              );
+                            }
+                          },
                         ),
                       ],
                     ),
                   ),
 
-                  // Right side buttons (Follow + Menu)
+                  // Right side buttons (Follow + Menu) - Compact layout
                   Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       // Follow Button (gradient + compact, avoids overflow)
-                      FittedBox(
+                      Container(
+                        constraints: const BoxConstraints(maxWidth: 80), // Constrain width
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFC2D6D6), Color(0xFFBDD5D3)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
+                            gradient: babaPage.isFollowing 
+                              ? const LinearGradient(
+                                  colors: [Color(0xFF4CAF50), Color(0xFF45A049)], // Green gradient for following
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : const LinearGradient(
+                                  colors: [Color(0xFFC2D6D6), Color(0xFFBDD5D3)], // Original gradient for follow
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.1),
-                                blurRadius: 6,
+                                blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
                             ],
                           ),
                           child: GestureDetector(
-                            onTap: () {
-                              print('Follow button pressed for: ${babaPage.name}');
-                            },
-                            child: const Text(
-                              'Follow',
-                              style: TextStyle(
+                            onTap: () => _handleFollowBabaPage(babaPage),
+                            child: Text(
+                              babaPage.isFollowing ? 'Following' : 'Follow',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
+                                fontSize: 10, // Reduced font size
                               ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       // 3-dot menu button
                       PopupMenuButton<String>(
                         onSelected: (value) {
@@ -817,15 +1151,15 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                           ),
                         ],
                         child: Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: Colors.grey.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: const Icon(
                             Icons.more_vert,
                             color: Colors.grey,
-                            size: 20,
+                            size: 16, // Reduced icon size
                           ),
                         ),
                       ),
@@ -841,62 +1175,52 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
   }
 
   Widget _buildStatItem(IconData icon, String count, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: const Color(0xFF6B7280), // Muted purple-grey color
-        ),
-        const SizedBox(width: 4),
-        Text(
-          count,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF6B7280), // Muted purple-grey color
-            fontFamily: 'Poppins',
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 10, // Further reduced size
+                color: const Color(0xFF6B7280),
+              ),
+              const SizedBox(width: 1),
+              Flexible(
+                child: Text(
+                  count,
+                  style: const TextStyle(
+                    fontSize: 9, // Further reduced font size
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                    fontFamily: 'Poppins',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(width: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF6B7280), // Muted purple-grey color
-            fontFamily: 'Poppins',
+          const SizedBox(height: 1),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 8, // Further reduced font size
+              color: Color(0xFF6B7280),
+              fontFamily: 'Poppins',
+            ),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Color _getReligionColor(String religion, ThemeService themeService) {
-    switch (religion.toLowerCase()) {
-      case 'hinduism':
-        return ThemeService.hinduSaffronOrange;
-      case 'islam':
-        return ThemeService.islamDarkGreen;
-      case 'christianity':
-        return ThemeService.christianDeepBlue;
-      case 'sikhism':
-        return ThemeService.sikhSaffron;
-      case 'buddhism':
-        return ThemeService.buddhistMonkOrange;
-      case 'jainism':
-        return ThemeService.jainDeepRed;
-      case 'judaism':
-        return ThemeService.jewishDeepBlue;
-      case 'bahai':
-        return ThemeService.bahaiWarmOrange;
-      case 'taoism':
-        return ThemeService.taoBlack;
-      case 'indigenous':
-        return ThemeService.indigenousEarthBrown;
-      default:
-        return themeService.primaryColor;
-    }
-  }
 }
 

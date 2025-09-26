@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -9,6 +10,7 @@ import '../models/chat_response_model.dart';
 import '../widgets/app_loader.dart';
 import '../utils/app_theme.dart';
 import '../services/theme_service.dart';
+import '../widgets/user_avatar_widget.dart';
 
 class ChatScreen extends StatefulWidget {
   final String recipientUserId;
@@ -38,6 +40,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   String? _currentThreadId;
   bool _isSending = false;
   DateTime? _lastRefreshTime;
+  Timer? _messagePollingTimer;
 
   @override
   void initState() {
@@ -45,20 +48,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // Set the thread ID if provided
     _currentThreadId = widget.threadId;
-    _loadMessages();
     
     // Add scroll listener for pagination
     _scrollController.addListener(_onScroll);
     
-    // Start real-time updates only after we have a real thread ID
-    // This will be handled in _sendMessage when the first message is sent
+    // Load messages and start polling
+    _loadMessages();
+    _startMessagePolling();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Only load messages once when screen is first opened
-    if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_') && _messages.isEmpty) {
+    // Load messages when screen becomes active if we have a real thread ID
+    if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
       _loadMessages();
     }
   }
@@ -66,8 +69,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // Only refresh messages when app becomes active if we have no messages loaded
-    if (state == AppLifecycleState.resumed && _currentThreadId != null && !_currentThreadId!.startsWith('temp_') && _messages.isEmpty) {
+    // Refresh messages when app becomes active if we have a real thread ID
+    if (state == AppLifecycleState.resumed && _currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
       _loadMessages();
     }
   }
@@ -78,11 +81,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _messageController.dispose();
     _scrollController.dispose();
     // Stop real-time updates
+    _stopMessagePolling();
     _lastRefreshTime = null;
     super.dispose();
   }
 
   Future<void> _loadMessages() async {
+    // Don't reload if we already have messages and it's been less than 30 seconds since last load
+    if (_messages.isNotEmpty && _lastRefreshTime != null) {
+      final timeSinceLastLoad = DateTime.now().difference(_lastRefreshTime!);
+      if (timeSinceLastLoad.inSeconds < 30) {
+        print('ChatScreen: Skipping reload - messages loaded recently');
+        return;
+      }
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -104,24 +117,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         
         if (mounted) {
           setState(() {
-            // Only add new messages if we don't have any messages yet
-            if (_messages.isEmpty) {
-              _messages = messages;
-              print('ChatScreen: Loaded ${messages.length} messages from API (initial load)');
-            } else {
-              // Merge new messages with existing ones, avoiding duplicates
-              final existingMessageIds = _messages.map((m) => m.id).toSet();
-              final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
-              
-              if (newMessages.isNotEmpty) {
-                _messages.addAll(newMessages);
-                // Sort messages by creation time to maintain chronological order
-                _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-                print('ChatScreen: Added ${newMessages.length} new messages, total: ${_messages.length}');
-              } else {
-                print('ChatScreen: No new messages to add');
-              }
-            }
+            // Always update messages to ensure we have the latest
+            _messages = messages;
+            print('ChatScreen: Loaded ${messages.length} messages from API');
             
             _isLoading = false;
           });
@@ -129,9 +127,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _lastRefreshTime = DateTime.now();
         }
       } else if (_currentThreadId != null && _currentThreadId!.startsWith('temp_')) {
-        // We have a temporary thread ID, just show the local messages
-        print('ChatScreen: Using temporary thread ID, keeping local messages');
+        // We have a temporary thread ID, don't load any messages - just show empty state
+        print('ChatScreen: Using temporary thread ID, no messages to load');
         setState(() {
+          _messages = []; // Clear any existing messages
           _isLoading = false;
         });
       } else {
@@ -148,31 +147,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _currentThreadId = threadId;
           print('ChatScreen: Got thread ID: $_currentThreadId');
           
-          // Load messages from this thread
-          final messages = await ChatService.getMessagesByThreadId(
-            threadId: _currentThreadId!,
-            token: authProvider.authToken!,
-          );
-          
-          if (mounted) {
+          // Only load messages if we have a real thread ID
+          if (!_currentThreadId!.startsWith('temp_')) {
+            final messages = await ChatService.getMessagesByThreadId(
+              threadId: _currentThreadId!,
+              token: authProvider.authToken!,
+            );
+            
+            if (mounted) {
+              setState(() {
+                _messages = messages;
+                _isLoading = false;
+              });
+              _scrollToBottom();
+              
+              // Mark messages as read
+              if (messages.isNotEmpty) {
+                ChatService.markMessagesAsRead(
+                  threadId: _currentThreadId!,
+                  token: authProvider.authToken!,
+                );
+              }
+            }
+          } else {
+            // Temporary thread, no messages to load
             setState(() {
-              _messages = messages;
+              _messages = [];
               _isLoading = false;
             });
-            _scrollToBottom();
-            
-            // Mark messages as read
-            if (messages.isNotEmpty) {
-              ChatService.markMessagesAsRead(
-                threadId: _currentThreadId!,
-                token: authProvider.authToken!,
-              );
-            }
           }
         } else {
           // Failed to create thread, start fresh
           print('ChatScreen: Failed to create thread, starting fresh');
           setState(() {
+            _messages = [];
             _isLoading = false;
           });
         }
@@ -190,6 +198,61 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         );
       }
+    }
+  }
+
+  /// Start polling for new messages
+  void _startMessagePolling() {
+    // Only start polling if we have a real thread ID
+    if (_currentThreadId != null && !_currentThreadId!.startsWith('temp_')) {
+      print('ChatScreen: Starting message polling for thread: $_currentThreadId');
+      _messagePollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+        _pollForNewMessages();
+      });
+    } else {
+      print('ChatScreen: Not starting polling - no real thread ID yet');
+    }
+  }
+
+  /// Stop polling for new messages
+  void _stopMessagePolling() {
+    if (_messagePollingTimer != null) {
+      print('ChatScreen: Stopping message polling');
+      _messagePollingTimer!.cancel();
+      _messagePollingTimer = null;
+    }
+  }
+
+  /// Poll for new messages
+  Future<void> _pollForNewMessages() async {
+    if (_currentThreadId == null || _currentThreadId!.startsWith('temp_')) {
+      return; // Don't poll if we don't have a real thread ID
+    }
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final messages = await ChatService.getMessagesByThreadId(
+        threadId: _currentThreadId!,
+        token: authProvider.authToken!,
+      );
+
+      if (mounted && messages.isNotEmpty) {
+        // Check if we have new messages
+        final existingMessageIds = _messages.map((m) => m.id).toSet();
+        final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
+
+        if (newMessages.isNotEmpty) {
+          print('ChatScreen: Found ${newMessages.length} new messages via polling');
+          setState(() {
+            _messages.addAll(newMessages);
+            // Sort messages by creation time to maintain chronological order
+            _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          });
+          _scrollToBottom();
+        }
+      }
+    } catch (e) {
+      print('ChatScreen: Error polling for new messages: $e');
     }
   }
 
@@ -466,6 +529,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (_currentThreadId != realThreadId) {
             _currentThreadId = realThreadId;
             print('ChatScreen: Updated thread ID to real ID: $_currentThreadId');
+            
+            // Start polling now that we have a real thread ID
+            _startMessagePolling();
           }
         }
         
@@ -584,88 +650,93 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          backgroundColor: themeService.backgroundColor,
-          appBar: AppBar(
-        backgroundColor: themeService.surfaceColor,
-        foregroundColor: themeService.onSurfaceColor,
-        title: Row(
-          children: [
-            // Recipient Avatar
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: themeService.primaryColor,
-              child: widget.recipientAvatar != null && widget.recipientAvatar!.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        widget.recipientAvatar!,
-                        width: 36,
-                        height: 36,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          widget.recipientUsername[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+          body: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/Signup page bg.jpeg'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Custom App Bar - Glassmorphism style
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
                       ),
-                    )
-                  : Text(
-                      widget.recipientUsername[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
                       ),
                     ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.recipientFullName,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'Poppins',
-                    color: themeService.onSurfaceColor,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.black),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        // Recipient Avatar
+                        UserAvatarWidget(
+                          avatarUrl: widget.recipientAvatar,
+                          userName: widget.recipientUsername,
+                          size: 36,
+                          borderColor: Colors.white.withOpacity(0.2),
+                          borderWidth: 2,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.recipientFullName,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Poppins',
+                                  color: Colors.black,
+                                ),
+                              ),
+                              Text(
+                                '@${widget.recipientUsername}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black.withOpacity(0.7),
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _manualRefresh,
+                          icon: const Icon(Icons.refresh, color: Colors.black),
+                          tooltip: 'Refresh Messages',
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Text(
-                  '@${widget.recipientUsername}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: themeService.onSurfaceColor.withOpacity(0.6),
-                    fontFamily: 'Poppins',
+                  
+                  // Messages List
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator(color: Colors.black))
+                        : _messages.isEmpty
+                            ? _buildEmptyState()
+                            : _buildMessagesList(authProvider.userProfile),
                   ),
-                ),
-              ],
+                  
+                  // Message Input
+                  _buildMessageInput(),
+                ],
+              ),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: _manualRefresh,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Messages',
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Messages List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
-                    ? _buildEmptyState()
-                    : _buildMessagesList(authProvider.userProfile),
-          ),
-          
-          // Message Input
-          _buildMessageInput(),
-        ],
-      ),
         );
       },
     );
@@ -673,35 +744,55 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.chat_bubble_outline,
-            size: 64,
-            color: Colors.grey[400],
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.2),
+            width: 1,
           ),
-          const SizedBox(height: 16),
-          Text(
-            'No messages yet',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-              fontFamily: 'Poppins',
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              spreadRadius: 5,
+              offset: const Offset(0, 10),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start a conversation with ${widget.recipientFullName}',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-              fontFamily: 'Poppins',
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 80,
+              color: Colors.black.withOpacity(0.8),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+                fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start a conversation with ${widget.recipientFullName}',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.black.withOpacity(0.8),
+                fontFamily: 'Poppins',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -733,34 +824,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         children: [
           if (!isCurrentUser) ...[
             // Sender Avatar
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppTheme.primaryColor,
-              child: message.sender.avatar.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        message.sender.avatar,
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          message.sender.username[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    )
-                  : Text(
-                      message.sender.username[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+            UserAvatarWidget(
+              avatarUrl: message.sender.avatar,
+              userName: message.sender.username,
+              size: 32,
+              borderColor: Colors.white.withOpacity(0.2),
+              borderWidth: 1,
             ),
             const SizedBox(width: 8),
           ],
@@ -770,13 +839,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isCurrentUser ? AppTheme.primaryColor : AppTheme.surfaceColor,
+                color: isCurrentUser 
+                    ? Colors.white.withOpacity(0.2) 
+                    : Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -789,9 +865,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       Expanded(
                         child: Text(
                           message.content,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: isCurrentUser ? Colors.white : AppTheme.textPrimary,
+                            color: Colors.black,
                             fontFamily: 'Poppins',
                           ),
                         ),
@@ -804,7 +880,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           child: Icon(
                             Icons.more_vert,
                             size: 18,
-                            color: isCurrentUser ? Colors.white70 : Colors.grey[600],
+                            color: Colors.black.withOpacity(0.7),
                           ),
                         ),
                       ),
@@ -815,7 +891,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     _formatTime(message.createdAt),
                     style: TextStyle(
                       fontSize: 11,
-                      color: isCurrentUser ? Colors.white70 : Colors.grey[500],
+                      color: Colors.black.withOpacity(0.7),
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -827,34 +903,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (isCurrentUser) ...[
             const SizedBox(width: 8),
             // Current User Avatar
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF10B981),
-              child: currentUser?.profileImageUrl != null && currentUser!.profileImageUrl!.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        currentUser.profileImageUrl!,
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          currentUser.name[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    )
-                  : Text(
-                      currentUser?.name[0].toUpperCase() ?? 'U',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+            UserAvatarWidget(
+              avatarUrl: currentUser?.profileImageUrl,
+              userName: currentUser?.name,
+              size: 32,
+              borderColor: Colors.white.withOpacity(0.2),
+              borderWidth: 1,
             ),
           ],
         ],
@@ -866,12 +920,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
-            offset: const Offset(0, -2),
+            spreadRadius: 2,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
@@ -881,20 +944,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               child: TextField(
                 controller: _messageController,
-                decoration: const InputDecoration(
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 15,
+                  fontFamily: 'Poppins',
+                ),
+                decoration: InputDecoration(
                   hintText: 'Type a message...',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   hintStyle: TextStyle(
-                    color: Colors.grey,
+                    color: Colors.black.withOpacity(0.7),
+                    fontSize: 15,
                     fontFamily: 'Poppins',
                   ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
                 maxLines: null,
                 textInputAction: TextInputAction.send,
@@ -912,21 +992,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: _isSending ? Colors.grey : AppTheme.primaryColor,
+                color: _isSending 
+                    ? Colors.white.withOpacity(0.3) 
+                    : Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               child: _isSending
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                        color: Colors.white,
+                        color: Colors.black,
                         strokeWidth: 2,
                       ),
                     )
                   : const Icon(
                       Icons.send,
-                      color: Colors.white,
+                      color: Colors.black,
                       size: 24,
                     ),
             ),

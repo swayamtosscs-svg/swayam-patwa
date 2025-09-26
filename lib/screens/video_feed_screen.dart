@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import '../widgets/video_player_widget.dart';
+import '../widgets/baba_comment_dialog.dart';
 
 class VideoFeedScreen extends StatefulWidget {
   final String selectedReligion;
@@ -850,57 +851,18 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
   }
 
   void _showCommentDialog(BuildContext context, Map<String, dynamic> video) {
+    // Use the improved BabaCommentDialog for better functionality
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.grey[900],
-          title: Text(
-            'Comments (${video['comments']})',
-            style: const TextStyle(color: Colors.white),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    children: [
-                      _buildCommentItem('User1', 'Amazing video! 🙏', '2m ago'),
-                      _buildCommentItem('User2', 'Beautiful content!', '5m ago'),
-                      _buildCommentItem('User3', 'Love this! ❤️', '10m ago'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Add a comment...',
-                          hintStyle: TextStyle(color: Colors.white54),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Comment posted!')),
-                        );
-                      },
-                      icon: const Icon(Icons.send, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+        return BabaCommentDialog(
+          postId: video['id'] ?? video['_id'] ?? '',
+          babaPageId: 'default', // Use default baba page for video feed
+          isReel: true, // Treat video feed items as reels
+          onCommentAdded: () {
+            // Refresh video data if needed
+            print('Comment added to video: ${video['id']}');
+          },
         );
       },
     );
@@ -1057,184 +1019,41 @@ class ReelVideoPlayer extends StatefulWidget {
 }
 
 class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
-  VideoPlayerController? _controller;
   bool _isMuted = true;
-  bool _isInitialized = false;
-  bool _isYouTube = false;
-  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
-  }
-
-  @override
-  void didUpdateWidget(covariant ReelVideoPlayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoUrl != widget.videoUrl) {
-      _disposeController();
-      _init();
-    }
-    if (oldWidget.isActive != widget.isActive) {
-      if (widget.isActive && _isInitialized && !_isDisposed) {
-        _controller?.play();
-      } else {
-        _controller?.pause();
-      }
-    }
-  }
-
-  Future<void> _init() async {
-    if (_isDisposed) return;
-    
-    _isYouTube = _isYouTubeUrl(widget.videoUrl);
-    
-    if (_isYouTube) {
-      // For YouTube URLs, we'll show a placeholder since direct playback isn't supported
-      if (!_isDisposed) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-      return;
-    }
-
-    try {
-      final controller = VideoPlayerController.network(
-        widget.videoUrl,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
-      if (_isDisposed) {
-        controller.dispose();
-        return;
-      }
-      
-      _controller = controller;
-      
-      await controller.initialize();
-      if (_isDisposed) return;
-      
-      await controller.setLooping(true);
-      if (_isMuted) {
-        await controller.setVolume(0.0);
-      }
-      if (widget.isActive) {
-        await controller.play();
-      }
-      
-      if (!mounted || _isDisposed) return;
-      setState(() {
-        _isInitialized = true;
-      });
-    } catch (e) {
-      print('Video initialization error: $e');
-      if (!mounted || _isDisposed) return;
-      setState(() {
-        _isInitialized = true;
-      });
-    }
-  }
-
-  bool _isYouTubeUrl(String url) {
-    return url.contains('youtube.com') || url.contains('youtu.be');
-  }
-
-  void _disposeController() {
-    if (_controller != null) {
-      _controller!.pause();
-      _controller!.dispose();
-      _controller = null;
-    }
   }
 
   @override
   void dispose() {
-    _isDisposed = true;
-    _disposeController();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isInitialized) {
-      return const ColoredBox(
-        color: Colors.black,
-        child: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      );
-    }
-
-    if (_isYouTube) {
+    // Check if it's a YouTube URL
+    bool isYouTube = widget.videoUrl.contains('youtube.com') || widget.videoUrl.contains('youtu.be');
+    
+    if (isYouTube) {
       // Show YouTube placeholder with play button
       return _buildYouTubePlaceholder();
-    }
-
-    if (_controller == null) {
-      return const ColoredBox(
-        color: Colors.black,
-        child: Center(
-          child: Icon(Icons.error, color: Colors.white, size: 50),
-        ),
-      );
     }
 
     return Stack(
       children: [
         // Video player
         Positioned.fill(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: _controller!.value.size.width,
-              height: _controller!.value.size.height,
-              child: VideoPlayer(_controller!),
-            ),
+          child: VideoPlayerWidget(
+            videoUrl: widget.videoUrl,
+            autoPlay: true,
+            looping: true,
+            muted: false, // Always start unmuted (audio on)
+            showControls: true, // Enable controls
           ),
         ),
-        // Tap to play/pause
-        Positioned.fill(
-          child: GestureDetector(
-            onTap: () {
-              if (_controller!.value.isPlaying) {
-                _controller!.pause();
-              } else {
-                _controller!.play();
-              }
-              setState(() {});
-            },
-            child: AnimatedOpacity(
-              opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Container(
-                color: Colors.black26,
-                child: const Center(
-                  child: Icon(Icons.play_arrow, color: Colors.white, size: 80),
-                ),
-              ),
-            ),
-          ),
-        ),
-        // Mute toggle
-        Positioned(
-          right: 16,
-          top: 16,
-          child: GestureDetector(
-            onTap: () async {
-              _isMuted = !_isMuted;
-              await _controller!.setVolume(_isMuted ? 0.0 : 1.0);
-              setState(() {});
-            },
-            child: CircleAvatar(
-              backgroundColor: Colors.black45,
-              child: Icon(_isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white),
-            ),
-          ),
-        ),
+        // Tap behavior is now handled by VideoPlayerWidget (mute/unmute)
       ],
     );
   }

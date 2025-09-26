@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
 import '../models/baba_page_reel_model.dart';
 import '../utils/app_theme.dart';
 import '../screens/fullscreen_reel_viewer_screen.dart';
+import 'video_player_widget.dart';
 
 class BabaPageReelWidget extends StatefulWidget {
   final BabaPageReel reel;
   final VoidCallback? onTap;
+  final VoidCallback? onLike;
   final bool showFullDetails;
   final bool autoplay;
 
@@ -14,6 +15,7 @@ class BabaPageReelWidget extends StatefulWidget {
     Key? key,
     required this.reel,
     this.onTap,
+    this.onLike,
     this.showFullDetails = true,
     this.autoplay = true, // Enable autoplay by default
   }) : super(key: key);
@@ -23,112 +25,14 @@ class BabaPageReelWidget extends StatefulWidget {
 }
 
 class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
-  VideoPlayerController? _videoController;
-  bool _isVideoInitialized = false;
   bool _isPlaying = false;
-  bool _hasError = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeVideo();
-  }
-
-  @override
-  void dispose() {
-    _videoController?.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initializeVideo() async {
-    try {
-      print('BabaPageReelWidget: Initializing video: ${widget.reel.video.url}');
-      print('BabaPageReelWidget: Autoplay enabled: ${widget.autoplay}');
-      
-      _videoController = VideoPlayerController.network(
-        widget.reel.video.url,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
-      
-      // Set video player configuration
-      _videoController!.setVolume(1.0);
-      _videoController!.setLooping(true);
-      
-      await _videoController!.initialize();
-      
-      if (mounted) {
-        setState(() {
-          _isVideoInitialized = true;
-        });
-        
-        // Add listener for video state changes
-        _videoController!.addListener(() {
-          if (mounted) {
-            setState(() {
-              _isPlaying = _videoController!.value.isPlaying;
-            });
-          }
-        });
-        
-        // Auto-play if enabled - with multiple retry attempts
-        if (widget.autoplay) {
-          print('BabaPageReelWidget: Starting autoplay...');
-          await _startAutoplayWithRetry();
-        }
-      }
-    } catch (e) {
-      print('BabaPageReelWidget: Error initializing video: $e');
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _isVideoInitialized = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _startAutoplayWithRetry() async {
-    int retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries && mounted && !_isPlaying) {
-      try {
-        await _videoController!.play();
-        if (mounted) {
-          setState(() {
-            _isPlaying = true;
-          });
-        }
-        print('BabaPageReelWidget: Autoplay started successfully (attempt ${retryCount + 1})');
-        break;
-      } catch (playError) {
-        retryCount++;
-        print('BabaPageReelWidget: Autoplay attempt $retryCount failed: $playError');
-        
-        if (retryCount < maxRetries) {
-          // Wait before retrying, with increasing delay
-          await Future.delayed(Duration(milliseconds: 300 * retryCount));
-        } else {
-          print('BabaPageReelWidget: All autoplay attempts failed');
-        }
-      }
-    }
-  }
 
   void _togglePlayPause() {
-    if (_videoController != null && _isVideoInitialized) {
-      if (_isPlaying) {
-        _videoController!.pause();
-      } else {
-        _videoController!.play();
-      }
-      setState(() {
-        _isPlaying = !_isPlaying;
-      });
-    }
+    // This will be handled by the VideoPlayerWidget
+    setState(() {
+      _isPlaying = !_isPlaying;
+    });
   }
 
   void _openFullScreen() {
@@ -193,42 +97,19 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Video Player or Thumbnail
-            if (_isVideoInitialized && _videoController != null && !_hasError)
-              VideoPlayer(_videoController!)
-            else
-              Image.network(
-                widget.reel.thumbnail.url,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.goldColor),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey.shade800,
-                    child: const Icon(
-                      Icons.video_library,
-                      color: Colors.white,
-                      size: 50,
-                    ),
-                  );
-                },
-              ),
+            // Video Player
+            VideoPlayerWidget(
+              videoUrl: widget.reel.video.url,
+              autoPlay: widget.autoplay,
+              looping: true,
+              muted: true,
+            ),
             
-            // Play/Pause Overlay (only show when not playing or not initialized)
-            if (!_isPlaying || !_isVideoInitialized || _hasError)
+            // Play/Pause Overlay (only show when not playing)
+            if (!_isPlaying)
               Center(
                 child: GestureDetector(
-                  onTap: _hasError ? null : _togglePlayPause,
+                  onTap: _togglePlayPause,
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -236,7 +117,7 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      _hasError ? Icons.error : (_isPlaying ? Icons.pause : Icons.play_arrow),
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
                       color: Colors.white,
                       size: 32,
                     ),
@@ -334,7 +215,7 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
         children: [
           _buildStatItem(Icons.visibility, widget.reel.viewsCount),
           const SizedBox(width: 16),
-          _buildStatItem(Icons.favorite, widget.reel.likesCount),
+          _buildStatItem(Icons.favorite, widget.reel.likesCount, onTap: widget.onLike),
           const SizedBox(width: 16),
           _buildStatItem(Icons.comment, widget.reel.commentsCount),
           const SizedBox(width: 16),
@@ -353,25 +234,32 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
     );
   }
 
-  Widget _buildStatItem(IconData icon, int count) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: AppTheme.textSecondary,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          _formatCount(count),
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppTheme.textSecondary,
-            fontFamily: 'Poppins',
+  Widget _buildStatItem(IconData icon, int count, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: onTap != null && icon == Icons.favorite 
+                ? (widget.reel.likesCount > 0 ? Colors.red : AppTheme.textSecondary)
+                : AppTheme.textSecondary,
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+          Text(
+            _formatCount(count),
+            style: TextStyle(
+              fontSize: 12,
+              color: onTap != null && icon == Icons.favorite 
+                  ? (widget.reel.likesCount > 0 ? Colors.red : AppTheme.textSecondary)
+                  : AppTheme.textSecondary,
+              fontFamily: 'Poppins',
+            ),
+          ),
+        ],
+      ),
     );
   }
 

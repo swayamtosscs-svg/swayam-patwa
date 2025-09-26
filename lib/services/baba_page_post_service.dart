@@ -77,6 +77,8 @@ class BabaPagePostService {
   }) async {
     try {
       print('BabaPagePostService: Fetching posts for Baba Ji page: $babaPageId');
+      print('BabaPagePostService: Using token: ${token.substring(0, 20)}...');
+      print('BabaPagePostService: Request URL: $baseUrl/baba-pages/$babaPageId/posts?page=$page&limit=$limit');
       
       final response = await http.get(
         Uri.parse('$baseUrl/baba-pages/$babaPageId/posts?page=$page&limit=$limit'),
@@ -87,12 +89,18 @@ class BabaPagePostService {
       );
 
       print('BabaPagePostService: Response status: ${response.statusCode}');
+      print('BabaPagePostService: Response headers: ${response.headers}');
       print('BabaPagePostService: Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         try {
           final jsonResponse = jsonDecode(response.body);
-          return BabaPagePostListResponse.fromJson(jsonResponse);
+          print('BabaPagePostService: Parsed JSON response: $jsonResponse');
+          
+          final result = BabaPagePostListResponse.fromJson(jsonResponse);
+          print('BabaPagePostService: Parsed result - Success: ${result.success}, Posts count: ${result.posts.length}');
+          
+          return result;
         } catch (e) {
           print('BabaPagePostService: Error parsing JSON response: $e');
           print('BabaPagePostService: Response body: ${response.body}');
@@ -103,14 +111,17 @@ class BabaPagePostService {
           );
         }
       } else {
+        print('BabaPagePostService: HTTP Error ${response.statusCode}');
         try {
           final jsonResponse = jsonDecode(response.body);
+          print('BabaPagePostService: Error response: $jsonResponse');
           return BabaPagePostListResponse(
             success: false,
             message: jsonResponse['message'] ?? 'Failed to fetch posts',
             posts: [],
           );
         } catch (e) {
+          print('BabaPagePostService: Error parsing error response: $e');
           return BabaPagePostListResponse(
             success: false,
             message: 'Failed to fetch posts: HTTP ${response.statusCode}',
@@ -120,6 +131,7 @@ class BabaPagePostService {
       }
     } catch (e) {
       print('BabaPagePostService: Error fetching posts: $e');
+      print('BabaPagePostService: Stack trace: ${StackTrace.current}');
       return BabaPagePostListResponse(
         success: false,
         message: 'Error fetching posts: $e',

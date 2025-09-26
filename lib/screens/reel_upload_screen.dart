@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
+import '../widgets/video_player_widget.dart';
 import 'package:provider/provider.dart';
 import '../services/reel_service.dart';
 import '../services/media_upload_service.dart';
@@ -24,10 +24,9 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
   final _thumbnailController = TextEditingController();
   
   dynamic _selectedVideo; // Use dynamic to support both File and XFile
-  VideoPlayerController? _videoController;
-  bool _isVideoInitialized = false;
   bool _isLoading = false;
   String? _uploadResult;
+  bool _isVideoInitialized = false;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -98,28 +97,9 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
         return;
       }
       
-      _videoController?.dispose();
-      _videoController = VideoPlayerController.file(_selectedVideo!);
-      
-      try {
-        await _videoController!.initialize();
-        // Add listener to update UI when video state changes
-        _videoController!.addListener(() {
-          if (mounted) {
-            setState(() {});
-          }
-        });
-        // Auto-play the video when initialized
-        await _videoController!.play();
-        setState(() {
-          _isVideoInitialized = true;
-        });
-      } catch (e) {
-        print('Error initializing video: $e');
-        setState(() {
-          _isVideoInitialized = false;
-        });
-      }
+      setState(() {
+        _isVideoInitialized = true;
+      });
     }
   }
 
@@ -147,7 +127,6 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
   void dispose() {
     _contentController.dispose();
     _thumbnailController.dispose();
-    _videoController?.dispose();
     super.dispose();
   }
 
@@ -315,17 +294,20 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: VideoPlayer(_videoController!),
+                        child: VideoPlayerWidget(
+                          videoUrl: _selectedVideo is File 
+                              ? _selectedVideo.path 
+                              : _selectedVideo.path,
+                          autoPlay: false,
+                          looping: true,
+                          muted: true,
+                        ),
                       ),
                       // Play/Pause overlay
                       Center(
                         child: GestureDetector(
                           onTap: () {
-                            if (_videoController!.value.isPlaying) {
-                              _videoController!.pause();
-                            } else {
-                              _videoController!.play();
-                            }
+                            // Play/pause is handled by VideoPlayerWidget
                             setState(() {});
                           },
                           child: Container(
@@ -334,10 +316,8 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
                               color: Colors.black.withOpacity(0.6),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
-                              _videoController!.value.isPlaying 
-                                  ? Icons.pause 
-                                  : Icons.play_arrow,
+                            child: const Icon(
+                              Icons.play_arrow,
                               color: Colors.white,
                               size: 32,
                             ),

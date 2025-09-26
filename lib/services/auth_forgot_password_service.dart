@@ -57,7 +57,8 @@ class AuthForgotPasswordService {
           print('AuthForgotPasswordService: Forgot password request successful');
           return {
             'success': true,
-            'message': jsonResponse['message'] ?? 'Password reset link sent successfully',
+            'message': jsonResponse['message'] ?? 'Password reset link sent successfully to your email',
+            'email': email,
           };
         } else {
           print('AuthForgotPasswordService: Forgot password request failed: ${jsonResponse['message']}');
@@ -71,21 +72,35 @@ class AuthForgotPasswordService {
         print('AuthForgotPasswordService: Bad request - invalid email or user not found');
         return {
           'success': false,
-          'message': 'Invalid email address or user not found',
+          'message': 'Invalid email address or user not found. Please check your email and try again.',
           'error': 'Bad Request',
+        };
+      } else if (response.statusCode == 404) {
+        print('AuthForgotPasswordService: User not found');
+        return {
+          'success': false,
+          'message': 'No account found with this email address. Please check your email or sign up for a new account.',
+          'error': 'User Not Found',
         };
       } else if (response.statusCode == 429) {
         print('AuthForgotPasswordService: Too many requests');
         return {
           'success': false,
-          'message': 'Too many requests. Please try again later.',
+          'message': 'Too many password reset requests. Please wait a few minutes before trying again.',
           'error': 'Rate Limited',
+        };
+      } else if (response.statusCode == 500) {
+        print('AuthForgotPasswordService: Server error');
+        return {
+          'success': false,
+          'message': 'Server is temporarily unavailable. Please try again in a few minutes.',
+          'error': 'Server Error',
         };
       } else {
         print('AuthForgotPasswordService: Request failed with status ${response.statusCode}');
         return {
           'success': false,
-          'message': 'Failed to send password reset link. Please try again later.',
+          'message': 'Unable to send password reset link. Please try again later.',
           'error': 'Server Error',
         };
       }

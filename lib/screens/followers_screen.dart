@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
+import '../utils/responsive_utils.dart';
+import '../services/theme_service.dart';
 
 class FollowersScreen extends StatefulWidget {
   final String? userId; // Optional userId, if null use current user
@@ -41,6 +44,11 @@ class _FollowersScreenState extends State<FollowersScreen> {
         followers = await authProvider.getFollowers();
       }
       
+      print('FollowersScreen: Loaded ${followers.length} followers');
+      for (final follower in followers) {
+        print('FollowersScreen: Follower data: $follower');
+      }
+      
       if (mounted) {
         setState(() {
           _followers = followers;
@@ -48,6 +56,7 @@ class _FollowersScreenState extends State<FollowersScreen> {
         });
       }
     } catch (e) {
+      print('FollowersScreen: Error loading followers: $e');
       if (mounted) {
         setState(() {
           _error = 'Failed to load followers: $e';
@@ -59,235 +68,475 @@ class _FollowersScreenState extends State<FollowersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      appBar: AppBar(
-        title: const Text(
-          'Followers',
-          style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w600,
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          body: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/Signup page bg.jpeg'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Custom Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        // Back Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              color: Colors.black,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(width: 16),
+                        
+                        // Title
+                        Expanded(
+                          child: Text(
+                            'Followers (${_followers.length})',
+                            style: TextStyle(
+                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 24),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              fontFamily: 'Poppins',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        
+                        const SizedBox(width: 16),
+                        
+                        // Refresh Button
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            onPressed: _loadFollowers,
+                            icon: const Icon(
+                              Icons.refresh,
+                              color: Colors.black,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Main Content
+                  Expanded(
+                    child: _buildBody(),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _loadFollowers,
-            icon: const Icon(Icons.refresh, color: Color(0xFF6366F1)),
-          ),
-        ],
-      ),
-      body: _buildBody(),
+        );
+      },
     );
   }
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFF6366F1),
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 15,
+                spreadRadius: 3,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    color: Colors.black,
+                    strokeWidth: 2,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading followers...',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       );
     }
 
     if (_error != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red[300],
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Error',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF666666),
-                fontFamily: 'Poppins',
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 15,
+                spreadRadius: 3,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red[300],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Error',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: ElevatedButton(
+                      onPressed: _loadFollowers,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Retry',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF999999),
-                fontFamily: 'Poppins',
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadFollowers,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6366F1),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       );
     }
 
     if (_followers.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.people_outline,
-              size: 64,
-              color: Colors.grey[300],
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'No followers yet',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF666666),
-                fontFamily: 'Poppins',
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 15,
+                spreadRadius: 3,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.people_outline,
+                    size: 64,
+                    color: Colors.grey[300],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No followers yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'When other users follow you, they\'ll appear here',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.black,
+                      fontFamily: 'Poppins',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'When other users follow you, they\'ll appear here',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF999999),
-                fontFamily: 'Poppins',
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadFollowers,
-      color: const Color(0xFF6366F1),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _followers.length,
-        itemBuilder: (context, index) {
-          final userData = _followers[index];
-          return _buildUserCard(userData);
-        },
+    return Container(
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 15,
+            spreadRadius: 3,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: RefreshIndicator(
+            onRefresh: _loadFollowers,
+            color: Colors.black,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _followers.length,
+              itemBuilder: (context, index) {
+                final userData = _followers[index];
+                return _buildUserCard(userData);
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildUserCard(Map<String, dynamic> userData) {
-    final username = userData['username'] ?? 'Unknown';
-    final fullName = userData['fullName'] ?? 'No Name';
-    final avatar = userData['avatar'] ?? '';
+    // Handle different possible field names from API
+    final username = userData['username'] ?? userData['userName'] ?? 'Unknown';
+    final fullName = userData['fullName'] ?? userData['name'] ?? userData['displayName'] ?? 'No Name';
+    final avatar = userData['avatar'] ?? userData['profileImageUrl'] ?? userData['profile_image_url'] ?? '';
+    final userId = userData['_id'] ?? userData['id'] ?? userData['userId'] ?? '';
+    final isPrivate = userData['isPrivate'] ?? userData['is_private'] ?? false;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: const Offset(0, 5),
+            spreadRadius: 1,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          radius: 25,
-          backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
-          child: avatar.isNotEmpty
-              ? ClipOval(
-                  child: Image.network(
-                    avatar,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(),
-                  ),
-                )
-              : _buildDefaultAvatar(),
-        ),
-        title: Text(
-          fullName,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
-            fontFamily: 'Poppins',
-          ),
-        ),
-        subtitle: Text(
-          '@$username',
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF666666),
-            fontFamily: 'Poppins',
-          ),
-        ),
-        trailing: IconButton(
-          onPressed: () {
-            // Navigate to user profile
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => UserProfileScreen(
-                  userId: userData['_id'] ?? '',
-                  username: username,
-                  fullName: fullName,
-                  avatar: avatar,
-                  bio: '',
-                  followersCount: 0,
-                  followingCount: 0,
-                  postsCount: 0,
-                  isPrivate: userData['isPrivate'] ?? false,
-                ),
-              ),
-            );
-          },
-          icon: const Icon(
-            Icons.visibility,
-            color: Color(0xFF6366F1),
-          ),
-        ),
-        onTap: () {
-          // Navigate to user profile
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => UserProfileScreen(
-                userId: userData['_id'] ?? '',
-                username: username,
-                fullName: fullName,
-                avatar: avatar,
-                bio: '',
-                followersCount: 0,
-                followingCount: 0,
-                postsCount: 0,
-                isPrivate: userData['isPrivate'] ?? false,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: CircleAvatar(
+              radius: 25,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              child: avatar.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        avatar,
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(),
+                      ),
+                    )
+                  : _buildDefaultAvatar(),
+            ),
+            title: Text(
+              fullName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+                fontFamily: 'Poppins',
               ),
             ),
-          );
-        },
+            subtitle: Text(
+              '@$username',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black,
+                fontFamily: 'Poppins',
+              ),
+            ),
+            trailing: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: IconButton(
+                onPressed: () {
+                  // Navigate to user profile
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => UserProfileScreen(
+                        userId: userId,
+                        username: username,
+                        fullName: fullName,
+                        avatar: avatar,
+                        bio: '',
+                        followersCount: 0,
+                        followingCount: 0,
+                        postsCount: 0,
+                        isPrivate: isPrivate,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.visibility,
+                  color: Colors.black,
+                  size: 20,
+                ),
+              ),
+            ),
+            onTap: () {
+              // Navigate to user profile
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => UserProfileScreen(
+                    userId: userId,
+                    username: username,
+                    fullName: fullName,
+                    avatar: avatar,
+                    bio: '',
+                    followersCount: 0,
+                    followingCount: 0,
+                    postsCount: 0,
+                    isPrivate: isPrivate,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -296,7 +545,7 @@ class _FollowersScreenState extends State<FollowersScreen> {
     return const Icon(
       Icons.person,
       size: 30,
-      color: Color(0xFF6366F1),
+      color: Colors.black,
     );
   }
 }

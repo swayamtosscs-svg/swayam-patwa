@@ -6,6 +6,7 @@ import 'dart:ui';
 // import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
+import '../utils/responsive_utils.dart';
 import '../screens/home_screen.dart';
 import '../services/auth_forgot_password_service.dart';
 import '../services/theme_service.dart';
@@ -131,14 +132,79 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgotPassword() async {
-    if (_emailController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email address first'),
-          backgroundColor: AppTheme.errorColor,
+    // Show dialog to get email if not already entered
+    String email = _emailController.text.trim();
+    
+    if (email.isEmpty) {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            'Reset Password',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your email address to receive a password reset link:',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Email address',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.email),
+                ),
+                keyboardType: TextInputType.emailAddress,
+                onChanged: (value) => email = value.trim(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (email.isNotEmpty && email.contains('@')) {
+                  Navigator.of(context).pop(email);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a valid email address'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF87CEEB),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Send Reset Link',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
         ),
       );
-      return;
+      
+      if (result == null) return;
+      email = result;
     }
 
     setState(() {
@@ -147,31 +213,179 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await AuthForgotPasswordService.sendForgotPasswordRequest(
-        email: _emailController.text.trim(),
+        email: email,
       );
 
       if (response['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Password reset link sent successfully'),
-            backgroundColor: AppTheme.successColor,
-            duration: const Duration(seconds: 5),
+        // Show success dialog with more information
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.green[600],
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Email Sent!',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Password reset link has been sent to:',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  email,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF4A2C2A),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.blue[600],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Please check your email and follow the instructions to reset your password.',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text(
+                  'Got it!',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+              ),
+            ],
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Failed to send password reset link'),
-            backgroundColor: AppTheme.errorColor,
-            duration: const Duration(seconds: 5),
+        // Show error dialog
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  Icons.error,
+                  color: Colors.red[600],
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Error',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              response['message'] ?? 'Failed to send password reset link. Please try again.',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(
+                  'OK',
+                  style: TextStyle(fontFamily: 'Poppins'),
+                ),
+              ),
+            ],
           ),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: AppTheme.errorColor,
+      // Show error dialog for network issues
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                Icons.wifi_off,
+                color: Colors.orange[600],
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Connection Error',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Unable to send password reset link. Please check your internet connection and try again.',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+            ),
+          ],
         ),
       );
     } finally {
@@ -369,243 +583,257 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             child: SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 40),
-                        
-                        // App Logo/Icon (Top Center) - Small square rounded icon
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.asset(
-                              'assets/icons/Peaceful Sunburst Icon Design.png',
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.cover,
+              child: Padding(
+                padding: ResponsiveUtils.getResponsivePadding(context, horizontal: 4.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      
+                      // App Logo/Icon (Top Center) - Smaller icon
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                              offset: const Offset(0, 3),
                             ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/images/Peaceful Sunburst Icon Design.png',
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
                           ),
                         ),
+                      ),
+                      
+                      const SizedBox(height: 4),
                         
-                        const SizedBox(height: 8),
+                       
                         
-                        // RGRAM text below logo
-                        const Text(
-                          'RGRAM',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF4A2C2A),
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 40),
-                        
-                        // Main Content Card - Semi-transparent white card
-                        Container(
+                      // Main Content Card - Semi-transparent white card with message screen styling
+                      Expanded(
+                        child: Container(
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08), // More transparent so background shows through
-                            borderRadius: BorderRadius.circular(24),
+                            color: Colors.white.withOpacity(0.1), // Match message screen opacity
+                            borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withOpacity(0.2),
                               width: 1,
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.1),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                                offset: const Offset(0, 10),
+                                blurRadius: 15,
+                                spreadRadius: 3,
+                                offset: const Offset(0, 8),
                               ),
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(20),
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                               child: Padding(
-                                padding: const EdgeInsets.all(32),
+                                padding: const EdgeInsets.all(16),
                                 child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    // Title
-                                    const Text(
-                                      'Welcome Back to RGRAM',
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF4A2C2A), // Dark brown
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                    
-                                    const SizedBox(height: 8),
-                                    
-                                    // Tagline
-                                    const Text(
-                                      'Connecting Hearts, Spreading Harmony Worldwide',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Color(0xFF4A2C2A), // Dark brown
-                                        fontFamily: 'Poppins',
-                                        height: 1.4,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    
-                                    const SizedBox(height: 40),
-                                    
-                                    // Username or Email Field
-                                    TextFormField(
-                                      controller: _emailController,
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please enter your username or email';
-                                        }
-                                        return null;
-                                      },
-                                      style: const TextStyle(
-                                        color: Color(0xFF4A2C2A), // Dark brown
-                                        fontSize: 16,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Username or Email',
-                                        hintStyle: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 16,
+                                    // Title - Centered
+                                    Center(
+                                      child: Text(
+                                        'Welcome Back to RGRAM',
+                                        style: TextStyle(
+                                          fontSize: ResponsiveUtils.getResponsiveFontSize(context, 24),
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
                                           fontFamily: 'Poppins',
                                         ),
-                                        filled: true,
-                                        fillColor: Colors.white.withOpacity(0.9), // Same opacity as other fields
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: const BorderSide(color: Color(0xFF87CEEB), width: 2), // Sky blue
-                                        ),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                                        textAlign: TextAlign.center,
                                       ),
                                     ),
-                                    const SizedBox(height: 20),
                                     
-                                    // Password Field
-                                    TextFormField(
-                                      controller: _passwordController,
-                                      obscureText: !_isPasswordVisible,
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return 'Please enter your password';
-                                        }
-                                        return null;
-                                      },
-                                      style: const TextStyle(
-                                        color: Color(0xFF4A2C2A), // Dark brown
-                                        fontSize: 16,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Password',
-                                        hintStyle: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 16,
+                                    const SizedBox(height: 4),
+                                    
+                                    // Tagline - Message screen style
+                                    Center(
+                                      child: Text(
+                                        'Connecting Hearts, Spreading Harmony Worldwide',
+                                        style: TextStyle(
+                                          fontSize: ResponsiveUtils.getResponsiveFontSize(context, 14),
+                                          color: Colors.black.withOpacity(0.8),
                                           fontFamily: 'Poppins',
+                                          height: 1.3,
                                         ),
-                                        filled: true,
-                                        fillColor: Colors.white.withOpacity(0.9), // Same opacity as other fields
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: const BorderSide(color: Color(0xFF87CEEB), width: 2), // Sky blue
-                                        ),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                                        suffixIcon: IconButton(
-                                          icon: Icon(
-                                            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                                            color: Colors.grey[600],
-                                          ),
-                                          onPressed: () {
-                                            setState(() {
-                                              _isPasswordVisible = !_isPasswordVisible;
-                                            });
-                                          },
-                                        ),
+                                        textAlign: TextAlign.center,
                                       ),
                                     ),
-                                    const SizedBox(height: 20),
                                     
-                                    // Remember me checkbox
-                                    Row(
-                                      children: [
-                                        Checkbox(
-                                          value: false,
-                                          onChanged: (bool? value) {
-                                            // Handle remember me logic here
-                                          },
-                                          activeColor: const Color(0xFF87CEEB), // Sky blue
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                        ),
-                                        const Text(
-                                          'Remember me',
-                                          style: TextStyle(
-                                            color: Color(0xFF4A2C2A),
-                                            fontSize: 16,
-                                            fontFamily: 'Poppins',
-                                          ),
-                                        ),
-                                      ],
-                                    ),
                                     const SizedBox(height: 24),
                                     
-                                    // Log In Button with Dove Icon
+                                    // Username or Email Field - Message screen style
                                     Container(
-                                      width: double.infinity,
-                                      height: 56,
                                       decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [Color(0xFF87CEEB), Color(0xFF4682B4)], // Sky blue gradient
+                                        color: Colors.white.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.2),
+                                          width: 1,
                                         ),
-                                        borderRadius: BorderRadius.circular(16),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: const Color(0xFF87CEEB).withOpacity(0.3),
-                                            blurRadius: 12,
-                                            spreadRadius: 2,
-                                            offset: const Offset(0, 6),
+                                            color: Colors.black.withOpacity(0.05),
+                                            blurRadius: 8,
+                                            spreadRadius: 1,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextFormField(
+                                        controller: _emailController,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Please enter your username or email';
+                                          }
+                                          return null;
+                                        },
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 15,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'Username or Email',
+                                          hintStyle: TextStyle(
+                                            color: Colors.black.withOpacity(0.7),
+                                            fontSize: 15,
+                                            fontFamily: 'Poppins',
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.transparent,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(
+                                              color: Colors.white.withOpacity(0.4),
+                                              width: 2,
+                                            ),
+                                          ),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    
+                                    // Password Field - Message screen style
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.2),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.05),
+                                            blurRadius: 8,
+                                            spreadRadius: 1,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextFormField(
+                                        controller: _passwordController,
+                                        obscureText: !_isPasswordVisible,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Please enter your password';
+                                          }
+                                          return null;
+                                        },
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 15,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'Password',
+                                          hintStyle: TextStyle(
+                                            color: Colors.black.withOpacity(0.7),
+                                            fontSize: 15,
+                                            fontFamily: 'Poppins',
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.transparent,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(
+                                              color: Colors.white.withOpacity(0.4),
+                                              width: 2,
+                                            ),
+                                          ),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(
+                                              _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                              color: Colors.black.withOpacity(0.7),
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _isPasswordVisible = !_isPasswordVisible;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    
+                                    // Log In Button - Message screen style
+                                    Container(
+                                      width: double.infinity,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.3),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.1),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                            offset: const Offset(0, 4),
                                           ),
                                         ],
                                       ),
@@ -615,15 +843,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                           backgroundColor: Colors.transparent,
                                           shadowColor: Colors.transparent,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(16),
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
                                         ),
                                         child: _isLoading
                                             ? const SizedBox(
-                                                width: 24,
-                                                height: 24,
+                                                width: 20,
+                                                height: 20,
                                                 child: CircularProgressIndicator(
-                                                  color: Colors.white,
+                                                  color: Colors.black,
                                                   strokeWidth: 2,
                                                 ),
                                               )
@@ -632,15 +860,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 children: [
                                                   Icon(
                                                     Icons.volunteer_activism, // Dove-like icon
-                                                    color: Colors.white,
-                                                    size: 24,
+                                                    color: Colors.black,
+                                                    size: 20,
                                                   ),
-                                                  SizedBox(width: 12),
+                                                  SizedBox(width: 8),
                                                   Text(
                                                     'Log In',
                                                     style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 18,
+                                                      color: Colors.black,
+                                                      fontSize: 16,
                                                       fontWeight: FontWeight.w600,
                                                       fontFamily: 'Poppins',
                                                     ),
@@ -649,26 +877,26 @@ class _LoginScreenState extends State<LoginScreen> {
                                               ),
                                       ),
                                     ),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 16),
                                     
-                                    // Forgot Password Link
+                                    // Forgot Password Link - Message screen style
                                     Center(
                                       child: TextButton(
                                         onPressed: _isForgotPasswordLoading ? null : _forgotPassword,
                                         child: _isForgotPasswordLoading
                                             ? const SizedBox(
-                                                width: 16,
-                                                height: 16,
+                                                width: 14,
+                                                height: 14,
                                                 child: CircularProgressIndicator(
                                                   strokeWidth: 2,
-                                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                                                 ),
                                               )
-                                            : const Text(
+                                            : Text(
                                                 'Forgotten password?',
                                                 style: TextStyle(
-                                                  color: Color(0xFF000000), // Sky blue
-                                                  fontSize: 14,
+                                                  color: Colors.black.withOpacity(0.8),
+                                                  fontSize: 13,
                                                   fontWeight: FontWeight.w400,
                                                   fontFamily: 'Poppins',
                                                 ),
@@ -677,12 +905,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     
                                     if (_error != null) ...[
-                                      const SizedBox(height: 16),
+                                      const SizedBox(height: 12),
                                       Container(
-                                        padding: const EdgeInsets.all(16),
+                                        padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
                                           color: Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(8),
                                           border: Border.all(
                                             color: Colors.red.withOpacity(0.3),
                                           ),
@@ -693,38 +921,48 @@ class _LoginScreenState extends State<LoginScreen> {
                                             color: Colors.red,
                                             fontWeight: FontWeight.w500,
                                             fontFamily: 'Poppins',
+                                            fontSize: 13,
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
-                                      const SizedBox(height: 20),
+                                      const SizedBox(height: 12),
                                     ],
                                     
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: 8),
                                     
-                                    // Sign Up Link
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pushNamed(context, '/signup');
-                                      },
-                                      child: RichText(
-                                        text: const TextSpan(
-                                          text: "Don't have an account? ",
-                                          style: TextStyle(
-                                            color: Color(0xFF4A2C2A),
-                                            fontSize: 16,
-                                            fontFamily: 'Poppins',
-                                          ),
-                                          children: [
-                                            TextSpan(
-                                              text: 'Sign Up',
-                                              style: TextStyle(
-                                                color: Color(0xFF000000), // Sky blue
-                                                fontWeight: FontWeight.w600,
-                                               
+                                    // Sign Up Link - Message screen style
+                                    Center(
+                                      child: TextButton(
+                                        onPressed: () {
+                                          Navigator.pushNamed(context, '/signup');
+                                        },
+                                        child: Flexible(
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  "Don't have an account? ",
+                                                  style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontSize: 14,
+                                                    fontFamily: 'Poppins',
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                              Text(
+                                                'Sign Up',
+                                                style: TextStyle(
+                                                  color: Colors.black.withOpacity(0.8),
+                                                  fontSize: 14,
+                                                  fontFamily: 'Poppins',
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -734,8 +972,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),

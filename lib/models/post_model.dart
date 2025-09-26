@@ -13,10 +13,12 @@ class Post {
   final List<String> imageUrls; // Support for multiple images
   final PostType type;
   final int likes;
+  final int likesCount; // Add likesCount property
   final int comments;
   final int shares;
   final bool isLiked;
   final bool isSaved;
+  final bool isFavourite; // Add isFavourite property
   final bool isFollowing;
   final String? music;
   final String? location;
@@ -38,10 +40,12 @@ class Post {
     this.imageUrls = const [],
     required this.type,
     this.likes = 0,
+    this.likesCount = 0,
     this.comments = 0,
     this.shares = 0,
     this.isLiked = false,
     this.isSaved = false,
+    this.isFavourite = false,
     this.isFollowing = false,
     this.music,
     this.location,
@@ -68,10 +72,12 @@ class Post {
         orElse: () => PostType.image,
       ),
       likes: json['likes'] ?? 0,
+      likesCount: json['likesCount'] ?? json['likes'] ?? 0,
       comments: json['comments'] ?? 0,
       shares: json['shares'] ?? 0,
       isLiked: json['isLiked'] ?? false,
       isSaved: json['isSaved'] ?? false,
+      isFavourite: json['isFavourite'] ?? false,
       isFollowing: json['isFollowing'] ?? false,
       music: json['music'],
       location: json['location'],
@@ -96,10 +102,12 @@ class Post {
       'imageUrls': imageUrls,
       'type': type.toString().split('.').last,
       'likes': likes,
+      'likesCount': likesCount,
       'comments': comments,
       'shares': shares,
       'isLiked': isLiked,
       'isSaved': isSaved,
+      'isFavourite': isFavourite,
       'isFollowing': isFollowing,
       'music': music,
       'location': location,
@@ -123,10 +131,12 @@ class Post {
     List<String>? imageUrls,
     PostType? type,
     int? likes,
+    int? likesCount,
     int? comments,
     int? shares,
     bool? isLiked,
     bool? isSaved,
+    bool? isFavourite,
     bool? isFollowing,
     String? music,
     String? location,
@@ -148,10 +158,12 @@ class Post {
       imageUrls: imageUrls ?? this.imageUrls,
       type: type ?? this.type,
       likes: likes ?? this.likes,
+      likesCount: likesCount ?? this.likesCount,
       comments: comments ?? this.comments,
       shares: shares ?? this.shares,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
+      isFavourite: isFavourite ?? this.isFavourite,
       isFollowing: isFollowing ?? this.isFollowing,
       music: music ?? this.music,
       location: location ?? this.location,

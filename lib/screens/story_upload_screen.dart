@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
+import '../widgets/video_player_widget.dart';
 import 'package:provider/provider.dart';
 import '../services/story_service.dart';
 import '../services/media_upload_service.dart';
@@ -26,13 +26,11 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
   String _mediaType = 'image';
   bool _isUploading = false;
   bool _isVideoInitialized = false;
-  VideoPlayerController? _videoController;
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _captionController = TextEditingController();
 
   @override
   void dispose() {
-    _videoController?.dispose();
     _captionController.dispose();
     super.dispose();
   }
@@ -57,7 +55,6 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
         }
           _mediaType = 'image';
         });
-        _disposeVideoController();
       }
     } catch (e) {
       _showErrorSnackBar('Error picking image: $e');
@@ -109,7 +106,6 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
           }
           _mediaType = 'image';
         });
-        _disposeVideoController();
       }
     } catch (e) {
       _showErrorSnackBar('Error taking photo: $e');
@@ -152,18 +148,10 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
         return;
       }
       
-      _videoController = VideoPlayerController.file(_selectedMedia!)
-        ..initialize().then((_) {
-          setState(() {
-            _isVideoInitialized = true;
-          });
-        });
+      setState(() {
+        _isVideoInitialized = true;
+      });
     }
-  }
-
-  void _disposeVideoController() {
-    _videoController?.dispose();
-    _videoController = null;
   }
 
   Future<void> _uploadStory() async {
@@ -311,28 +299,25 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
                                   width: double.infinity,
                                   height: double.infinity,
                                 )
-                          : _videoController?.value.isInitialized == true
+                          : _isVideoInitialized
                               ? Stack(
                                   alignment: Alignment.center,
                                   children: [
-                                    AspectRatio(
-                                      aspectRatio: _videoController!.value.aspectRatio,
-                                      child: VideoPlayer(_videoController!),
+                                    VideoPlayerWidget(
+                                      videoUrl: _selectedMedia is File 
+                                          ? _selectedMedia.path 
+                                          : _selectedMedia.path,
+                                      autoPlay: false,
+                                      looping: true,
+                                      muted: true,
                                     ),
                                     FloatingActionButton(
                                       onPressed: () {
-                                        setState(() {
-                                          if (_videoController!.value.isPlaying) {
-                                            _videoController!.pause();
-                                          } else {
-                                            _videoController!.play();
-                                          }
-                                        });
+                                        // Play/pause is handled by VideoPlayerWidget
+                                        setState(() {});
                                       },
-                                      child: Icon(
-                                        _videoController!.value.isPlaying
-                                            ? Icons.pause
-                                            : Icons.play_arrow,
+                                      child: const Icon(
+                                        Icons.play_arrow,
                                       ),
                                     ),
                                   ],

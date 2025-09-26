@@ -188,14 +188,30 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 ],
               ),
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _smallStat(icon: Icons.grid_on, value: '${user.postsCount}', label: 'Posts', color: Colors.blue.shade50),
-                  _smallStat(icon: Icons.slow_motion_video_outlined, value: '3', label: 'Reels', color: Colors.green.shade50),
-                  _smallStat(icon: Icons.groups_outlined, value: '${user.followersCount}', label: 'Followers', color: Colors.orange.shade50),
-                  _smallStat(icon: Icons.person_add_alt_1_outlined, value: '${user.followingCount}', label: 'Following', color: Colors.purple.shade50),
-                ],
+              FutureBuilder<UserMediaResponse>(
+                future: UserMediaService.getUserMedia(userId: user.id),
+                builder: (context, snapshot) {
+                  int postsCount = user.postsCount;
+                  int reelsCount = 0;
+                  
+                  if (snapshot.hasData && snapshot.data!.success) {
+                    postsCount = snapshot.data!.posts.length;
+                    reelsCount = snapshot.data!.reels.length;
+                  }
+                  
+                  return Row(
+                    children: [
+                      Expanded(child: _smallStat(icon: Icons.grid_on, value: postsCount.toString(), label: 'Posts', color: Colors.blue.shade50)),
+                      Expanded(child: _smallStat(icon: Icons.slow_motion_video_outlined, value: reelsCount.toString(), label: 'Reels', color: Colors.green.shade50)),
+                      Expanded(
+                        child: _buildFollowersStat(user),
+                      ),
+                      Expanded(
+                        child: _buildFollowingStat(user),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -233,7 +249,21 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         backgroundColor: Colors.white,
         backgroundImage: (imageUrl != null && imageUrl.isNotEmpty)
             ? NetworkImage(imageUrl)
-            : const NetworkImage('https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&q=80&auto=format&fit=crop'),
+            : null,
+        child: (imageUrl == null || imageUrl.isEmpty)
+            ? Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.grey.withOpacity(0.1),
+                      Colors.grey.withOpacity(0.3),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              )
+            : null,
       ),
     );
   }
@@ -267,29 +297,106 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     );
   }
 
-  Widget _smallStat({required IconData icon, required String value, required String label, required Color color}) {
+  Widget _smallStat({required IconData icon, required String value, required String label, required Color color, VoidCallback? onTap}) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 18),
-                const Spacer(),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(label, style: const TextStyle(fontSize: 12)),
-            ),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: color, 
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: onTap != null ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ] : null,
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 18),
+                  const Spacer(),
+                  Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(label, style: const TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFollowersStat(UserModel user) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Provider.of<AuthProvider>(context, listen: false).getFollowersForUser(user.id),
+      builder: (context, snapshot) {
+        int followersCount = user.followersCount; // Fallback to cached count
+        
+        if (snapshot.hasData) {
+          followersCount = snapshot.data!.length;
+          print('ProfileScreen: Real followers count: $followersCount');
+        }
+        
+        return _smallStat(
+          icon: Icons.groups_outlined, 
+          value: '$followersCount', 
+          label: 'Followers', 
+          color: Colors.orange.shade50,
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => FollowersScreen(userId: user.id),
+              ),
+            );
+            // Refresh user profile when returning
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            await authProvider.refreshUserProfile();
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildFollowingStat(UserModel user) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Provider.of<AuthProvider>(context, listen: false).getFollowingUsersForUser(user.id),
+      builder: (context, snapshot) {
+        int followingCount = user.followingCount; // Fallback to cached count
+        
+        if (snapshot.hasData) {
+          followingCount = snapshot.data!.length;
+          print('ProfileScreen: Real following count: $followingCount');
+        }
+        
+        return _smallStat(
+          icon: Icons.person_add_alt_1_outlined, 
+          value: '$followingCount', 
+          label: 'Following', 
+          color: Colors.purple.shade50,
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => FollowingScreen(userId: user.id),
+              ),
+            );
+            // Refresh user profile when returning
+            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+            await authProvider.refreshUserProfile();
+          },
+        );
+      },
     );
   }
 
@@ -482,6 +589,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   currentImageUrl: user.profileImageUrl,
                   userId: user.id,
                   token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+                  userName: user.fullName, // Pass user name for default avatar
                   onImageChanged: (String newImageUrl) async {
                     print('ProfileScreen: DP changed to: $newImageUrl');
                     // Update the user profile with new image URL
@@ -733,7 +841,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           label,
           style: const TextStyle(
             fontSize: 12,
-            color: Color(0xFF666666),
+            color: Colors.black,
             fontFamily: 'Poppins',
           ),
         ),
@@ -1350,8 +1458,8 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       ),
                     );
                     
-                    // Immediately redirect to signup page
-                    Navigator.of(context).pushNamedAndRemoveUntil('/signup', (route) => false);
+                    // Immediately redirect to login page
+                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
                     
                     // Logout in background (don't wait for it)
                     authProvider.logout().catchError((e) {

@@ -104,14 +104,14 @@ class _SearchScreenState extends State<SearchScreen> {
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(
                             Icons.arrow_back,
-                            color: Colors.white,
+                            color: Colors.black,
                           ),
                         ),
                         const SizedBox(width: 8),
                         const Text(
                           'Search Users',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w600,
                             fontSize: 20,
@@ -135,7 +135,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 color: Colors.white.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(25),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.orange.withOpacity(0.8),
                                   width: 1,
                                 ),
                                 boxShadow: [
@@ -151,18 +151,18 @@ class _SearchScreenState extends State<SearchScreen> {
                                 onSubmitted: _onSearchSubmitted,
                                 onChanged: _onSearchChanged,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Colors.black,
                                   fontFamily: 'Poppins',
                                 ),
                                 decoration: InputDecoration(
                                   hintText: 'Search for users...',
                                   hintStyle: const TextStyle(
-                                    color: Colors.white70,
+                                    color: Colors.black54,
                                     fontFamily: 'Poppins',
                                   ),
                                   prefixIcon: const Icon(
                                     Icons.search,
-                                    color: Colors.white,
+                                    color: Colors.black,
                                   ),
                                   suffixIcon: _searchController.text.isNotEmpty
                                       ? IconButton(
@@ -175,7 +175,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                           },
                                           icon: const Icon(
                                             Icons.clear,
-                                            color: Colors.white70,
+                                            color: Colors.black54,
                                           ),
                                         )
                                       : null,
@@ -225,7 +225,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Icon(
               Icons.search,
               size: 64,
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.black.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -233,7 +233,7 @@ class _SearchScreenState extends State<SearchScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: Colors.black,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -242,7 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
               'Enter a username or name to find other accounts',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.white70,
+                color: Colors.black54,
                 fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
@@ -260,7 +260,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Icon(
               Icons.person_off,
               size: 64,
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.black.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -268,7 +268,7 @@ class _SearchScreenState extends State<SearchScreen> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: Colors.black,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -277,7 +277,7 @@ class _SearchScreenState extends State<SearchScreen> {
               'No users found for "$_lastQuery"',
               style: const TextStyle(
                 fontSize: 14,
-                color: Colors.white70,
+                color: Colors.black54,
                 fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
@@ -361,7 +361,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: Colors.black,
                   fontFamily: 'Poppins',
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -372,7 +372,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 '@$username',
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Colors.white70,
+                  color: Colors.black54,
                   fontFamily: 'Poppins',
                 ),
               ),
@@ -387,7 +387,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 bio,
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Colors.white70,
+                  color: Colors.black54,
                   fontFamily: 'Poppins',
                 ),
                 maxLines: 2,
@@ -486,7 +486,7 @@ class _SearchScreenState extends State<SearchScreen> {
         return Icon(
           Icons.person,
           size: 30,
-          color: Colors.white,
+          color: Colors.black,
         );
       },
     );
@@ -500,7 +500,7 @@ class _SearchScreenState extends State<SearchScreen> {
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: Colors.black,
             fontFamily: 'Poppins',
           ),
         ),
@@ -508,7 +508,7 @@ class _SearchScreenState extends State<SearchScreen> {
           label,
           style: const TextStyle(
             fontSize: 12,
-            color: Colors.white70,
+            color: Colors.black54,
             fontFamily: 'Poppins',
           ),
         ),

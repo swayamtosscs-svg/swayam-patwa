@@ -193,9 +193,11 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
     try {
       return CachedNetworkImage(
         imageUrl: cleanUrl,
-        fit: BoxFit.fitWidth,
+        fit: BoxFit.cover, // Changed from fitWidth to cover to prevent stretching
         width: double.infinity,
+        height: widget.height, // Use the provided height
         placeholder: (context, url) => Container(
+          height: widget.height,
           color: Colors.grey[200],
           child: const Center(
             child: CircularProgressIndicator(
@@ -210,8 +212,9 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
           // Try fallback to Image.network
           return Image.network(
             cleanUrl,
-            fit: BoxFit.fitWidth,
+            fit: BoxFit.cover, // Changed from fitWidth to cover
             width: double.infinity,
+            height: widget.height,
             errorBuilder: (context, error, stackTrace) {
               return _buildErrorWidget('Failed to load image');
             },
@@ -225,11 +228,13 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
       // Fallback to regular Image.network
       return Image.network(
         cleanUrl,
-        fit: BoxFit.fitWidth,
+        fit: BoxFit.cover, // Changed from fitWidth to cover
         width: double.infinity,
+        height: widget.height,
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Container(
+            height: widget.height,
             color: Colors.grey[200],
             child: Center(
               child: CircularProgressIndicator(
@@ -254,6 +259,7 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
 
   Widget _buildErrorWidget(String message) {
     return Container(
+      height: widget.height,
       color: Colors.grey[200],
       child: Center(
         child: Column(

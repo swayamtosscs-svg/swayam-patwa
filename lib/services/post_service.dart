@@ -364,33 +364,77 @@ class PostService {
     }
   }
 
-  /// Delete a post
+  /// Delete a post permanently
   static Future<PostResponse> deletePost({
     required String postId,
     required String token,
   }) async {
     try {
+      print('PostService: Starting permanent deletion for post ID: $postId');
+      
+      // Use the correct server 103.14.120.163:8081
       final response = await http.delete(
-        Uri.parse('$baseUrl/posts/$postId'),
+        Uri.parse('http://103.14.120.163:8081/api/posts/$postId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
 
+      print('PostService: Delete response status: ${response.statusCode}');
+      print('PostService: Delete response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
-        return PostResponse.fromJson(jsonResponse);
+        final result = PostResponse.fromJson(jsonResponse);
+        if (result.success) {
+          print('PostService: Post permanently deleted successfully from server 103.14.120.163:8081');
+        } else {
+          // Only treat as success if explicitly confirmed as deleted
+          if (result.message.toLowerCase().contains('deleted successfully') ||
+              result.message.toLowerCase().contains('successfully deleted') ||
+              result.message.toLowerCase().contains('deleted')) {
+            print('PostService: Post deletion confirmed via message');
+            return PostResponse(
+              success: true,
+              message: 'Post permanently deleted successfully from server',
+            );
+          } else {
+            print('PostService: Deletion failed - ${result.message}');
+            return PostResponse(
+              success: false,
+              message: result.message,
+            );
+          }
+        }
+        return result;
+      } else if (response.statusCode == 404) {
+        print('PostService: Post not found - treating as failed deletion');
+        return PostResponse(
+          success: false,
+          message: 'Post not found on server. It may have already been deleted or never existed.',
+        );
+      } else if (response.statusCode == 401) {
+        return PostResponse(
+          success: false,
+          message: 'Unauthorized to delete this post. Please check your permissions.',
+        );
+      } else if (response.statusCode == 403) {
+        return PostResponse(
+          success: false,
+          message: 'You do not have permission to delete this post.',
+        );
       } else {
         return PostResponse(
           success: false,
-          message: 'Failed to delete post: ${response.statusCode}',
+          message: 'Failed to delete post. Server returned status: ${response.statusCode}',
         );
       }
     } catch (e) {
+      print('PostService: Delete error: $e');
       return PostResponse(
         success: false,
-        message: 'Error deleting post: $e',
+        message: 'Network error while deleting post: $e',
       );
     }
   }

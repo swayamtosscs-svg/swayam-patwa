@@ -5,6 +5,18 @@ import 'baba_page_dp_service.dart';
 
 class BabaPageService {
   static const String baseUrl = 'http://103.14.120.163:8081/api';
+  
+  // Simple in-memory cache
+  static Map<String, dynamic> _cache = {};
+  static DateTime? _lastCacheTime;
+  static const Duration _cacheTimeout = Duration(minutes: 3);
+  
+  /// Clear the cache (useful for refresh operations)
+  static void clearCache() {
+    _cache.clear();
+    _lastCacheTime = null;
+    print('BabaPageService: Cache cleared');
+  }
 
   /// Create a new Baba Ji page
   static Future<BabaPageResponse> createBabaPage({
@@ -94,6 +106,16 @@ class BabaPageService {
     try {
       print('BabaPageService: Fetching Baba Ji pages');
       
+      // Check cache for first page without search/filter
+      final cacheKey = 'baba_pages_${page}_${limit}_${search ?? ''}_${religion ?? ''}';
+      if (page == 1 && search == null && religion == null && 
+          _lastCacheTime != null && 
+          DateTime.now().difference(_lastCacheTime!) < _cacheTimeout &&
+          _cache.containsKey(cacheKey)) {
+        print('BabaPageService: Using cached data');
+        return BabaPageListResponse.fromJson(_cache[cacheKey]);
+      }
+      
       // Build query parameters
       final queryParams = <String, String>{
         'page': page.toString(),
@@ -127,6 +149,11 @@ class BabaPageService {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+          // Cache the response for first page without filters
+          if (page == 1 && search == null && religion == null) {
+            _cache[cacheKey] = jsonResponse;
+            _lastCacheTime = DateTime.now();
+          }
           return BabaPageListResponse.fromJson(jsonResponse);
         }
       }

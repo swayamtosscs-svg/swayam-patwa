@@ -8,6 +8,7 @@ import '../services/user_media_service.dart';
 import '../services/chat_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/post_full_view_screen.dart';
+import '../utils/avatar_utils.dart';
 import 'package:flutter/foundation.dart'; // Added for kDebugMode
 
 class UserProfileScreen extends StatefulWidget {
@@ -259,36 +260,24 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                   border: Border.all(color: const Color(0xFF4A2C2A), width: 2),
                 ),
                 child: ClipOval(
-                  child: widget.avatar.isNotEmpty
+                  child: widget.avatar.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.avatar)
                       ? Image.network(
-                          widget.avatar,
+                          AvatarUtils.getAbsoluteAvatarUrl(widget.avatar),
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    const Color(0xFF4A2C2A).withOpacity(0.1),
-                                    const Color(0xFF4A2C2A).withOpacity(0.3),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
+                            return AvatarUtils.buildDefaultAvatar(
+                              name: widget.fullName,
+                              size: 120,
+                              borderColor: const Color(0xFF4A2C2A),
+                              borderWidth: 2,
                             );
                           },
                         )
-                      : Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                const Color(0xFF4A2C2A).withOpacity(0.1),
-                                const Color(0xFF4A2C2A).withOpacity(0.3),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
+                      : AvatarUtils.buildDefaultAvatar(
+                          name: widget.fullName,
+                          size: 120,
+                          borderColor: const Color(0xFF4A2C2A),
+                          borderWidth: 2,
                         ),
                 ),
               ),
@@ -303,29 +292,33 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildStatColumn(_postsCount.toString(), 'posts'),
-                        _buildStatColumn(_reelsCount.toString(), 'reels'),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FollowersScreen(userId: widget.userId),
-                              ),
-                            );
-                          },
-                          child: _buildStatColumn(widget.followersCount.toString(), 'followers'),
+                        Expanded(child: _buildStatColumn(_postsCount.toString(), 'posts')),
+                        Expanded(child: _buildStatColumn(_reelsCount.toString(), 'reels')),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => FollowersScreen(userId: widget.userId),
+                                ),
+                              );
+                            },
+                            child: _buildStatColumn(widget.followersCount.toString(), 'followers'),
+                          ),
                         ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FollowingScreen(userId: widget.userId),
-                              ),
-                            );
-                          },
-                          child: _buildStatColumn(widget.followingCount.toString(), 'following'),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => FollowingScreen(userId: widget.userId),
+                                ),
+                              );
+                            },
+                            child: _buildStatColumn(widget.followingCount.toString(), 'following'),
+                          ),
                         ),
                       ],
                     ),
@@ -441,10 +434,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           CircleAvatar(
             radius: 50,
             backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
-            child: widget.avatar.isNotEmpty
+            child: widget.avatar.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.avatar)
                 ? ClipOval(
                     child: Image.network(
-                      widget.avatar,
+                      AvatarUtils.getAbsoluteAvatarUrl(widget.avatar),
                       width: 100,
                       height: 100,
                       fit: BoxFit.cover,
@@ -500,31 +493,35 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildStatItem('Posts', _isLoadingPosts ? '...' : _postsCount.toString()),
-              _buildStatItem('Reels', _isLoadingReels ? '...' : _reelsCount.toString()),
-              GestureDetector(
-                onTap: () {
-                  // Navigate to followers list for this user
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => FollowersScreen(userId: widget.userId),
-                    ),
-                  );
-                },
-                child: _buildStatItem('Followers', widget.followersCount.toString()),
+              Expanded(child: _buildStatItem('Posts', _isLoadingPosts ? '...' : _postsCount.toString())),
+              Expanded(child: _buildStatItem('Reels', _isLoadingReels ? '...' : _reelsCount.toString())),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    // Navigate to followers list for this user
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FollowersScreen(userId: widget.userId),
+                      ),
+                    );
+                  },
+                  child: _buildStatItem('Followers', widget.followersCount.toString()),
+                ),
               ),
-              GestureDetector(
-                onTap: () {
-                  // Navigate to following list for this user
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => FollowingScreen(userId: widget.userId),
-                    ),
-                  );
-                },
-                child: _buildStatItem('Following', widget.followingCount.toString()),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    // Navigate to following list for this user
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FollowingScreen(userId: widget.userId),
+                      ),
+                    );
+                  },
+                  child: _buildStatItem('Following', widget.followingCount.toString()),
+                ),
               ),
             ],
           ),
@@ -539,10 +536,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildDefaultAvatar() {
-    return const Icon(
-      Icons.person,
-      size: 40,
-      color: Color(0xFF6366F1),
+    return AvatarUtils.buildDefaultAvatar(
+      name: widget.fullName,
+      size: 100,
+      borderColor: const Color(0xFF6366F1),
+      borderWidth: 2,
     );
   }
 
@@ -563,7 +561,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           label,
           style: const TextStyle(
             fontSize: 12,
-            color: Color(0xFF999999),
+            color: Colors.black,
             fontFamily: 'Poppins',
           ),
         ),

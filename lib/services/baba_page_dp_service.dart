@@ -209,11 +209,18 @@ class BabaPageDPService {
           print('BabaPageDPService: Size: $size bytes');
           
           if (avatarUrl != null && avatarUrl.isNotEmpty) {
+            // Convert relative URL to absolute URL
+            String fullAvatarUrl = avatarUrl;
+            if (avatarUrl.startsWith('/')) {
+              // If it's a relative path, prepend the base URL
+              fullAvatarUrl = 'http://103.14.120.163:8081$avatarUrl';
+            }
+            
             return {
               'success': true,
               'message': 'Baba Ji page display picture uploaded successfully',
               'data': {
-                'avatarUrl': avatarUrl,
+                'avatarUrl': fullAvatarUrl,
                 'publicId': publicId,
                 'format': format,
                 'width': width,
@@ -348,13 +355,19 @@ class BabaPageDPService {
           print('BabaPageDPService: Has Avatar: $hasAvatar');
           print('BabaPageDPService: Followers Count: $followersCount');
           
+          // Convert relative URL to absolute URL if needed
+          String fullAvatarUrl = avatar ?? '';
+          if (avatar != null && avatar.isNotEmpty && avatar.startsWith('/')) {
+            fullAvatarUrl = 'http://103.14.120.163:8081$avatar';
+          }
+          
           return {
             'success': true,
             'message': 'Baba Ji page display picture retrieved successfully',
             'data': {
               'pageId': pageId,
               'pageName': pageName,
-              'avatar': avatar,
+              'avatar': fullAvatarUrl,
               'hasAvatar': hasAvatar,
               'followersCount': followersCount,
               'avatarInfo': avatarInfo,
@@ -680,11 +693,18 @@ class BabaPageDPService {
           print('BabaPageDPService: Avatar URL: $avatarUrl');
           
           if (avatarUrl != null && avatarUrl.isNotEmpty) {
+            // Convert relative URL to absolute URL
+            String fullAvatarUrl = avatarUrl;
+            if (avatarUrl.startsWith('/')) {
+              // If it's a relative path, prepend the base URL
+              fullAvatarUrl = 'http://103.14.120.163:8081$avatarUrl';
+            }
+            
             return {
               'success': true,
               'message': 'Baba Ji page display picture uploaded successfully',
               'data': {
-                'avatarUrl': avatarUrl,
+                'avatarUrl': fullAvatarUrl,
                 'publicId': publicId,
                 'format': format,
                 'width': width,

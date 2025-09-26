@@ -8,6 +8,15 @@ import 'baba_page_reel_service.dart';
 
 class FeedService {
   static const String _baseUrl = 'http://103.14.120.163:8081/api';
+  
+  // Cache for feed data
+  static List<Post> _cachedFeedPosts = [];
+  static DateTime? _lastFeedCacheTime;
+  static const Duration _cacheExpiry = Duration(minutes: 2); // Cache for 2 minutes
+  
+  // Cache for Baba Ji posts
+  static List<Post> _cachedBabaJiPosts = [];
+  static DateTime? _lastBabaJiCacheTime;
 
   /// Get feed posts from followed users using the working Home Feed API
   static Future<List<Post>> getFeedPosts({
@@ -412,7 +421,7 @@ class FeedService {
     }
   }
 
-  /// Get mixed feed content (posts and reels) from followed users
+  /// Get mixed feed content (posts and reels) from followed users - Ultra-optimized with caching
   static Future<List<Post>> getMixedFeed({
     required String token,
     required String currentUserId,
@@ -422,24 +431,37 @@ class FeedService {
     try {
       print('FeedService: Fetching mixed feed content for user: $currentUserId');
       
-      // Get posts from followed users using the home feed API
-      final userPosts = await getFeedPosts(
-        token: token,
-        currentUserId: currentUserId,
-        page: page,
-        limit: limit ~/ 2, // Half for user posts
-      );
+      // Check cache first for faster loading
+      if (_isCacheValid(_lastFeedCacheTime)) {
+        print('FeedService: Using cached feed data');
+        return _getCachedFeedPosts(page, limit);
+      }
+      
+      // Load user posts and Baba Ji posts in parallel for maximum speed
+      final futures = await Future.wait([
+        getFeedPosts(
+          token: token,
+          currentUserId: currentUserId,
+          page: page,
+          limit: limit ~/ 2, // Half for user posts
+        ),
+        getBabaJiPostsOptimized(
+          token: token,
+          page: page,
+          limit: limit ~/ 2, // Half for Baba Ji posts
+        ),
+      ]);
 
-      // Get Baba Ji posts
-      final babaJiPosts = await getBabaJiPosts(
-        token: token,
-        page: page,
-        limit: limit, // Get more Baba Ji posts
-      );
+      final userPosts = futures[0] as List<Post>;
+      final babaJiPosts = futures[1] as List<Post>;
 
       // Combine and sort all posts
       final List<Post> allPosts = [...userPosts, ...babaJiPosts];
       allPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      // Cache the results
+      _cachedFeedPosts = allPosts;
+      _lastFeedCacheTime = DateTime.now();
 
       // Apply final pagination
       final startIndex = (page - 1) * limit;
@@ -453,6 +475,134 @@ class FeedService {
       return paginatedPosts;
     } catch (e) {
       print('FeedService: Error creating mixed feed: $e');
+      // Return cached data if available, even if expired
+      if (_cachedFeedPosts.isNotEmpty) {
+        print('FeedService: Returning cached data due to error');
+        return _getCachedFeedPosts(page, limit);
+      }
+      return [];
+    }
+  }
+
+  /// Check if cache is still valid
+  static bool _isCacheValid(DateTime? cacheTime) {
+    if (cacheTime == null) return false;
+    return DateTime.now().difference(cacheTime) < _cacheExpiry;
+  }
+
+  /// Get cached feed posts with pagination
+  static List<Post> _getCachedFeedPosts(int page, int limit) {
+    final startIndex = (page - 1) * limit;
+    final endIndex = startIndex + limit;
+    return _cachedFeedPosts.sublist(
+      startIndex < _cachedFeedPosts.length ? startIndex : 0,
+      endIndex < _cachedFeedPosts.length ? endIndex : _cachedFeedPosts.length,
+    );
+  }
+
+  /// Clear cache (call when user posts new content)
+  static void clearCache() {
+    _cachedFeedPosts.clear();
+    _cachedBabaJiPosts.clear();
+    _lastFeedCacheTime = null;
+    _lastBabaJiCacheTime = null;
+    print('FeedService: Cache cleared');
+  }
+
+  /// Ultra-optimized Baba Ji posts loading
+  static Future<List<Post>> getBabaJiPostsOptimized({
+    required String token,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    try {
+      print('FeedService: Fetching Baba Ji posts (optimized)');
+      
+      // Get limited Baba Ji pages for faster loading
+      final babaPagesResponse = await http.get(
+        Uri.parse('http://103.14.120.163:8081/api/baba-pages?page=1&limit=5'), // Reduced from 50
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (babaPagesResponse.statusCode != 200) {
+        print('FeedService: Failed to get Baba Ji pages: ${babaPagesResponse.statusCode}');
+        return [];
+      }
+
+      final babaPagesJson = jsonDecode(babaPagesResponse.body);
+      if (babaPagesJson['success'] != true) {
+        print('FeedService: Failed to get Baba Ji pages: ${babaPagesJson['message']}');
+        return [];
+      }
+
+      final List<dynamic> babaPages = babaPagesJson['data']['pages'] ?? [];
+      print('FeedService: Found ${babaPages.length} Baba Ji pages');
+
+      final List<Post> allBabaPosts = [];
+
+      // Get posts from each Baba Ji page in parallel
+      final postFutures = babaPages.map((babaPage) async {
+        final babaPageId = babaPage['_id'] ?? babaPage['id'];
+        if (babaPageId != null) {
+          try {
+            final postsResponse = await BabaPagePostService.getBabaPagePosts(
+              babaPageId: babaPageId,
+              token: token,
+              page: 1,
+              limit: 3, // Reduced limit for faster loading
+            );
+
+            if (postsResponse.success) {
+              final List<Post> posts = [];
+              for (final babaPost in postsResponse.posts) {
+                final imageUrls = babaPost.media.map((media) => media.url).toList();
+                final post = Post(
+                  id: 'baba_${babaPost.id}',
+                  userId: babaPost.babaPageId,
+                  username: babaPage['name'] ?? 'Baba Ji',
+                  userAvatar: babaPage['avatar'] ?? '',
+                  caption: babaPost.content,
+                  imageUrl: babaPost.media.isNotEmpty ? babaPost.media.first.url : null,
+                  imageUrls: imageUrls,
+                  videoUrl: null,
+                  type: PostType.image,
+                  likes: babaPost.likesCount,
+                  comments: babaPost.commentsCount,
+                  shares: babaPost.sharesCount,
+                  isLiked: false,
+                  createdAt: babaPost.createdAt,
+                  hashtags: [],
+                  thumbnailUrl: null,
+                  isBabaJiPost: true,
+                  babaPageId: babaPost.babaPageId,
+                );
+                posts.add(post);
+              }
+              return posts;
+            }
+          } catch (e) {
+            print('FeedService: Error getting posts from Baba Ji page $babaPageId: $e');
+          }
+        }
+        return <Post>[];
+      });
+
+      // Wait for all post loading to complete in parallel
+      final postResults = await Future.wait(postFutures);
+      for (final posts in postResults) {
+        allBabaPosts.addAll(posts);
+      }
+
+      // Sort by creation date (newest first)
+      allBabaPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      print('FeedService: Found ${allBabaPosts.length} Baba Ji posts (optimized)');
+      return allBabaPosts;
+    } catch (e) {
+      print('FeedService: Error getting Baba Ji posts (optimized): $e');
       return [];
     }
   }

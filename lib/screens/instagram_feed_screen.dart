@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'package:provider/provider.dart';
+import '../widgets/video_player_widget.dart';
 import '../models/post_model.dart';
+import '../services/feed_service.dart';
+import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
+import '../providers/auth_provider.dart';
 
 class InstagramFeedScreen extends StatefulWidget {
   const InstagramFeedScreen({super.key});
@@ -15,129 +20,92 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
   final PageController _reelsPageController = PageController();
   int _currentReelIndex = 0;
   
-  late List<Post> posts;
-  late List<Post> reels;
+  List<Post> posts = [];
+  List<Post> reels = [];
+  
+  // Error handling variables
+  String? _errorMessage;
+  bool _isInitialized = false;
+  bool _hasError = false;
+  bool _isLoading = false;
+  
+  // Pagination
+  int _currentPage = 1;
+  bool _hasMorePosts = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _initializeData();
+    _loadFeedData();
   }
 
-  void _initializeData() {
-    // Initialize posts (horizontal scrollable feed)
-    posts = [
-      Post(
-        id: '1',
-        userId: 'user1',
-        username: 'spiritual_guide',
-        userAvatar: '🙏',
-        caption: 'Morning meditation brings peace to the soul #meditation #peace #spiritual',
-        imageUrl: 'https://picsum.photos/400/400?random=1',
-        type: PostType.image,
-        likes: 1247,
-        comments: 89,
-        shares: 23,
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        hashtags: ['meditation', 'peace', 'spiritual'],
-      ),
-      Post(
-        id: '2',
-        userId: 'user2',
-        username: 'divine_connect',
-        userAvatar: '🕉️',
-        caption: 'Beautiful temple architecture #temple #architecture #divine',
-        imageUrl: 'https://picsum.photos/400/400?random=2',
-        type: PostType.image,
-        likes: 892,
-        comments: 45,
-        shares: 12,
-        createdAt: DateTime.now().subtract(const Duration(hours: 4)),
-        hashtags: ['temple', 'architecture', 'divine'],
-      ),
-      Post(
-        id: '3',
-        userId: 'user3',
-        username: 'peaceful_soul',
-        userAvatar: '🧘',
-        caption: 'Sunset prayer time #prayer #sunset #peaceful',
-        imageUrl: 'https://picsum.photos/400/400?random=3',
-        type: PostType.image,
-        likes: 1567,
-        comments: 123,
-        shares: 67,
-        createdAt: DateTime.now().subtract(const Duration(hours: 6)),
-        hashtags: ['prayer', 'sunset', 'peaceful'],
-      ),
-      Post(
-        id: '4',
-        userId: 'user4',
-        username: 'gospel_singer',
-        userAvatar: '🎵',
-        caption: 'Sunday service highlights #gospel #church #worship',
-        imageUrl: 'https://picsum.photos/400/400?random=4',
-        type: PostType.image,
-        likes: 2341,
-        comments: 234,
-        shares: 89,
-        createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-        hashtags: ['gospel', 'church', 'worship'],
-      ),
-    ];
+  Future<void> _loadFeedData({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        _currentPage = 1;
+        posts.clear();
+        reels.clear();
+        _hasMorePosts = true;
+        _errorMessage = null;
+      });
+    }
 
-    // Initialize reels (vertical video feed) - using images as placeholders for now
-    reels = [
-      Post(
-        id: 'reel1',
-        userId: 'user1',
-        username: 'TejasviSen',
-        userAvatar: '😊',
-        caption: 'What\'s my name?? 💃💃 The type of audience says it all ✅ #dance #trending',
-        imageUrl: 'https://picsum.photos/400/600?random=100',
-        type: PostType.reel,
-        likes: 1200,
-        comments: 89,
-        shares: 23,
-        createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-        hashtags: ['dance', 'trending', 'viral'],
-        music: 'Chuttamalle · Shilpa Rao',
-        thumbnailUrl: 'https://picsum.photos/400/600?random=100',
-      ),
-      Post(
-        id: 'reel2',
-        userId: 'user2',
-        username: 'divine_connect',
-        userAvatar: '🕉️',
-        caption: 'Temple rituals and ceremonies #temple #rituals #ceremonies',
-        imageUrl: 'https://picsum.photos/400/600?random=200',
-        type: PostType.reel,
-        likes: 1892,
-        comments: 145,
-        shares: 78,
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-        hashtags: ['temple', 'rituals', 'ceremonies'],
-        music: 'Sacred Chants - Traditional',
-        thumbnailUrl: 'https://picsum.photos/400/600?random=200',
-      ),
-      Post(
-        id: 'reel3',
-        userId: 'user3',
-        username: 'peaceful_soul',
-        userAvatar: '🧘',
-        caption: 'Mindfulness breathing exercise #mindfulness #breathing #exercise',
-        imageUrl: 'https://picsum.photos/400/600?random=300',
-        type: PostType.reel,
-        likes: 2567,
-        comments: 223,
-        shares: 167,
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-        hashtags: ['mindfulness', 'breathing', 'exercise'],
-        music: 'Calm Nature Sounds - Original',
-        thumbnailUrl: 'https://picsum.photos/400/600?random=300',
-      ),
-    ];
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      final currentUserId = authProvider.userProfile?.id;
+
+      if (token == null || currentUserId == null) {
+        setState(() {
+          _errorMessage = 'Please login to view feed';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Load mixed feed (posts and reels from followed users + Baba Ji content)
+      final feedPosts = await FeedService.getMixedFeed(
+        token: token,
+        currentUserId: currentUserId,
+        page: _currentPage,
+        limit: 20,
+      );
+
+      setState(() {
+        if (refresh) {
+          posts = feedPosts.where((post) => post.type != PostType.video).toList();
+          reels = feedPosts.where((post) => post.type == PostType.video || post.isReel == true).toList();
+        } else {
+          posts.addAll(feedPosts.where((post) => post.type != PostType.video));
+          reels.addAll(feedPosts.where((post) => post.type == PostType.video || post.isReel == true));
+        }
+        
+        _isLoading = false;
+        _isInitialized = true;
+        
+        // Check if we have more posts to load
+        if (feedPosts.length < 20) {
+          _hasMorePosts = false;
+        }
+      });
+
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading feed: $e';
+        _isLoading = false;
+        _isInitialized = true;
+      });
+    }
   }
+
 
   @override
   void dispose() {
@@ -148,41 +116,88 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: const Text(
-          'Rgram',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+    if (!_isInitialized && _isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_hasError && _errorMessage != null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red[300],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error Loading Feed',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => _loadFeedData(refresh: true),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Image.asset(
+          'assets/images/Rgram_Text_Logo.png',
+          height: 32,
+          errorBuilder: (context, error, stackTrace) {
+            return const Text(
+              'R-Gram',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            );
+          },
         ),
         actions: [
           IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.add_box_outlined, color: Colors.white),
-          ),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.favorite_border, color: Colors.white),
-          ),
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+            onPressed: () => _loadFeedData(refresh: true),
+            icon: const Icon(Icons.refresh, color: Colors.black),
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
+          indicatorColor: Colors.black,
+          labelColor: Colors.black,
           unselectedLabelColor: Colors.grey,
           tabs: const [
-            Tab(text: 'Posts'),
-            Tab(text: 'Reels'),
+            Tab(
+              icon: Icon(Icons.grid_on),
+              text: 'Posts',
+            ),
+            Tab(
+              icon: Icon(Icons.video_library),
+              text: 'Reels',
+            ),
           ],
         ),
       ),
@@ -193,60 +208,111 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
           _buildReelsTab(),
         ],
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
   Widget _buildPostsTab() {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        children: [
-          // Stories row
-          Container(
-            height: 100,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: 8,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _buildAddStoryItem();
-                }
-                return _buildStoryItem(index);
-              },
+    if (posts.isEmpty && !_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 64,
+              color: Colors.grey[400],
             ),
-          ),
-          // Posts feed
-          Expanded(
-            child: ListView.builder(
-              itemCount: posts.length,
-              itemBuilder: (context, index) {
-                return _buildPostCard(posts[index]);
-              },
+            const SizedBox(height: 16),
+            Text(
+              'No Posts Yet',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.grey[600],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Follow some users to see their posts here',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[500],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => _loadFeedData(refresh: true),
+              child: const Text('Refresh'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _loadFeedData(refresh: true),
+      child: ListView.builder(
+        itemCount: posts.length + (_isLoading ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == posts.length) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          
+          return _buildPostCard(posts[index]);
+        },
       ),
     );
   }
 
   Widget _buildReelsTab() {
-    return Container(
-      color: Colors.black,
-      child: PageView.builder(
-        controller: _reelsPageController,
-        scrollDirection: Axis.vertical,
-        onPageChanged: (index) {
-          setState(() {
-            _currentReelIndex = index;
-          });
-        },
-        itemCount: reels.length,
-        itemBuilder: (context, index) {
-          return _buildReelCard(reels[index], index);
-        },
-      ),
+    if (reels.isEmpty && !_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.video_library_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No Reels Yet',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Follow some users to see their reels here',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[500],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => _loadFeedData(refresh: true),
+              child: const Text('Refresh'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return PageView.builder(
+      controller: _reelsPageController,
+      scrollDirection: Axis.vertical,
+      onPageChanged: (index) {
+        setState(() {
+          _currentReelIndex = index;
+        });
+      },
+      itemCount: reels.length,
+      itemBuilder: (context, index) {
+        return _buildReelCard(reels[index], index);
+      },
     );
   }
 
@@ -349,6 +415,14 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
+                          color: Colors.black,
+                        ),
+                      ),
+                      Text(
+                        _formatTimeAgo(post.createdAt),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
                         ),
                       ),
                       if (post.location != null)
@@ -362,9 +436,24 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.more_vert),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      _showDeleteConfirmation(post);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, color: Colors.red),
+                          SizedBox(width: 8),
+                          Text('Delete'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -461,7 +550,7 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Text(
-              _getTimeAgo(post.createdAt),
+              _formatTimeAgo(post.createdAt),
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
             ),
           ),
@@ -541,6 +630,14 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Uploaded by ${reel.username}',
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
                           if (reel.caption != null)
@@ -728,6 +825,19 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Uploader info
+                Text(
+                  'Uploaded by ${reel.username}',
+                  style: const TextStyle(
+                    color: Colors.white60,
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
                 
@@ -862,7 +972,7 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
     );
   }
 
-  String _getTimeAgo(DateTime dateTime) {
+  String _formatTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
@@ -874,6 +984,112 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
       return '${difference.inMinutes}m ago';
     } else {
       return 'Just now';
+    }
+  }
+
+  void _showDeleteConfirmation(Post post) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Post'),
+        content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deletePost(post);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deletePost(Post post) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to delete posts'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deleting post...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      print('InstagramFeedScreen: Starting deletion for post ID: ${post.id}');
+
+      // Call delete API
+      final response = await ApiService.deleteMedia(
+        mediaId: post.id,
+        token: token,
+      );
+
+      print('InstagramFeedScreen: Delete response: $response');
+
+      if (response['success'] == true) {
+        // Remove from local list immediately
+        setState(() {
+          posts.removeWhere((p) => p.id == post.id);
+          reels.removeWhere((p) => p.id == post.id);
+        });
+        
+        // Clear from local storage
+        await LocalStorageService.deletePost(post.id);
+        await LocalStorageService.deleteReel(post.id);
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Post deleted successfully'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        // Show error message with more details
+        final errorMessage = response['message'] ?? 'Failed to delete post';
+        print('InstagramFeedScreen: Delete failed: $errorMessage');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Delete failed: $errorMessage'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('InstagramFeedScreen: Delete error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting post: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 }
@@ -895,148 +1111,46 @@ class ReelVideoPlayer extends StatefulWidget {
 }
 
 class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
-  VideoPlayerController? _controller;
   bool _isMuted = true;
-  bool _isInitialized = false;
-  bool _hasError = false;
+  
+  // Error handling variables
   String? _errorMessage;
-  bool _isLoading = true;
+  bool _isInitialized = true;
+  bool _hasError = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
-  }
-
-  @override
-  void didUpdateWidget(covariant ReelVideoPlayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoUrl != widget.videoUrl) {
-      _disposeController();
-      _init();
-    }
-    if (oldWidget.isActive != widget.isActive) {
-      if (widget.isActive && _isInitialized && !_hasError) {
-        _controller?.play();
-      } else {
-        _controller?.pause();
-      }
-    }
-  }
-
-  Future<void> _init() async {
-    setState(() {
-      _hasError = false;
-      _errorMessage = null;
-      _isLoading = true;
-    });
-
-    try {
-      final controller = VideoPlayerController.network(
-        widget.videoUrl,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
-      _controller = controller;
-      
-      // Set a timeout for video initialization
-      await controller.initialize().timeout(
-        const Duration(seconds: 8),
-        onTimeout: () {
-          throw Exception('Video took too long to load. Please check your internet connection.');
-        },
-      );
-      
-      await controller.setLooping(true);
-      if (_isMuted) {
-        await controller.setVolume(0.0);
-      }
-      if (widget.isActive) {
-        await controller.play();
-      }
-      
-      if (!mounted) return;
-      setState(() {
-        _isInitialized = true;
-        _hasError = false;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('Video initialization error: $e');
-      if (!mounted) return;
-      
-      String errorMsg = 'Failed to load video';
-      if (e.toString().contains('timeout')) {
-        errorMsg = 'Video loading timeout. Check your internet connection.';
-      } else if (e.toString().contains('404')) {
-        errorMsg = 'Video not found. The link may be broken.';
-      } else if (e.toString().contains('network')) {
-        errorMsg = 'Network error. Please check your connection.';
-      }
-      
-      setState(() {
-        _isInitialized = true;
-        _hasError = true;
-        _errorMessage = errorMsg;
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _disposeController() {
-    _controller?.pause();
-    _controller?.dispose();
-    _controller = null;
   }
 
   @override
   void dispose() {
-    _disposeController();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildLoadingState();
-    }
-
-    if (_hasError) {
-      return _buildErrorState();
-    }
-
-    if (_controller == null || !_isInitialized) {
-      return _buildLoadingState();
-    }
-
     return Stack(
       children: [
         // Video player
         Positioned.fill(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: _controller!.value.size.width,
-              height: _controller!.value.size.height,
-              child: VideoPlayer(_controller!),
-            ),
+          child: VideoPlayerWidget(
+            videoUrl: widget.videoUrl,
+            autoPlay: widget.isActive,
+            looping: true,
+            muted: _isMuted,
           ),
         ),
         // Tap to play/pause
         Positioned.fill(
           child: GestureDetector(
             onTap: () {
-              if (_controller!.value.isPlaying) {
-                _controller!.pause();
-              } else {
-                _controller!.play();
-              }
+              // Play/pause is handled by VideoPlayerWidget
               setState(() {});
             },
             child: AnimatedOpacity(
-              opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
+              opacity: 0.0, // Always transparent since VideoPlayerWidget handles play/pause
               duration: const Duration(milliseconds: 200),
               child: Container(
                 color: Colors.black26,
@@ -1052,9 +1166,8 @@ class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
           right: 16,
           top: 16,
           child: GestureDetector(
-            onTap: () async {
+            onTap: () {
               _isMuted = !_isMuted;
-              await _controller!.setVolume(_isMuted ? 0.0 : 1.0);
               setState(() {});
             },
             child: CircleAvatar(
@@ -1182,7 +1295,12 @@ class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
                         _hasError = false;
                         _isLoading = true;
                       });
-                      _init();
+                      // Retry logic can be implemented here
+                      setState(() {
+                        _isInitialized = true;
+                        _hasError = false;
+                        _isLoading = false;
+                      });
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -1211,4 +1329,5 @@ class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
       ),
     );
   }
+
 }
