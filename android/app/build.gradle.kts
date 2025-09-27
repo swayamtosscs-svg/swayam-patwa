@@ -46,16 +46,29 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
             
-            // Memory optimization for release builds
+            // Maximum compression for release builds
             isMinifyEnabled = true
             isShrinkResources = true
+            isZipAlignEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            
+            // Additional compression optimizations
+            ndk {
+                debugSymbolLevel = "NONE"
+            }
+            
+            // Enable all optimizations
+            buildConfigField("boolean", "ENABLE_VIDEO_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_CAMERA_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_STORY_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_CALL_FEATURES", "true")
         }
         debug {
-            // Balanced debug build with all features enabled
+            // Compressed debug build with all features enabled
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = true
+            isZipAlignEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             
             // Additional optimizations for debug APK
@@ -63,22 +76,21 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             
-            // Size optimizations
+            // Maximum size optimizations
             ndk {
                 debugSymbolLevel = "NONE"
             }
             
             // Additional size optimizations for debug APK
-            isZipAlignEnabled = true
             isJniDebuggable = false
             
-            // Balanced size optimization for debug APK
+            // Universal APK for maximum compatibility
             splits {
                 abi {
                     isEnable = true
                     reset()
                     include("arm64-v8a", "armeabi-v7a") // Include both ARM architectures
-                    isUniversalApk = false
+                    isUniversalApk = true // Create universal APK
                 }
             }
             
@@ -91,6 +103,7 @@ android {
             buildConfigField("boolean", "ENABLE_VIDEO_FEATURES", "true")
             buildConfigField("boolean", "ENABLE_CAMERA_FEATURES", "true")
             buildConfigField("boolean", "ENABLE_STORY_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_CALL_FEATURES", "true")
         }
     }
     

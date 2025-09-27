@@ -370,13 +370,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                 ],
               ),
             )
-          : Column(
-              children: [
-                // Camera Preview
-                if (_isInitialized && _cameraController != null)
-                  Expanded(
-                    flex: 3,
-                    child: Container(
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  // Camera Preview
+                  if (_isInitialized && _cameraController != null)
+                    Container(
+                      height: MediaQuery.of(context).size.height * 0.4,
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.black,
@@ -387,12 +387,10 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                         borderRadius: BorderRadius.circular(12),
                         child: CameraPreview(_cameraController!),
                       ),
-                    ),
-                  )
-                else
-                  Expanded(
-                    flex: 3,
-                    child: Container(
+                    )
+                  else
+                    Container(
+                      height: MediaQuery.of(context).size.height * 0.4,
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.grey[300],
@@ -421,12 +419,9 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                         ),
                       ),
                     ),
-                  ),
 
-                // Controls
-                Expanded(
-                  flex: 2,
-                  child: Container(
+                  // Controls
+                  Container(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
@@ -702,8 +697,8 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
     );
   }

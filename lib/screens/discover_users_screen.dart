@@ -405,8 +405,24 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildStatItem('Posts', postsCount.toString(), Icons.photo_library),
-                _buildStatItem('Followers', followersCount.toString(), Icons.people),
-                _buildStatItem('Following', followingCount.toString(), Icons.person_add),
+                FutureBuilder<Map<String, int>>(
+                  future: userId.isNotEmpty ? Provider.of<AuthProvider>(context, listen: false).getUserCounts(userId) : Future.value({'followers': 0, 'following': 0}),
+                  builder: (context, snapshot) {
+                    int realFollowersCount = followersCount;
+                    int realFollowingCount = followingCount;
+                    if (snapshot.hasData && userId.isNotEmpty) {
+                      realFollowersCount = snapshot.data!['followers'] ?? followersCount;
+                      realFollowingCount = snapshot.data!['following'] ?? followingCount;
+                    }
+                    return Row(
+                      children: [
+                        _buildStatItem('Followers', realFollowersCount.toString(), Icons.people),
+                        const SizedBox(width: 16),
+                        _buildStatItem('Following', realFollowingCount.toString(), Icons.person_add),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ],

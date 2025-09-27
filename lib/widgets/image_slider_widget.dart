@@ -220,8 +220,13 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
             },
           );
         },
-        memCacheWidth: 800, // Optimize memory usage
-        memCacheHeight: 600,
+        memCacheWidth: 1200, // Increased for better quality
+        memCacheHeight: 800, // Increased for better quality
+        maxWidthDiskCache: 1200, // Optimize disk cache
+        maxHeightDiskCache: 800,
+        fadeInDuration: const Duration(milliseconds: 150), // Faster fade in
+        fadeOutDuration: const Duration(milliseconds: 100),
+        useOldImageOnUrlChange: true, // Better performance
       );
     } catch (e) {
       print('ImageSliderWidget: CachedNetworkImage exception: $e');

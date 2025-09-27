@@ -48,6 +48,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   bool _isLoadingReels = false;
   bool _isFollowing = false;
   bool _isLoadingFollowRequest = false;
+  int _realFollowersCount = 0;
+  int _realFollowingCount = 0;
+  bool _isLoadingFollowers = false;
+  bool _isLoadingFollowing = false;
 
   String get _targetUserId => widget.userId;
 
@@ -57,6 +61,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     _tabController = TabController(length: 3, vsync: this);
     _loadUserMedia();
     _checkFollowingStatus();
+    _loadRealCounts();
   }
 
   @override
@@ -78,6 +83,38 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       }
     } catch (e) {
       print('Error checking following status: $e');
+    }
+  }
+
+  /// Load real followers and following counts from API
+  Future<void> _loadRealCounts() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      setState(() {
+        _isLoadingFollowers = true;
+        _isLoadingFollowing = true;
+      });
+
+      // Load both counts in a single optimized call
+      final counts = await authProvider.getUserCounts(widget.userId);
+      
+      if (mounted) {
+        setState(() {
+          _realFollowersCount = counts['followers'] ?? 0;
+          _realFollowingCount = counts['following'] ?? 0;
+          _isLoadingFollowers = false;
+          _isLoadingFollowing = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading real counts: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingFollowers = false;
+          _isLoadingFollowing = false;
+        });
+      }
     }
   }
 
@@ -304,7 +341,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                 ),
                               );
                             },
-                            child: _buildStatColumn(widget.followersCount.toString(), 'followers'),
+                            child: _buildStatColumn(
+                              _isLoadingFollowers ? '...' : _realFollowersCount.toString(), 
+                              'followers'
+                            ),
                           ),
                         ),
                         Expanded(
@@ -317,7 +357,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                                 ),
                               );
                             },
-                            child: _buildStatColumn(widget.followingCount.toString(), 'following'),
+                            child: _buildStatColumn(
+                              _isLoadingFollowing ? '...' : _realFollowingCount.toString(), 
+                              'following'
+                            ),
                           ),
                         ),
                       ],
@@ -506,7 +549,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                     );
                   },
-                  child: _buildStatItem('Followers', widget.followersCount.toString()),
+                  child: _buildStatItem('Followers', _isLoadingFollowers ? '...' : _realFollowersCount.toString()),
                 ),
               ),
               Expanded(
@@ -520,7 +563,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                       ),
                     );
                   },
-                  child: _buildStatItem('Following', widget.followingCount.toString()),
+                  child: _buildStatItem('Following', _isLoadingFollowing ? '...' : _realFollowingCount.toString()),
                 ),
               ),
             ],
@@ -599,6 +642,9 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               
               // Refresh the following status to ensure consistency
               await _checkFollowingStatus();
+              
+              // Refresh real counts after follow/unfollow action
+              await _loadRealCounts();
             }
             
             ScaffoldMessenger.of(context).showSnackBar(
@@ -903,10 +949,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     return GestureDetector(
       onTap: () {
         // Navigate to reel full view
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Viewing reel by ${reel.username}'),
-            backgroundColor: const Color(0xFF6366F1),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostFullViewScreen(post: reel),
           ),
         );
       },

@@ -16,6 +16,7 @@ import '../widgets/in_app_video_widget.dart';
 import '../widgets/single_video_widget.dart';
 import '../widgets/app_loader.dart';
 import '../widgets/image_slider_widget.dart';
+import '../widgets/skeleton_loader.dart';
 import '../utils/app_theme.dart';
 import '../utils/font_theme.dart';
 import '../screens/story_upload_screen.dart';
@@ -37,6 +38,7 @@ import '../screens/user_profile_screen.dart'; // Added import for UserProfileScr
 import '../screens/chat_list_screen.dart'; // Added import for ChatListScreen
 import '../screens/chat_screen.dart'; // Added import for ChatScreen
 import '../services/post_service.dart'; // Added import for PostService
+import '../services/baba_page_story_service.dart'; // Added import for BabaPageStoryService
 import '../screens/discover_users_screen.dart'; // Added import for DiscoverUsersScreen
 import '../screens/notifications_screen.dart'; // Added import for NotificationsScreen
 import '../utils/performance_test.dart';
@@ -468,6 +470,27 @@ class _HomeScreenState extends State<HomeScreen> {
             // Fallback: if we can't get followed users, just show current user's stories
           }
           
+          // Load Babaji stories for home page
+          try {
+            print('Loading Babaji stories for home page...');
+            final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
+              token: authProvider.authToken,
+              page: 1,
+              limit: 10,
+            );
+            print('Loaded ${babajiStories.length} Babaji stories');
+            
+            if (babajiStories.isNotEmpty) {
+              allStories.addAll(babajiStories);
+              print('Added ${babajiStories.length} Babaji stories to home page');
+            } else {
+              print('No Babaji stories found');
+            }
+          } catch (e) {
+            print('Error loading Babaji stories: $e');
+            // Continue without Babaji stories if there's an error
+          }
+          
         } catch (e) {
           print('Error loading stories from story API: $e');
         }
@@ -475,6 +498,24 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // Remove local stories fallback - only show real stories from server
       // This prevents showing old/stale local stories when user has no real stories
+      
+      // If no stories were loaded, try to load at least Babaji stories as fallback
+      if (allStories.isEmpty) {
+        print('No stories loaded, trying Babaji stories as fallback...');
+        try {
+          final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
+            token: authProvider.authToken,
+            page: 1,
+            limit: 10,
+          );
+          if (babajiStories.isNotEmpty) {
+            allStories.addAll(babajiStories);
+            print('Added ${babajiStories.length} Babaji stories as fallback');
+          }
+        } catch (e) {
+          print('Error loading Babaji stories as fallback: $e');
+        }
+      }
       
       // Sort stories by creation date (newest first) - only if we have stories
       if (allStories.isNotEmpty) {
@@ -713,7 +754,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             // Show single loader for any loading state - Fixed to prevent infinite loading
-            if (authProvider.userProfile == null || _isRefreshing || (_isLoadingStories && _stories.isEmpty)) {
+            if (authProvider.userProfile == null || _isRefreshing) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1144,6 +1185,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final fullName = userData['fullName'] ?? 'No Name';
         final bio = userData['bio'] ?? '';
         final avatar = userData['avatar'] ?? '';
+        final userId = userData['id'] ?? userData['_id'] ?? '';
         final followersCount = userData['followersCount'] ?? 0;
         final followingCount = userData['followingCount'] ?? 0;
         final postsCount = userData['postsCount'] ?? 0;
@@ -1228,9 +1270,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _buildStatItem('Posts', postsCount.toString()),
                     const SizedBox(width: 16),
-                    _buildStatItem('Followers', followersCount.toString()),
-                    const SizedBox(width: 16),
-                    _buildStatItem('Following', followingCount.toString()),
+                    FutureBuilder<Map<String, int>>(
+                      future: userId.isNotEmpty ? Provider.of<AuthProvider>(context, listen: false).getUserCounts(userId) : Future.value({'followers': 0, 'following': 0}),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Row(
+                            children: [
+                              SkeletonStatItem(width: 50, height: 20),
+                              const SizedBox(width: 16),
+                              SkeletonStatItem(width: 50, height: 20),
+                            ],
+                          );
+                        }
+                        
+                        int realFollowersCount = followersCount;
+                        int realFollowingCount = followingCount;
+                        if (snapshot.hasData && userId.isNotEmpty) {
+                          realFollowersCount = snapshot.data!['followers'] ?? followersCount;
+                          realFollowingCount = snapshot.data!['following'] ?? followingCount;
+                        }
+                        return Row(
+                          children: [
+                            _buildStatItem('Followers', realFollowersCount.toString()),
+                            const SizedBox(width: 16),
+                            _buildStatItem('Following', realFollowingCount.toString()),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
                 
@@ -1458,86 +1525,102 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Show stories or simple add story option
-            if (_groupedStories.isEmpty)
-              // Simple add story state
+            // Show loading indicator if stories are loading
+            if (_isLoadingStories && _groupedStories.isEmpty)
               Container(
                 height: 80,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    // Your Story Circle (Instagram style)
-                    _buildInstagramStyleAddStoryButton(),
-                  ],
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.8)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Loading stories...',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 14,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
-              // Stories List
+              // Always show stories list with add story button
               Container(
                 height: 80,
                 child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 16,
-                  ),
-                  itemCount: _groupedStories.length + 1, // User story sections + add story button
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      // Add Story Button
-                      return _buildAddStoryButton();
-                    }
-                    
-                    // Get user story section
-                    final userId = _groupedStories.keys.elementAt(index - 1);
-                    final userStories = _groupedStories[userId]!;
-                    final firstStory = userStories.first; // Use first story for user info
-                    
-                    print('HomeScreen: Building story section for user ${firstStory.authorName}');
-                    print('HomeScreen: User has ${userStories.length} stories');
-                    
-                    // Check if this is the current user's story
-                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                    final isCurrentUser = authProvider.userProfile != null && 
-                                        firstStory.authorId == authProvider.userProfile!.id;
-                    
-                    // Determine display name - prioritize username for followed accounts
-                    String displayName;
-                    if (isCurrentUser) {
-                      displayName = 'Your Story';
-                    } else {
-                      // Show username for followed accounts to make it clear whose story it is
-                      displayName = firstStory.authorUsername.isNotEmpty ? 
-                                   firstStory.authorUsername : 
-                                   firstStory.authorName.isNotEmpty ? 
-                                   firstStory.authorName : 'Unknown User';
-                    }
-                    
-                    // Ensure we have a valid media URL from the first story
-                    String mediaUrl = firstStory.media;
-                    if (mediaUrl.isEmpty || mediaUrl == 'null') {
-                      print('HomeScreen: Invalid media URL, using default');
-                      mediaUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=Story';
-                    }
-                    
-                    return StoryWidget(
-                      storyId: userId, // Use userId as storyId for the section
-                      userId: firstStory.authorId,
-                      userName: displayName, // Use the determined display name
-                      userImage: firstStory.authorAvatar,
-                      storyImage: mediaUrl,
-                      isViewed: false, // Will be updated based on view status
-                      currentUserId: authProvider.userProfile?.id, // Pass current user ID
-                      storyType: firstStory.type, // Pass story type for video indicator
-                      onTap: () {
-                        // Open story viewer with all stories from this user
-                        print('Opening story section for user: ${firstStory.authorName}');
-                        print('User has ${userStories.length} stories to view');
-                        _openStoryViewerForUser(userId, userStories);
-                      },
-                    );
-                  },
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(
+                  horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 16,
                 ),
+                itemCount: _groupedStories.length + 1, // User story sections + add story button
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    // Add Story Button
+                    return _buildAddStoryButton();
+                  }
+                  
+                  // Get user story section
+                  final userId = _groupedStories.keys.elementAt(index - 1);
+                  final userStories = _groupedStories[userId]!;
+                  final firstStory = userStories.first; // Use first story for user info
+                  
+                  print('HomeScreen: Building story section for user ${firstStory.authorName}');
+                  print('HomeScreen: User has ${userStories.length} stories');
+                  
+                  // Check if this is the current user's story
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  final isCurrentUser = authProvider.userProfile != null && 
+                                      firstStory.authorId == authProvider.userProfile!.id;
+                  
+                  // Determine display name - prioritize username for followed accounts
+                  String displayName;
+                  if (isCurrentUser) {
+                    displayName = 'Your Story';
+                  } else {
+                    // Show username for followed accounts to make it clear whose story it is
+                    displayName = firstStory.authorUsername.isNotEmpty ? 
+                                 firstStory.authorUsername : 
+                                 firstStory.authorName.isNotEmpty ? 
+                                 firstStory.authorName : 'Unknown User';
+                  }
+                  
+                  // Ensure we have a valid media URL from the first story
+                  String mediaUrl = firstStory.media;
+                  if (mediaUrl.isEmpty || mediaUrl == 'null') {
+                    print('HomeScreen: Invalid media URL, using default');
+                    mediaUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=Story';
+                  }
+                  
+                  return StoryWidget(
+                    storyId: userId, // Use userId as storyId for the section
+                    userId: firstStory.authorId,
+                    userName: displayName, // Use the determined display name
+                    userImage: firstStory.authorAvatar,
+                    storyImage: mediaUrl,
+                    isViewed: false, // Will be updated based on view status
+                    currentUserId: authProvider.userProfile?.id, // Pass current user ID
+                    storyType: firstStory.type, // Pass story type for video indicator
+                    onTap: () {
+                      // Open story viewer with all stories from this user
+                      print('Opening story section for user: ${firstStory.authorName}');
+                      print('User has ${userStories.length} stories to view');
+                      _openStoryViewerForUser(userId, userStories);
+                    },
+                  );
+                },
               ),
+            ),
           ],
         ),
       ),

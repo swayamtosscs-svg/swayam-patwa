@@ -17,6 +17,14 @@ String _constructFullUrl(String url) {
     return 'http://103.14.120.163:8081/$url';
   }
   
+  // If it's just a filename or path, try to construct full URL
+  if (!url.contains('://')) {
+    // Add the base URL if it looks like a file path
+    if (url.contains('/') || url.contains('.')) {
+      return 'http://103.14.120.163:8081/$url';
+    }
+  }
+  
   return url;
 }
 
@@ -144,8 +152,14 @@ class ReelVideo {
   });
 
   factory ReelVideo.fromJson(Map<String, dynamic> json) {
+    final originalUrl = json['url'] ?? '';
+    final constructedUrl = _constructFullUrl(originalUrl);
+    
+    print('ReelVideo.fromJson: Original URL: $originalUrl');
+    print('ReelVideo.fromJson: Constructed URL: $constructedUrl');
+    
     return ReelVideo(
-      url: _constructFullUrl(json['url'] ?? ''),
+      url: constructedUrl,
       filename: json['filename'] ?? '',
       size: json['size'] ?? 0,
       duration: json['duration'] ?? 0,

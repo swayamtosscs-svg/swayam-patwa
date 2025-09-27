@@ -35,17 +35,20 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
 
   Widget _buildMediaContent() {
     // Check if this is a video/reel post
-    if (widget.post.isReel && widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
-      print('PostFullViewScreen: Building video content');
+    if ((widget.post.isReel || widget.post.type == PostType.video || widget.post.type == PostType.reel) && 
+        widget.post.videoUrl != null && widget.post.videoUrl!.isNotEmpty) {
+      print('PostFullViewScreen: Building video content for ${widget.post.id}');
+      print('PostFullViewScreen: Video URL: ${widget.post.videoUrl}');
       
       return Stack(
         fit: StackFit.expand,
         children: [
           VideoPlayerWidget(
             videoUrl: widget.post.videoUrl ?? '',
-            autoPlay: false,
+            autoPlay: true, // Auto-play when opened
             looping: true,
-            muted: true,
+            muted: false, // Enable audio for reels
+            showControls: true,
           ),
           // Play/Pause overlay - only show when not playing
           if (!_isPlaying)

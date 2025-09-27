@@ -17,6 +17,7 @@ import 'screens/add_options_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/baba_pages_screen.dart';
 import 'screens/live_stream_screen.dart';
+import 'screens/profile_edit_screen.dart';
 import 'widgets/dp_widget.dart';
 
 class ProfileUI extends StatefulWidget {
@@ -106,9 +107,59 @@ class _ProfileUIState extends State<ProfileUI> {
                             Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen()));
                           },
                         ),
-                        IconButton(
+                        PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert, color: Colors.black),
-                          onPressed: () => _showLogoutDialog(context),
+                          tooltip: 'More options',
+                          onSelected: (String value) {
+                            if (value == 'edit_profile') {
+                              _navigateToEditProfile(user);
+                            } else if (value == 'logout') {
+                              _showLogoutDialog(context);
+                            }
+                          },
+                          itemBuilder: (BuildContext context) => [
+                            const PopupMenuItem<String>(
+                              value: 'edit_profile',
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit, color: Color(0xFF1A1A1A), size: 20),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Edit Profile',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF1A1A1A),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem<String>(
+                              value: 'logout',
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.logout, color: Color(0xFFE53E3E), size: 20),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Logout',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFFE53E3E),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -195,12 +246,46 @@ class _ProfileUIState extends State<ProfileUI> {
                                           children: [
                                             _StatItem(value: postsCount.toString(), label: 'Posts', onTap: () {}),
                                             _StatItem(value: reelsCount.toString(), label: 'Reels', onTap: () { setState(() { _selectedTab = 1; }); _scrollToGrid(); }),
-                                            _StatItem(value: '${user.followersCount}', label: 'Followers', onTap: () {
-                                              Navigator.push(context, MaterialPageRoute(builder: (_) => FollowersScreen(userId: user.id)));
-                                            }),
-                                            _StatItem(value: '${user.followingCount}', label: 'Following', onTap: () {
-                                              Navigator.push(context, MaterialPageRoute(builder: (_) => FollowingScreen(userId: user.id)));
-                                            }),
+                                            FutureBuilder<List<Map<String, dynamic>>>(
+                                              future: Provider.of<AuthProvider>(context, listen: false).getFollowersForUser(user.id),
+                                              builder: (context, followersSnapshot) {
+                                                int realFollowersCount = user.followersCount;
+                                                if (followersSnapshot.hasData) {
+                                                  realFollowersCount = followersSnapshot.data!.length;
+                                                }
+                                                return _StatItem(
+                                                  value: realFollowersCount.toString(), 
+                                                  label: 'Followers', 
+                                                  onTap: () async {
+                                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => FollowersScreen(userId: user.id)));
+                                                    // Refresh the screen to show updated counts
+                                                    if (mounted) {
+                                                      setState(() {});
+                                                    }
+                                                  }
+                                                );
+                                              },
+                                            ),
+                                            FutureBuilder<List<Map<String, dynamic>>>(
+                                              future: Provider.of<AuthProvider>(context, listen: false).getFollowingUsersForUser(user.id),
+                                              builder: (context, followingSnapshot) {
+                                                int realFollowingCount = user.followingCount;
+                                                if (followingSnapshot.hasData) {
+                                                  realFollowingCount = followingSnapshot.data!.length;
+                                                }
+                                                return _StatItem(
+                                                  value: realFollowingCount.toString(), 
+                                                  label: 'Following', 
+                                                  onTap: () async {
+                                                    await Navigator.push(context, MaterialPageRoute(builder: (_) => FollowingScreen(userId: user.id)));
+                                                    // Refresh the screen to show updated counts
+                                                    if (mounted) {
+                                                      setState(() {});
+                                                    }
+                                                  }
+                                                );
+                                              },
+                                            ),
                                           ],
                                         );
                                       },
@@ -719,6 +804,30 @@ class _ProfileUIState extends State<ProfileUI> {
       // Show error message
       if (context.mounted) {
         SnackBarHelper.showError(context, 'Logout failed: $e');
+      }
+    }
+  }
+
+
+  void _navigateToEditProfile(UserModel user) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileEditScreen(user: user),
+      ),
+    );
+    
+    if (result == true) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.refreshUserProfile();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     }
   }

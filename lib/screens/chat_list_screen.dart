@@ -63,10 +63,10 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       if (authProvider.authToken != null && authProvider.userProfile != null) {
         print('ChatListScreen: Loading chat threads for user: ${authProvider.userProfile!.id}');
         
-        // Fetch real chat threads from the API
-        final threads = await ChatService.getChatThreads(
-          token: authProvider.authToken!,
+        // Use the new initialization method that handles both local and API conversations
+        final threads = await ChatService.initializeConversations(
           currentUserId: authProvider.userProfile!.id,
+          token: authProvider.authToken!,
         );
         
         if (mounted) {
@@ -75,7 +75,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
             _filteredChatThreads = threads;
             _isLoading = false;
           });
-          print('ChatListScreen: Loaded ${threads.length} chat threads');
+          print('ChatListScreen: Loaded ${threads.length} total chat threads');
         }
       } else {
         print('ChatListScreen: No auth token or user profile found');

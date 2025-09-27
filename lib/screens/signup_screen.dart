@@ -1008,36 +1008,44 @@ class _SignupScreenState extends State<SignupScreen> {
                                         onPressed: () {
                                           Navigator.pushReplacementNamed(context, '/login');
                                         },
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              "Already have an account? ",
-                                              style: const TextStyle(
-                                                color: Colors.black,
-                                                fontSize: 16,
-                                                fontFamily: 'Poppins',
+                                        child: RichText(
+                                          textAlign: TextAlign.center,
+                                          text: TextSpan(
+                                            children: [
+                                              TextSpan(
+                                                text: "Already have an account? ",
+                                                style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 16,
+                                                  fontFamily: 'Poppins',
+                                                ),
                                               ),
-                                            ),
-                                            Text(
-                                              'Log in',
-                                              style: TextStyle(
-                                                color: Colors.black.withOpacity(0.8),
-                                                fontSize: 16,
-                                                fontFamily: 'Poppins',
-                                                fontWeight: FontWeight.w600,
+                                              TextSpan(
+                                                text: 'Log in',
+                                                style: TextStyle(
+                                                  color: Colors.black.withOpacity(0.8),
+                                                  fontSize: 16,
+                                                  fontFamily: 'Poppins',
+                                                  fontWeight: FontWeight.w600,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
+                                    
+                                    // Add extra bottom padding to prevent overflow
+                                    SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 2.0)),
                                   ],
                                 ),
                               ),
                             ),
                           ),
                         ),
+                        
+                        // Add extra bottom spacing
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 3.0)),
                       ],
                     ),
                   ),

@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserLikeService {
-  static const String _baseUrl = 'http://103.14.120.163:8081/api';
+  static const String _baseUrl = 'http://103.14.120.163:8081/api/feed';
   static const String _likesKey = 'user_post_likes';
 
   /// Get liked posts from local storage
@@ -40,232 +40,163 @@ class UserLikeService {
 
   /// Like a user post
   static Future<Map<String, dynamic>> likeUserPost({
-    required String userId,
     required String postId,
     required String token,
+    required String userId,
   }) async {
-    try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/like');
+    // Try multiple possible endpoints for liking posts
+    final endpoints = [
+      'http://103.14.120.163:8081/api/posts/$postId/like',
+      'http://103.14.120.163:8081/api/feed/like/$postId',
+      'http://103.14.120.163:8081/api/user/posts/$postId/like',
+      'https://api-rgram1.vercel.app/api/posts/$postId/like',
+    ];
 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'action': 'like',
-        }),
-      );
-
-      print('➡️ Like user post - URL: $url');
-      print('➡️ Response status: ${response.statusCode}');
-      print('➡️ Response body: ${response.body}');
-
-      // Always save to local storage regardless of API response
-      final likedPosts = await getLikedPosts();
-      likedPosts.add(postId);
-      await saveLikedPosts(likedPosts);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return _safeDecode(response.body);
-      } else {
-        // If API fails, return a mock success response for local functionality
-        print('UserLikeService: API failed with ${response.statusCode}, using local storage');
-        return {
-          'success': true,
-          'message': 'Post liked successfully (local)',
-          'data': {
-            'liked': true,
-            'likeCount': 1,
+    for (final endpoint in endpoints) {
+      try {
+        print('➡️ Trying like endpoint: $endpoint');
+        
+        final response = await http.post(
+          Uri.parse(endpoint),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
           },
-        };
+          body: jsonEncode({
+            'contentId': postId,
+            'contentType': 'post',
+            'userId': userId,
+            'action': 'like',
+          }),
+        );
+
+        print('➡️ Like Post API - URL: $endpoint');
+        print('➡️ Like Post API - PostId: $postId, UserId: $userId');
+        print('➡️ Response status: ${response.statusCode}');
+        print('➡️ Response body: ${response.body}');
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final likedPosts = await getLikedPosts();
+          likedPosts.add(postId);
+          await saveLikedPosts(likedPosts);
+          print('➡️ Like Post API succeeded with endpoint: $endpoint');
+          return _safeDecode(response.body);
+        } else if (response.statusCode == 404) {
+          print('➡️ Like Post API: Endpoint $endpoint not found (404), trying next...');
+          continue; // Try next endpoint
+        } else {
+          print('➡️ Like Post API: Endpoint $endpoint failed with ${response.statusCode}, trying next...');
+          continue; // Try next endpoint
+        }
+      } catch (e) {
+        print('➡️ Like Post API: Error with endpoint $endpoint: $e, trying next...');
+        continue; // Try next endpoint
       }
-    } catch (e) {
-      // Even if API fails, save to local storage
-      final likedPosts = await getLikedPosts();
-      likedPosts.add(postId);
-      await saveLikedPosts(likedPosts);
-      
-      print('UserLikeService: Error liking user post: $e, using local storage');
-      return {
-        'success': true,
-        'message': 'Post liked successfully (local)',
-        'data': {
-          'liked': true,
-          'likeCount': 1,
-        },
-      };
     }
+
+    // If all endpoints fail, use local fallback
+    print('➡️ Like Post API: All endpoints failed, using local fallback');
+    final likedPosts = await getLikedPosts();
+    likedPosts.add(postId);
+    await saveLikedPosts(likedPosts);
+    return _fallbackLike(postId);
   }
 
   /// Unlike a user post
   static Future<Map<String, dynamic>> unlikeUserPost({
-    required String userId,
     required String postId,
     required String token,
+    required String userId,
   }) async {
-    try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/like');
+    // Try multiple possible endpoints for unliking posts
+    final endpoints = [
+      'http://103.14.120.163:8081/api/posts/$postId/like',
+      'http://103.14.120.163:8081/api/feed/like/$postId',
+      'http://103.14.120.163:8081/api/user/posts/$postId/like',
+      'https://api-rgram1.vercel.app/api/posts/$postId/like',
+    ];
 
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'action': 'unlike',
-        }),
-      );
-
-      print('➡️ Unlike user post - URL: $url');
-      print('➡️ Response status: ${response.statusCode}');
-      print('➡️ Response body: ${response.body}');
-
-      // Always remove from local storage regardless of API response
-      final likedPosts = await getLikedPosts();
-      likedPosts.remove(postId);
-      await saveLikedPosts(likedPosts);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return _safeDecode(response.body);
-      } else {
-        // If API fails, return a mock success response for local functionality
-        print('UserLikeService: Unlike API failed with ${response.statusCode}, using local storage');
-        return {
-          'success': true,
-          'message': 'Post unliked successfully (local)',
-          'data': {
-            'liked': false,
-            'likeCount': 0,
+    for (final endpoint in endpoints) {
+      try {
+        print('➡️ Trying unlike endpoint: $endpoint');
+        
+        final response = await http.post(
+          Uri.parse(endpoint),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
           },
-        };
+          body: jsonEncode({
+            'contentId': postId,
+            'contentType': 'post',
+            'userId': userId,
+            'action': 'unlike',
+          }),
+        );
+
+        print('➡️ Unlike Post API - URL: $endpoint');
+        print('➡️ Unlike Post API - PostId: $postId, UserId: $userId');
+        print('➡️ Response status: ${response.statusCode}');
+        print('➡️ Response body: ${response.body}');
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final likedPosts = await getLikedPosts();
+          likedPosts.remove(postId);
+          await saveLikedPosts(likedPosts);
+          print('➡️ Unlike Post API succeeded with endpoint: $endpoint');
+          return _safeDecode(response.body);
+        } else if (response.statusCode == 404) {
+          print('➡️ Unlike Post API: Endpoint $endpoint not found (404), trying next...');
+          continue; // Try next endpoint
+        } else {
+          print('➡️ Unlike Post API: Endpoint $endpoint failed with ${response.statusCode}, trying next...');
+          continue; // Try next endpoint
+        }
+      } catch (e) {
+        print('➡️ Unlike Post API: Error with endpoint $endpoint: $e, trying next...');
+        continue; // Try next endpoint
       }
-    } catch (e) {
-      // Even if API fails, remove from local storage
-      final likedPosts = await getLikedPosts();
-      likedPosts.remove(postId);
-      await saveLikedPosts(likedPosts);
-      
-      print('UserLikeService: Error unliking user post: $e, using local storage');
-      return {
-        'success': true,
-        'message': 'Post unliked successfully (local)',
-        'data': {
-          'liked': false,
-          'likeCount': 0,
-        },
-      };
     }
+
+    // If all endpoints fail, use local fallback
+    print('➡️ Unlike Post API: All endpoints failed, using local fallback');
+    final likedPosts = await getLikedPosts();
+    likedPosts.remove(postId);
+    await saveLikedPosts(likedPosts);
+    return _fallbackUnlike(postId);
   }
 
   /// Toggle like/unlike
   static Future<Map<String, dynamic>> toggleUserPostLike({
-    required String userId,
     required String postId,
     required String token,
+    required String userId,
     required bool isCurrentlyLiked,
   }) async {
     return isCurrentlyLiked
-        ? await unlikeUserPost(userId: userId, postId: postId, token: token)
-        : await likeUserPost(userId: userId, postId: postId, token: token);
-  }
-
-  /// Get like status
-  static Future<Map<String, dynamic>> getUserPostLikeStatus({
-    required String userId,
-    required String postId,
-    required String token,
-  }) async {
-    try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/likes/$userId');
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      print('➡️ Get like status - URL: $url');
-      print('➡️ Response status: ${response.statusCode}');
-      print('➡️ Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        return _safeDecode(response.body);
-      } else {
-        return {'success': false, 'message': 'Failed to get like status: ${response.statusCode}'};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
+        ? await unlikeUserPost(postId: postId, token: token, userId: userId)
+        : await likeUserPost(postId: postId, token: token, userId: userId);
     }
+
+  /// Local fallback like
+  static Map<String, dynamic> _fallbackLike(String postId) {
+    return {
+      'success': true,
+      'message': 'Post liked locally (API fallback)',
+      'data': {'likesCount': 1},
+    };
   }
 
-  /// Get like count
-  static Future<Map<String, dynamic>> getUserPostLikeCount({
-    required String postId,
-    required String token,
-  }) async {
-    try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/likes/count');
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      print('➡️ Get like count - URL: $url');
-      print('➡️ Response status: ${response.statusCode}');
-      print('➡️ Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        return _safeDecode(response.body);
-      } else {
-        return {'success': false, 'message': 'Failed to get like count: ${response.statusCode}'};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
-    }
+  /// Local fallback unlike
+  static Map<String, dynamic> _fallbackUnlike(String postId) {
+    return {
+      'success': true,
+      'message': 'Post unliked locally (API fallback)',
+      'data': {'likesCount': 0},
+    };
   }
 
-  /// Get users who liked a post
-  static Future<Map<String, dynamic>> getPostLikers({
-    required String postId,
-    required String token,
-    int page = 1,
-    int limit = 20,
-  }) async {
-    try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/likes?page=$page&limit=$limit');
-
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      print('➡️ Get post likers - URL: $url');
-      print('➡️ Response status: ${response.statusCode}');
-      print('➡️ Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        return _safeDecode(response.body);
-      } else {
-        return {'success': false, 'message': 'Failed to get post likers: ${response.statusCode}'};
-      }
-    } catch (e) {
-      return {'success': false, 'message': 'Network error: $e'};
-    }
-  }
-
-  /// Helper: safely decode JSON or return empty map
+  /// Safe decode
   static Map<String, dynamic> _safeDecode(String body) {
     try {
       if (body.isEmpty) return {};

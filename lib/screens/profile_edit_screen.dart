@@ -329,6 +329,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           
           const SizedBox(height: 24),
           
+          // Account Privacy section
+          _buildAccountPrivacySection(),
+          
+          const SizedBox(height: 24),
+          
           // Threads badge section
           _buildThreadsBadgeSection(),
         ],
@@ -377,6 +382,69 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAccountPrivacySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              _editingUser.isPrivate ? Icons.lock : Icons.public,
+              color: _editingUser.isPrivate ? const Color(0xFFE53E3E) : const Color(0xFF10B981),
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Account Privacy',
+                    style: const TextStyle(
+                      color: Color(0xFF4A2C2A), // Deep Brown
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _editingUser.isPrivate ? 'Private Account' : 'Public Account',
+                    style: TextStyle(
+                      color: _editingUser.isPrivate ? const Color(0xFFE53E3E) : const Color(0xFF10B981),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _editingUser.isPrivate,
+              onChanged: (value) {
+                setState(() {
+                  _editingUser = _editingUser.copyWith(isPrivate: value);
+                });
+              },
+              activeColor: const Color(0xFFE53E3E), // Red for private
+              inactiveThumbColor: const Color(0xFF10B981), // Green for public
+              inactiveTrackColor: const Color(0xFF10B981).withOpacity(0.3),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _editingUser.isPrivate 
+            ? 'Only approved followers can see your posts and stories.'
+            : 'Anyone can see your posts and stories.',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+          ),
+        ),
+      ],
     );
   }
 
@@ -731,6 +799,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         website: _websiteController.text.trim(),
         location: _locationController.text.trim(),
         religion: _selectedReligion?.toString().split('.').last,
+        isPrivate: _editingUser.isPrivate,
       );
 
       if (success) {

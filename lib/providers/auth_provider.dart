@@ -22,6 +22,11 @@ class AuthProvider extends ChangeNotifier {
   String? _phoneNumber;
   String? _authToken;
   UserModel? _userProfile;
+  
+  // Cache for followers and following counts
+  final Map<String, Map<String, dynamic>> _userCountsCache = {};
+  final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheExpiry = Duration(minutes: 5); // Cache for 5 minutes
 
   // Getters
   GoogleUser? get googleUser => _googleUser;
@@ -578,6 +583,7 @@ class AuthProvider extends ChangeNotifier {
     String? website,
     String? location,
     String? religion,
+    bool? isPrivate,
   }) async {
     if (_authToken == null) return false;
 
@@ -610,6 +616,9 @@ class AuthProvider extends ChangeNotifier {
       }
       if (religion != null) {
         updateData['religion'] = religion;
+      }
+      if (isPrivate != null) {
+        updateData['isPrivate'] = isPrivate;
       }
 
       // Don't proceed if no data to update
@@ -724,6 +733,17 @@ class AuthProvider extends ChangeNotifier {
       if (response['success'] == true) {
         // Refresh own profile to update following count
         await _loadUserProfile();
+        
+        // Update local following count immediately for better UX
+        if (_userProfile != null) {
+          _userProfile = _userProfile!.copyWith(
+            followingCount: _userProfile!.followingCount + 1,
+          );
+        }
+        
+        // Clear cache for the target user to ensure fresh data
+        clearUserCache(targetUserId);
+        
         notifyListeners();
         return true;
       } else {
@@ -754,6 +774,17 @@ class AuthProvider extends ChangeNotifier {
       if (response['success'] == true) {
         // Refresh own profile to update following count
         await _loadUserProfile();
+        
+        // Update local following count immediately for better UX
+        if (_userProfile != null) {
+          _userProfile = _userProfile!.copyWith(
+            followingCount: (_userProfile!.followingCount - 1).clamp(0, double.infinity).toInt(),
+          );
+        }
+        
+        // Clear cache for the target user to ensure fresh data
+        clearUserCache(targetUserId);
+        
         notifyListeners();
         return true;
       } else {
@@ -939,6 +970,47 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Check if cached data is still valid
+  bool _isCacheValid(String userId) {
+    final timestamp = _cacheTimestamps[userId];
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _cacheExpiry;
+  }
+
+  /// Get cached followers and following counts
+  Map<String, int>? _getCachedCounts(String userId) {
+    if (!_isCacheValid(userId)) return null;
+    final cached = _userCountsCache[userId];
+    if (cached == null) return null;
+    return {
+      'followers': cached['followers'] ?? 0,
+      'following': cached['following'] ?? 0,
+    };
+  }
+
+  /// Cache followers and following counts
+  void _cacheCounts(String userId, int followersCount, int followingCount) {
+    _userCountsCache[userId] = {
+      'followers': followersCount,
+      'following': followingCount,
+    };
+    _cacheTimestamps[userId] = DateTime.now();
+  }
+
+  /// Clear cache for a specific user (useful after follow/unfollow actions)
+  void clearUserCache(String userId) {
+    _userCountsCache.remove(userId);
+    _cacheTimestamps.remove(userId);
+    print('Cleared cache for user: $userId');
+  }
+
+  /// Clear all cached data
+  void clearAllCache() {
+    _userCountsCache.clear();
+    _cacheTimestamps.clear();
+    print('Cleared all cached data');
+  }
+
   /// Get list of users that follow a specific user
   Future<List<Map<String, dynamic>>> getFollowersForUser(String userId) async {
     if (_authToken == null) return [];
@@ -1014,6 +1086,96 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       print('Error checking if following user $targetUserId: $e');
       return false;
+    }
+  }
+
+  /// Get followers and following counts with caching for better performance
+  Future<Map<String, int>> getUserCounts(String userId) async {
+    if (_authToken == null) return {'followers': 0, 'following': 0};
+
+    // Check cache first
+    final cachedCounts = _getCachedCounts(userId);
+    if (cachedCounts != null) {
+      print('Using cached counts for user $userId: $cachedCounts');
+      return cachedCounts;
+    }
+
+    try {
+      // Get both followers and following counts in parallel
+      final futures = await Future.wait([
+        ApiService.getRGramFollowers(userId: userId, token: _authToken!),
+        ApiService.getRGramFollowing(userId: userId, token: _authToken!),
+      ]);
+
+      final followersResponse = futures[0];
+      final followingResponse = futures[1];
+
+      int followersCount = 0;
+      int followingCount = 0;
+
+      if (followersResponse['success'] == true && followersResponse['data'] != null) {
+        final followers = List<Map<String, dynamic>>.from(followersResponse['data']['followers'] ?? []);
+        followersCount = followers.length;
+      }
+
+      if (followingResponse['success'] == true && followingResponse['data'] != null) {
+        final following = List<Map<String, dynamic>>.from(followingResponse['data']['following'] ?? []);
+        followingCount = following.length;
+      }
+
+      // Cache the results
+      _cacheCounts(userId, followersCount, followingCount);
+
+      print('Fetched and cached counts for user $userId: followers=$followersCount, following=$followingCount');
+      
+      return {
+        'followers': followersCount,
+        'following': followingCount,
+      };
+    } catch (e) {
+      print('Error fetching counts for user $userId: $e');
+      return {'followers': 0, 'following': 0};
+    }
+  }
+
+  /// Refresh follower and following counts for a specific user
+  Future<Map<String, int>> refreshUserCounts(String userId) async {
+    if (_authToken == null) return {'followers': 0, 'following': 0};
+
+    try {
+      // Get both followers and following counts
+      final followersResponse = await ApiService.getRGramFollowers(
+        userId: userId,
+        token: _authToken!,
+      );
+      
+      final followingResponse = await ApiService.getRGramFollowing(
+        userId: userId,
+        token: _authToken!,
+      );
+
+      int followersCount = 0;
+      int followingCount = 0;
+
+      if (followersResponse['success'] == true && followersResponse['data'] != null) {
+        final followers = List<Map<String, dynamic>>.from(followersResponse['data']['followers'] ?? []);
+        followersCount = followers.length;
+      }
+
+      if (followingResponse['success'] == true && followingResponse['data'] != null) {
+        final following = List<Map<String, dynamic>>.from(followingResponse['data']['following'] ?? []);
+        followingCount = following.length;
+      }
+
+      print('Refreshed counts for user $userId: followers=$followersCount, following=$followingCount');
+      
+      return {
+        'followers': followersCount,
+        'following': followingCount,
+      };
+    } catch (e) {
+      print('Error refreshing counts for user $userId: $e');
+      return {'followers': 0, 'following': 0};
     }
   }
 

@@ -4,19 +4,17 @@ import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../widgets/post_widget.dart';
-import 'package:flutter/foundation.dart';
 import '../screens/profile_edit_screen.dart';
 import '../screens/following_screen.dart';
 import '../screens/followers_screen.dart';
 import '../utils/app_theme.dart';
-import '../services/post_service.dart';
 import '../services/user_media_service.dart';
 import '../services/chat_service.dart';
 import '../screens/user_profile_screen.dart'; // Added import for UserProfileScreen
 import '../screens/chat_screen.dart'; // Added import for ChatScreen
 import '../widgets/dp_widget.dart'; // Added import for DPWidget
-import '../services/dp_service.dart'; // Added import for DPService
 import '../screens/post_full_view_screen.dart';
+import '../widgets/profile_reel_widget.dart';
 
 
 class ProfileScreen extends StatefulWidget {
@@ -110,11 +108,59 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         ],
       ),
       actions: [
-        IconButton(
-          onPressed: () {
-            // Show more options
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.black, size: 24),
+          tooltip: 'More options',
+          onSelected: (String value) {
+            if (value == 'edit_profile') {
+              _navigateToEditProfile(user);
+            } else if (value == 'logout') {
+              _showLogoutDialog(context);
+            }
           },
-          icon: const Icon(Icons.more_vert, color: Colors.black),
+          itemBuilder: (BuildContext context) => [
+            const PopupMenuItem<String>(
+              value: 'edit_profile',
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, color: Color(0xFF1A1A1A), size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Edit Profile',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem<String>(
+              value: 'logout',
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Color(0xFFE53E3E), size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFFE53E3E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -213,6 +259,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   );
                 },
               ),
+              const SizedBox(height: 20),
+              // Action Buttons Section
+              _buildActionButtons(user),
             ],
           ),
         ),
@@ -337,14 +386,27 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildFollowersStat(UserModel user) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: Provider.of<AuthProvider>(context, listen: false).getFollowersForUser(user.id),
+    return FutureBuilder<Map<String, int>>(
+      future: Provider.of<AuthProvider>(context, listen: false).getUserCounts(user.id),
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _smallStat(
+            icon: Icons.groups_outlined, 
+            value: '...', 
+            label: 'Followers', 
+            color: Colors.orange.shade50,
+            onTap: () {},
+          );
+        }
+        
         int followersCount = user.followersCount; // Fallback to cached count
         
         if (snapshot.hasData) {
-          followersCount = snapshot.data!.length;
+          followersCount = snapshot.data!['followers'] ?? user.followersCount;
           print('ProfileScreen: Real followers count: $followersCount');
+        } else if (snapshot.hasError) {
+          print('ProfileScreen: Error fetching followers: ${snapshot.error}');
+          // Keep using cached count on error
         }
         
         return _smallStat(
@@ -359,9 +421,13 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 builder: (context) => FollowersScreen(userId: user.id),
               ),
             );
-            // Refresh user profile when returning
+            // Refresh user profile when returning to get updated counts
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.refreshUserProfile();
+            // Also refresh the current screen to show updated counts
+            if (mounted) {
+              setState(() {});
+            }
           },
         );
       },
@@ -369,14 +435,27 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildFollowingStat(UserModel user) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: Provider.of<AuthProvider>(context, listen: false).getFollowingUsersForUser(user.id),
+    return FutureBuilder<Map<String, int>>(
+      future: Provider.of<AuthProvider>(context, listen: false).getUserCounts(user.id),
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _smallStat(
+            icon: Icons.person_add_alt_1_outlined, 
+            value: '...', 
+            label: 'Following', 
+            color: Colors.purple.shade50,
+            onTap: () {},
+          );
+        }
+        
         int followingCount = user.followingCount; // Fallback to cached count
         
         if (snapshot.hasData) {
-          followingCount = snapshot.data!.length;
+          followingCount = snapshot.data!['following'] ?? user.followingCount;
           print('ProfileScreen: Real following count: $followingCount');
+        } else if (snapshot.hasError) {
+          print('ProfileScreen: Error fetching following: ${snapshot.error}');
+          // Keep using cached count on error
         }
         
         return _smallStat(
@@ -391,9 +470,13 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 builder: (context) => FollowingScreen(userId: user.id),
               ),
             );
-            // Refresh user profile when returning
+            // Refresh user profile when returning to get updated counts
             final authProvider = Provider.of<AuthProvider>(context, listen: false);
             await authProvider.refreshUserProfile();
+            // Also refresh the current screen to show updated counts
+            if (mounted) {
+              setState(() {});
+            }
           },
         );
       },
@@ -499,31 +582,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                       )
                     : const Icon(Icons.refresh, color: Color(0xFF1A1A1A)),
                 ),
-                IconButton(
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProfileEditScreen(user: user),
-                      ),
-                    );
-                    
-                    if (result == true) {
-                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                      await authProvider.refreshUserProfile();
-                      
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Profile updated successfully!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.edit, color: Color(0xFF1A1A1A)),
-                ),
                 
                 
                 // Message Button (only show if not own profile)
@@ -558,12 +616,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     icon: const Icon(Icons.message, color: Color(0xFF6366F1)),
                     tooltip: 'Send Message',
                   ),
-                // Logout Button
-                IconButton(
-                  onPressed: () => _showLogoutDialog(context),
-                  icon: const Icon(Icons.logout, color: Color(0xFFE53E3E)),
-                  tooltip: 'Logout',
-                ),
               ],
             ),
           ),
@@ -735,10 +787,28 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   child: _buildStatItem('Reels', '0'),
                 ),
                 Expanded(
-                  child: _buildStatItem('Followers', user.followersCount.toString()),
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: authProvider.getFollowersForUser(user.id),
+                    builder: (context, snapshot) {
+                      int followersCount = user.followersCount;
+                      if (snapshot.hasData) {
+                        followersCount = snapshot.data!.length;
+                      }
+                      return _buildStatItem('Followers', followersCount.toString());
+                    },
+                  ),
                 ),
                 Expanded(
-                  child: _buildStatItem('Following', user.followingCount.toString()),
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: authProvider.getFollowingUsersForUser(user.id),
+                    builder: (context, snapshot) {
+                      int followingCount = user.followingCount;
+                      if (snapshot.hasData) {
+                        followingCount = snapshot.data!.length;
+                      }
+                      return _buildStatItem('Following', followingCount.toString());
+                    },
+                  ),
                 ),
               ],
             ),
@@ -795,7 +865,16 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                           ),
                         );
                       },
-                      child: _buildStatItem('Followers', user.followersCount.toString()),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: Provider.of<AuthProvider>(context, listen: false).getFollowersForUser(user.id),
+                        builder: (context, snapshot) {
+                          int followersCount = user.followersCount;
+                          if (snapshot.hasData) {
+                            followersCount = snapshot.data!.length;
+                          }
+                          return _buildStatItem('Followers', followersCount.toString());
+                        },
+                      ),
                     ),
                   ),
                   Expanded(
@@ -808,7 +887,16 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                           ),
                         );
                       },
-                      child: _buildStatItem('Following', user.followingCount.toString()),
+                      child: FutureBuilder<List<Map<String, dynamic>>>(
+                        future: Provider.of<AuthProvider>(context, listen: false).getFollowingUsersForUser(user.id),
+                        builder: (context, snapshot) {
+                          int followingCount = user.followingCount;
+                          if (snapshot.hasData) {
+                            followingCount = snapshot.data!.length;
+                          }
+                          return _buildStatItem('Following', followingCount.toString());
+                        },
+                      ),
                     ),
                   ),
                 ],
@@ -1231,22 +1319,10 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                         ),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: reel.thumbnailUrl != null
-                              ? Image.network(
-                                  reel.thumbnailUrl!,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: Icon(Icons.play_circle_outline, color: Colors.grey, size: 40),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(color: Colors.grey[200]),
+                          child: ProfileReelWidget(
+                            reel: reel,
+                            showThumbnail: true,
+                          ),
                         ),
                         Positioned(
                           right: 8,
@@ -1271,6 +1347,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       },
     );
   }
+
 
 
   Widget _buildSavedTab() {
@@ -1398,6 +1475,40 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         return Colors.grey;
       default:
         return Colors.grey;
+    }
+  }
+
+  void _navigateToEditProfile(UserModel user) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileEditScreen(user: user),
+      ),
+    );
+    
+    if (result == true) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.refreshUserProfile();
+      
+      if (mounted) {
+        // Force UI refresh to show updated profile picture
+        setState(() {});
+        
+        // Add a small delay to ensure the profile data is fully updated
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        // Force another refresh to ensure DPWidget gets the updated data
+        if (mounted) {
+          setState(() {});
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     }
   }
 
@@ -1648,6 +1759,113 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         );
       }
     }
+  }
+
+  Widget _buildActionButtons(UserModel user) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 18),
+      child: Row(
+        children: [
+          // Edit Profile Button
+          Expanded(
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => _navigateToEditProfile(user),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.edit,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Edit Profile',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Logout Button
+          Expanded(
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFE53E3E),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFE53E3E).withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => _showLogoutDialog(context),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.logout,
+                        color: Color(0xFFE53E3E),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: Color(0xFFE53E3E),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPrivacyToggleButton(UserModel user) {

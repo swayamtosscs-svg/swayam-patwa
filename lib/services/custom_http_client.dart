@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 class CustomHttpClient {
   static http.Client? _client;
-  static const int _maxConnections = 5;
-  static const Duration _connectionTimeout = Duration(seconds: 10);
-  static const Duration _idleTimeout = Duration(seconds: 30);
+  static const int _maxConnections = 10; // Increased for better concurrency
+  static const Duration _connectionTimeout = Duration(seconds: 5); // Reduced timeout
+  static const Duration _idleTimeout = Duration(seconds: 15); // Reduced idle timeout
+  static const Duration _receiveTimeout = Duration(seconds: 8); // Added receive timeout
   
   /// Get a custom HTTP client that handles SSL issues with memory optimization
   static http.Client get client {
@@ -18,7 +20,23 @@ class CustomHttpClient {
     if (Platform.isWindows) {
       // On Windows, create a client that can handle SSL issues
       print('CustomHttpClient: Creating optimized client for Windows platform');
-      return http.Client();
+      
+      // Create HttpClient with SSL bypass for development
+      final httpClient = HttpClient();
+      httpClient.badCertificateCallback = (X509Certificate cert, String host, int port) {
+        print('CustomHttpClient: Bypassing SSL certificate verification for $host:$port');
+        return true; // Accept all certificates for development
+      };
+      
+      // Set optimized timeouts and connection limits
+      httpClient.connectionTimeout = _connectionTimeout;
+      httpClient.idleTimeout = _idleTimeout;
+      httpClient.maxConnectionsPerHost = _maxConnections;
+      
+      // Enable connection pooling for better performance
+      httpClient.autoUncompress = true;
+      
+      return IOClient(httpClient);
     } else {
       // On other platforms, use default client with optimizations
       return http.Client();

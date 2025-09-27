@@ -68,14 +68,17 @@
 -keep class com.example.my_auth_app.providers.** { *; }
 -keep class com.example.my_auth_app.services.** { *; }
 
-# Additional optimizations for smaller APK
+# Maximum compression optimizations
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
--optimizationpasses 5
+-optimizationpasses 7
 -allowaccessmodification
+-overloadaggressively
+-repackageclasses ''
 
-# Remove unused resources
+# Remove unused resources and code
 -dontwarn **
 -ignorewarnings
+-dontnote **
 
 # Keep only essential classes for reflection
 -keepattributes Signature
@@ -83,7 +86,7 @@
 -keepattributes EnclosingMethod
 -keepattributes InnerClasses
 
-# Remove debug information
+# Remove all debug information and logging
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
@@ -91,4 +94,37 @@
     public static *** w(...);
     public static *** e(...);
 }
+
+# Remove System.out.println calls
+-assumenosideeffects class java.io.PrintStream {
+    public void println(%);
+    public void println(**);
+}
+
+# Additional compression rules
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# Keep WebRTC classes for call functionality
+-keep class org.webrtc.** { *; }
+-keep class io.flutter.plugins.flutter_webrtc.** { *; }
+
+# Keep media kit classes for video playback
+-keep class com.alexmercerind.mediakit.** { *; }
+
+# Keep camera plugin classes
+-keep class io.flutter.plugins.camera.** { *; }
+
+# Keep image picker classes
+-keep class io.flutter.plugins.imagepicker.** { *; }
+
+# Keep permission handler classes
+-keep class com.baseflow.permissionhandler.** { *; }
+
+# Keep socket.io classes
+-keep class io.socket.** { *; }
+
+# Keep audio player classes
+-keep class xyz.luan.audioplayers.** { *; }
 

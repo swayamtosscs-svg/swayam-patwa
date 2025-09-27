@@ -15,12 +15,18 @@ import '../services/local_storage_service.dart';
 import '../services/baba_page_dp_service.dart';
 import '../services/baba_page_reel_service.dart';
 import '../models/baba_page_reel_model.dart';
+import '../services/baba_page_story_service.dart';
+import '../models/baba_page_story_model.dart';
+import '../models/story_model.dart';
+import '../screens/story_viewer_screen.dart';
 import '../providers/auth_provider.dart';
 import '../utils/avatar_utils.dart';
 import '../utils/responsive_utils.dart';
 import 'baba_page_post_creation_screen.dart';
 import 'baba_pages_screen.dart';
 import 'baba_page_reel_upload_screen.dart';
+import 'baba_page_story_upload_screen.dart';
+import '../widgets/video_player_widget.dart';
 
 class BabaProfileUiDemoScreen extends StatefulWidget {
   final BabaPage? babaPage; // when provided, bind to real data
@@ -40,6 +46,10 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   List<MediaData> _videos = [];
   bool _loadingVideos = false;
   bool _videosLoaded = false; // Prevent multiple loads
+  
+  List<BabaPageStory> _stories = [];
+  bool _loadingStories = false;
+  bool _storiesLoaded = false; // Prevent multiple loads
   
   // Local state for current avatar URL
   String? _currentAvatarUrl;
@@ -91,8 +101,10 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   void _resetLoadedState() {
     _postsLoaded = false;
     _videosLoaded = false;
+    _storiesLoaded = false;
     _posts.clear();
     _videos.clear();
+    _stories.clear();
   }
 
   @override
@@ -122,6 +134,16 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
         if (mounted) {
           _videosLoaded = true;
           _fetchVideos(page!);
+        }
+      });
+    }
+    
+    // Load stories when bound to real page (only once)
+    if (hasRealData && !_loadingStories && !_storiesLoaded) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _storiesLoaded = true;
+          _fetchStories(page!);
         }
       });
     }
@@ -304,7 +326,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                                   Row(
                                     children: [
                                       Expanded(child: _smallStatCard(icon: Icons.videocam_outlined, value: hasRealData ? '${_videos.length}' : '0', label: 'Videos', color: Colors.green.shade100)),
-                                      Expanded(child: _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${page.storiesCount}' : '0', label: 'Stories', color: Colors.purple.shade100)),
+                                      Expanded(child: _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${_stories.length}' : '0', label: 'Stories', color: Colors.purple.shade100)),
                                     ],
                                   ),
                                 ],
@@ -314,10 +336,10 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                               return Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                 children: [
-                                  Flexible(child: _smallStatCard(icon: Icons.person, value: hasRealData ? '${page.followersCount}' : '2', label: 'Followers', color: Colors.orange.shade100)),
-                                  Flexible(child: _smallStatCard(icon: Icons.article_outlined, value: hasRealData ? '${_posts.length}' : '3', label: 'Posts', color: Colors.blue.shade100)),
-                                  Flexible(child: _smallStatCard(icon: Icons.videocam_outlined, value: hasRealData ? '${_videos.length}' : '0', label: 'Videos', color: Colors.green.shade100)),
-                                  Flexible(child: _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${page.storiesCount}' : '0', label: 'Stories', color: Colors.purple.shade100)),
+                                  Expanded(child: _smallStatCard(icon: Icons.person, value: hasRealData ? '${page.followersCount}' : '2', label: 'Followers', color: Colors.orange.shade100)),
+                                  Expanded(child: _smallStatCard(icon: Icons.article_outlined, value: hasRealData ? '${_posts.length}' : '3', label: 'Posts', color: Colors.blue.shade100)),
+                                  Expanded(child: _smallStatCard(icon: Icons.videocam_outlined, value: hasRealData ? '${_videos.length}' : '0', label: 'Videos', color: Colors.green.shade100)),
+                                  Expanded(child: _smallStatCard(icon: Icons.auto_stories_outlined, value: hasRealData ? '${_stories.length}' : '0', label: 'Stories', color: Colors.purple.shade100)),
                                 ],
                               );
                             }
@@ -356,7 +378,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                           index: selectedSegment,
                           children: [
                             // Posts tab
-                            hasRealData && _posts.isEmpty && !_loadingPosts
+                            hasRealData && _posts.isEmpty
                                 ? Container(
                                     padding: const EdgeInsets.all(32),
                                     child: Column(
@@ -368,7 +390,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                                         ),
                                         const SizedBox(height: 16),
                                         Text(
-                                          'No posts uploaded yet',
+                                          'No posts yet',
                                           style: TextStyle(
                                             fontSize: 16,
                                             color: Colors.grey.shade600,
@@ -668,8 +690,8 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
 
   Widget _smallStatCard({required IconData icon, required String value, required String label, required Color color}) {
     return Container(
-      padding: const EdgeInsets.all(8),
-      margin: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.all(6),
+      margin: const EdgeInsets.symmetric(horizontal: 1),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(12),
@@ -679,22 +701,24 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16),
-              const SizedBox(width: 4),
+              Icon(icon, size: 14),
+              const SizedBox(width: 2),
               Flexible(
                 child: Text(
                   value, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             label, 
-            style: const TextStyle(fontSize: 11),
+            style: const TextStyle(fontSize: 10),
             textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
@@ -705,7 +729,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   }
 
   Widget _segmentControl() {
-    final labels = ['Posts', 'Videos', 'Stories', 'Events / Live Sessions'];
+    final labels = ['Posts', 'Videos', 'Stories', 'Events'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -734,6 +758,10 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                         // Auto-load videos when Videos tab is selected
                         if (i == 1 && widget.babaPage != null) {
                           _fetchVideos(widget.babaPage!);
+                        }
+                        // Auto-load stories when Stories tab is selected
+                        if (i == 2 && widget.babaPage != null) {
+                          _fetchStories(widget.babaPage!);
                         }
                       },
                       child: Container(
@@ -764,8 +792,8 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                   },
                 ),
               );
-            } else {
-              // For normal screens, use the original layout
+            } else if (constraints.maxWidth < 400) {
+              // For medium screens, use reduced margins and smaller font
               return Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -787,10 +815,14 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                           if (i == 1 && widget.babaPage != null) {
                             _fetchVideos(widget.babaPage!);
                           }
+                          // Auto-load stories when Stories tab is selected
+                          if (i == 2 && widget.babaPage != null) {
+                            _fetchStories(widget.babaPage!);
+                          }
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          margin: const EdgeInsets.symmetric(horizontal: 6),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          margin: const EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
                             color: isSelected ? Colors.white : Colors.transparent,
                             borderRadius: BorderRadius.circular(24),
@@ -804,7 +836,64 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                fontSize: 12,
+                                fontSize: 10,
+                                color: isSelected ? Colors.black87 : Colors.grey[600],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              );
+            } else {
+              // For normal screens, use the original layout with reduced margins
+              return Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  children: List.generate(labels.length, (i) {
+                    final isSelected = i == selectedSegment;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => selectedSegment = i);
+                          // Auto-load posts when Posts tab is selected
+                          if (i == 0 && widget.babaPage != null) {
+                            _fetchPosts(widget.babaPage!);
+                          }
+                          // Auto-load videos when Videos tab is selected
+                          if (i == 1 && widget.babaPage != null) {
+                            _fetchVideos(widget.babaPage!);
+                          }
+                          // Auto-load stories when Stories tab is selected
+                          if (i == 2 && widget.babaPage != null) {
+                            _fetchStories(widget.babaPage!);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: isSelected
+                                ? [BoxShadow(color: Colors.black12, blurRadius: 8, offset: const Offset(0, 4))]
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              labels[i],
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                fontSize: 11,
                                 color: isSelected ? Colors.black87 : Colors.grey[600],
                               ),
                               overflow: TextOverflow.ellipsis,
@@ -866,55 +955,138 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                   const SizedBox(height: 16),
                   const Text('Create', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _createTile(
-                        icon: Icons.grid_3x3_outlined,
-                        label: 'Post',
-                        color: Colors.blue.shade100,
-                        onTap: page == null ? null : () async {
-                          Navigator.pop(context);
-                          final ok = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => BabaPagePostCreationScreen(babaPage: page),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth < 300) {
+                        // For very small screens, use vertical layout
+                        return Column(
+                          children: [
+                            _createTile(
+                              icon: Icons.grid_3x3_outlined,
+                              label: 'Post',
+                              color: Colors.blue.shade100,
+                              onTap: page == null ? null : () async {
+                                Navigator.pop(context);
+                                final ok = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BabaPagePostCreationScreen(babaPage: page),
+                                  ),
+                                );
+                                if (ok == true) {
+                                  _fetchPosts(page);
+                                }
+                              },
                             ),
-                          );
-                          if (ok == true) {
-                            _fetchPosts(page);
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      _createTile(
-                        icon: Icons.video_call_outlined,
-                        label: 'Reel',
-                        color: Colors.green.shade100,
-                        onTap: page == null ? null : () async {
-                          Navigator.pop(context);
-                          final ok = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => BabaPageReelUploadScreen(babaPage: page),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _createTile(
+                                    icon: Icons.video_call_outlined,
+                                    label: 'Reel',
+                                    color: Colors.green.shade100,
+                                    onTap: page == null ? null : () async {
+                                      Navigator.pop(context);
+                                      final ok = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => BabaPageReelUploadScreen(babaPage: page),
+                                        ),
+                                      );
+                                      if (ok == true) {
+                                        // Refresh reels if needed
+                                        print('Baba Ji reel uploaded successfully');
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _createTile(
+                                    icon: Icons.auto_stories_outlined,
+                                    label: 'Story',
+                                    color: Colors.orange.shade100,
+                                    onTap: page == null ? null : () async {
+                                      Navigator.pop(context);
+                                      final ok = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => BabaPageStoryUploadScreen(babaPage: page),
+                                        ),
+                                      );
+                                      if (ok == true) {
+                                        _fetchStories(page);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                          if (ok == true) {
-                            // Refresh reels if needed
-                            print('Baba Ji reel uploaded successfully');
-                          }
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      _createTile(
-                        icon: Icons.auto_stories_outlined,
-                        label: 'Story',
-                        color: Colors.orange.shade100,
-                        onTap: () {
-                          // TODO: open story upload screen
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
+                          ],
+                        );
+                      } else {
+                        // For normal screens, use horizontal layout
+                        return Row(
+                          children: [
+                            _createTile(
+                              icon: Icons.grid_3x3_outlined,
+                              label: 'Post',
+                              color: Colors.blue.shade100,
+                              onTap: page == null ? null : () async {
+                                Navigator.pop(context);
+                                final ok = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BabaPagePostCreationScreen(babaPage: page),
+                                  ),
+                                );
+                                if (ok == true) {
+                                  _fetchPosts(page);
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _createTile(
+                              icon: Icons.video_call_outlined,
+                              label: 'Reel',
+                              color: Colors.green.shade100,
+                              onTap: page == null ? null : () async {
+                                Navigator.pop(context);
+                                final ok = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BabaPageReelUploadScreen(babaPage: page),
+                                  ),
+                                );
+                                if (ok == true) {
+                                  // Refresh reels if needed
+                                  print('Baba Ji reel uploaded successfully');
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _createTile(
+                              icon: Icons.auto_stories_outlined,
+                              label: 'Story',
+                              color: Colors.orange.shade100,
+                              onTap: page == null ? null : () async {
+                                Navigator.pop(context);
+                                final ok = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => BabaPageStoryUploadScreen(babaPage: page),
+                                  ),
+                                );
+                                if (ok == true) {
+                                  _fetchStories(page);
+                                }
+                              },
+                            ),
+                          ],
+                        );
+                      }
+                    },
                   )
                 ],
               ),
@@ -926,24 +1098,22 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   }
 
   Widget _createTile({required IconData icon, required String label, required Color color, VoidCallback? onTap}) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          height: 100,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 28),
-              const SizedBox(height: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-            ],
-          ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 100,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
         ),
       ),
     );
@@ -1117,6 +1287,58 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
     }
   }
 
+  Future<void> _fetchStories(BabaPage page) async {
+    if (_loadingStories) return; // Prevent multiple simultaneous calls
+    
+    try {
+      if (mounted) {
+        setState(() => _loadingStories = true);
+      }
+      
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final token = auth.authToken;
+      
+      if (token != null) {
+        print('BabaProfileUiDemo: Fetching stories from server for page ${page.id}');
+        
+        // Fetch stories from server using BabaPageStoryService
+        final stories = await BabaPageStoryService.getBabaPageStories(
+          babaPageId: page.id,
+          token: token,
+          page: 1,
+          limit: 20,
+        );
+        
+        print('BabaProfileUiDemo: Server returned ${stories.length} stories');
+        
+        // Update UI with stories
+        if (mounted) {
+          setState(() {
+            _stories = stories;
+            _loadingStories = false;
+          });
+        }
+        
+        print('BabaProfileUiDemo: Loaded ${stories.length} stories');
+        if (stories.isNotEmpty) {
+          print('BabaProfileUiDemo: Stories data: ${stories.map((s) => '${s.id}: "${s.content.substring(0, s.content.length > 20 ? 20 : s.content.length)}..." (${s.media.type})').join(', ')}');
+        } else {
+          print('BabaProfileUiDemo: No stories returned from API');
+        }
+      } else {
+        print('BabaProfileUiDemo: No auth token found');
+        if (mounted) {
+          setState(() => _loadingStories = false);
+        }
+      }
+    } catch (e) {
+      print('BabaProfileUiDemo: Error fetching stories: $e');
+      if (mounted) {
+        setState(() => _loadingStories = false);
+      }
+    }
+  }
+
   Widget _buildVideosList() {
     if (_loadingVideos) {
       return Column(
@@ -1167,17 +1389,33 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   }
 
   Widget _buildVideoItem(MediaData video) {
+    print('BabaProfileUiDemo: Building video item for ${video.mediaId} with URL: ${video.secureUrl}');
     return Container(
-      key: ValueKey('video_${video.mediaId}'), // Add key to prevent unnecessary rebuilds
+      key: ValueKey('video_${video.mediaId}'),
       margin: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Video title/caption
+          if (video.fileName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                video.fileName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           
-          // Video bar (dark grey like third image)
+          // Video player container
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF2D2D2D), // Dark grey like third image
+              color: Colors.black,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -1187,107 +1425,69 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Video thumbnail/icon
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade700,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.video_file,
-                      color: Colors.white,
-                      size: 32,
-                    ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 16 / 9, // Standard video aspect ratio
+                child: GestureDetector(
+                  onTap: () {
+                    print('BabaProfileUiDemo: Video tapped - ${video.fileName}');
+                  },
+                  child: VideoPlayerWidget(
+                    videoUrl: video.secureUrl,
+                    autoPlay: false, // Don't autoplay in profile view
+                    looping: false,
+                    muted: true, // Start muted for better UX
+                    showControls: true,
                   ),
-                  const SizedBox(width: 16),
-                  
-                  // Video info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          video.fileName.isNotEmpty ? video.fileName : 'Video ${video.mediaId.substring(0, 8)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Uploaded ${_formatDate(video.uploadedAt)}',
-                          style: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          video.fileType.toUpperCase(),
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Play button (like third image) - simplified
-                  GestureDetector(
-                    onTap: () {
-                      // Simple tap handler without complex interactions
-                      print('Play video: ${video.fileName}');
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.black,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 12),
-                  
-                  // Delete button - simplified
-                  GestureDetector(
-                    onTap: () {
-                      // Simple delete without complex dialog
-                      _deleteVideoDirectly(video);
-                    },
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade600,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
+            ),
+          ),
+          
+          // Video info bar
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.video_file,
+                  size: 16,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Uploaded ${_formatDate(video.uploadedAt)}',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                  ),
+                ),
+                const Spacer(),
+                // Delete button
+                GestureDetector(
+                  onTap: () {
+                    _deleteVideoDirectly(video);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red.shade600,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1376,30 +1576,327 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   }
 
   Widget _buildStoriesList() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          Icon(
-            Icons.auto_stories_outlined,
-            size: 64,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No stories yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
+    if (_loadingStories) {
+      return Column(
+        children: List.generate(3, (index) => _buildStoryItemSkeleton()),
+      );
+    }
+
+    if (_stories.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          children: [
+            Icon(
+              Icons.auto_stories_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Create your first story',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
+            const SizedBox(height: 16),
+            Text(
+              'No stories yet',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create your first story',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _openCreateBottomSheet(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Create Story'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.shade400,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _stories.length,
+      itemBuilder: (context, index) {
+        return _buildStoryItem(_stories[index]);
+      },
+    );
+  }
+
+  Widget _buildStoryItem(BabaPageStory story) {
+    return GestureDetector(
+      onTap: () => _openStoryViewer(story),
+      child: Container(
+        key: ValueKey('story_${story.id}'),
+        margin: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Story content
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Story media
+                  if (story.media.url.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: story.media.type == 'image'
+                          ? Image.network(
+                              story.media.url,
+                              width: double.infinity,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey.shade200,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                    ),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey.shade200,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      color: Colors.grey,
+                                      size: 32,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Container(
+                              height: 200,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.videocam, size: 48, color: Colors.grey),
+                                    SizedBox(height: 8),
+                                    Text('Video Story'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
+                  const SizedBox(height: 12),
+                  // Story content text
+                  Text(
+                    story.content,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Story stats and actions
+                  Row(
+                    children: [
+                      Icon(Icons.visibility, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${story.viewsCount}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Icon(Icons.favorite, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${story.likesCount}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const Spacer(),
+                      // Delete button for Babaji stories
+                      GestureDetector(
+                        onTap: () => _showDeleteStoryConfirmation(story),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: Colors.red.shade600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDate(story.createdAt),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Convert BabaPageStory to Story format for story viewer
+  Story _convertBabaPageStoryToStory(BabaPageStory babaStory) {
+    return Story(
+      id: babaStory.id,
+      authorId: widget.babaPage?.id ?? '',
+      authorName: widget.babaPage?.name ?? 'Babaji',
+      authorUsername: widget.babaPage?.name ?? 'babaji',
+      authorAvatar: widget.babaPage?.avatar,
+      media: babaStory.media.url,
+      mediaId: babaStory.id,
+      type: babaStory.media.type,
+      mentions: [],
+      hashtags: [],
+      isActive: babaStory.isActive,
+      views: [],
+      viewsCount: babaStory.viewsCount,
+      expiresAt: babaStory.expiresAt,
+      createdAt: babaStory.createdAt,
+      updatedAt: babaStory.updatedAt,
+    );
+  }
+
+  // Open story viewer for a specific story
+  void _openStoryViewer(BabaPageStory story) {
+    // Convert all stories to Story format
+    final allStories = _stories.map((s) => _convertBabaPageStoryToStory(s)).toList();
+    final currentStory = _convertBabaPageStoryToStory(story);
+    final initialIndex = _stories.indexOf(story);
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StoryViewerScreen(
+          story: currentStory,
+          allStories: allStories,
+          initialIndex: initialIndex >= 0 ? initialIndex : 0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryItemSkeleton() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 200,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  height: 16,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 16,
+                  width: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Container(
+                      height: 12,
+                      width: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      height: 12,
+                      width: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      height: 12,
+                      width: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -2105,6 +2602,101 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
       _showSnackBar('Error deleting post: $e', Colors.red);
     }
   }
+
+  /// Show delete confirmation dialog for Babaji story
+  void _showDeleteStoryConfirmation(BabaPageStory story) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Babaji Story'),
+        content: const Text('Are you sure you want to delete this Babaji story? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteBabajiStory(story);
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Delete a Babaji story
+  Future<void> _deleteBabajiStory(BabaPageStory story) async {
+    try {
+      print('BabaProfileUiDemo: Deleting Babaji story ${story.id}');
+      
+      // Get auth token
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to delete stories'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deleting Babaji story...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+      
+      // Delete the story using BabaPageStoryService
+      final success = await BabaPageStoryService.deleteBabaPageStory(
+        storyId: story.id,
+        babaPageId: story.babaPageId,
+        token: token,
+      );
+      
+      if (success) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Babaji story deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Refresh the stories list
+        if (widget.babaPage != null) {
+          _fetchStories(widget.babaPage!);
+        }
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to delete Babaji story'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      
+    } catch (e) {
+      print('Error deleting Babaji story: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting Babaji story: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 }
 
 class _FollowButton extends StatefulWidget {
@@ -2453,6 +3045,7 @@ class _FollowButtonState extends State<_FollowButton> {
       if (mounted) setState(() => _loading = false);
     }
   }
+
 }
 
 

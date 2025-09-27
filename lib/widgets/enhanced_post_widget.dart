@@ -678,11 +678,13 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           response = await ApiService.unlikePost(
             postId: widget.post.id,
             token: token,
+            userId: userId,
           );
         } else {
           response = await ApiService.likePost(
             postId: widget.post.id,
             token: token,
+            userId: userId,
           );
         }
       }

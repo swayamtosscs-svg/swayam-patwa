@@ -121,6 +121,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
+      final userName = authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'User';
 
       final response = widget.isReel
           ? await BabaCommentService.addReelComment(
@@ -128,6 +129,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
               reelId: widget.postId,
               babaPageId: widget.babaPageId,
               content: content,
+              userName: userName,
               token: token,
             )
           : await BabaCommentService.addCommentWithFallback(
@@ -135,6 +137,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
               postId: widget.postId,
               babaPageId: widget.babaPageId,
               content: content,
+              userName: userName,
               token: token,
             );
 
@@ -225,6 +228,7 @@ class _BabaCommentDialogState extends State<BabaCommentDialog> {
       final response = await BabaCommentService.deleteComment(
         commentId: comment.id,
         userId: userId,
+        postId: widget.postId,
         token: token,
       );
 

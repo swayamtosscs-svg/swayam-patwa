@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/story_model.dart';
 // Removed Cloudinary dependency
 import '../services/story_service.dart';
+import '../services/baba_page_story_service.dart'; // Added for Babaji story deletion
 import '../providers/auth_provider.dart';
 import '../widgets/video_player_widget.dart';
 
@@ -542,18 +543,43 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
         ),
       );
       
-      // Delete the story using StoryService (only if user is the owner)
-      final result = await StoryService.deleteStory(
-        currentStory.id,
-        currentStory.authorId,
-        token,
-      );
+      bool deleteSuccess = false;
+      String deleteMessage = '';
       
-      if (result['success'] == true) {
+      // Check if this is a Babaji story (author name is "Baba Ji")
+      if (currentStory.authorName == 'Baba Ji') {
+        print('StoryViewerScreen: Deleting Babaji story ${currentStory.id}');
+        
+        // Delete using BabaPageStoryService
+        deleteSuccess = await BabaPageStoryService.deleteBabaPageStory(
+          storyId: currentStory.id,
+          babaPageId: currentStory.authorId, // For Babaji stories, authorId is the babaPageId
+          token: token,
+        );
+        
+        deleteMessage = deleteSuccess ? 'Babaji story deleted successfully' : 'Failed to delete Babaji story';
+        print('StoryViewerScreen: Babaji story delete result: $deleteSuccess');
+        
+      } else {
+        print('StoryViewerScreen: Deleting regular user story ${currentStory.id}');
+        
+        // Delete using regular StoryService
+        final result = await StoryService.deleteStory(
+          currentStory.id,
+          currentStory.authorId,
+          token,
+        );
+        
+        deleteSuccess = result['success'] == true;
+        deleteMessage = result['message'] ?? (deleteSuccess ? 'Story deleted successfully' : 'Failed to delete story');
+        print('StoryViewerScreen: Regular story delete result: $deleteSuccess');
+      }
+      
+      if (deleteSuccess) {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Story deleted successfully'),
+            content: Text(deleteMessage),
             backgroundColor: Colors.green,
           ),
         );
@@ -564,7 +590,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Failed to delete story'),
+            content: Text(deleteMessage),
             backgroundColor: Colors.red,
           ),
         );

@@ -1,49 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
-import 'fallback_video_player_widget.dart';
+import 'package:video_player/video_player.dart';
 
-class VideoPlayerWidget extends StatefulWidget {
+class FallbackVideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
   final bool autoPlay;
   final bool looping;
   final bool muted;
   final bool showControls;
 
-  const VideoPlayerWidget({
+  const FallbackVideoPlayerWidget({
     Key? key,
     required this.videoUrl,
     this.autoPlay = true,
     this.looping = true,
-    this.muted = false, // Changed default to false for audio
-    this.showControls = true, // Added controls option
+    this.muted = false,
+    this.showControls = true,
   }) : super(key: key);
 
   @override
-  State<VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
+  State<FallbackVideoPlayerWidget> createState() => _FallbackVideoPlayerWidgetState();
 }
 
-class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
-  late final Player player;
-  late final VideoController videoController;
+class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
+  VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
   String _errorMessage = '';
   bool _isPlaying = false;
   bool _isDisposed = false;
   bool _showControls = true;
-  bool _useFallback = false;
 
   @override
   void initState() {
     super.initState();
     _showControls = widget.showControls;
-    // Always initialize the player, regardless of autoPlay setting
     _initializePlayer();
   }
 
   @override
-  void didUpdateWidget(VideoPlayerWidget oldWidget) {
+  void didUpdateWidget(FallbackVideoPlayerWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoUrl != widget.videoUrl && !_isDisposed) {
       _loadNewVideo();
@@ -53,15 +48,13 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   @override
   void dispose() {
     _isDisposed = true;
-    if (_isInitialized) {
-      player.dispose();
-    }
+    _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _initializePlayer() async {
     try {
-      print('VideoPlayerWidget: Initializing player for URL: ${widget.videoUrl}');
+      print('FallbackVideoPlayerWidget: Initializing player for URL: ${widget.videoUrl}');
       
       // Validate URL
       if (widget.videoUrl.isEmpty) {
@@ -72,65 +65,46 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
         throw Exception('Invalid video URL format: ${widget.videoUrl}');
       }
       
-      player = Player();
-      videoController = VideoController(player);
+      _controller = VideoPlayerController.network(
+        widget.videoUrl,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: true,
+          allowBackgroundPlayback: false,
+        ),
+      );
       
-      // Set up event listeners
-      player.stream.playing.listen((playing) {
-        if (mounted && !_isDisposed) {
-          setState(() {
-            _isPlaying = playing;
-          });
-          print('VideoPlayerWidget: Playing state changed to: $playing');
-        }
-      });
-
-      player.stream.error.listen((error) {
-        if (mounted && !_isDisposed) {
-          print('VideoPlayerWidget: Player error: $error');
-          print('VideoPlayerWidget: Switching to fallback player');
-          setState(() {
-            _useFallback = true;
-            _hasError = false;
-            _errorMessage = '';
-          });
-        }
-      });
-
-      // Add completion listener
-      player.stream.completed.listen((completed) {
-        if (mounted && !_isDisposed && completed) {
-          print('VideoPlayerWidget: Video completed');
-          if (widget.looping) {
-            player.seek(Duration.zero);
-            player.play();
-          }
-        }
-      });
-
-      print('VideoPlayerWidget: Opening media...');
-      await player.open(Media(widget.videoUrl));
+      // Set video player configuration
+      _controller!.setVolume(widget.muted ? 0.0 : 1.0);
+      _controller!.setLooping(widget.looping);
+      
+      await _controller!.initialize();
       
       if (mounted && !_isDisposed) {
         setState(() {
           _isInitialized = true;
         });
         
-        print('VideoPlayerWidget: Player initialized successfully');
+        // Add listener for video state changes
+        _controller!.addListener(() {
+          if (mounted && !_isDisposed) {
+            setState(() {
+              _isPlaying = _controller!.value.isPlaying;
+            });
+          }
+        });
         
+        // Auto-play the video
         if (widget.autoPlay) {
-          print('VideoPlayerWidget: Starting autoplay...');
-          await player.play();
+          print('FallbackVideoPlayerWidget: Starting autoplay...');
+          await _controller!.play();
         }
       }
     } catch (e) {
-      print('VideoPlayerWidget: Initialization error: $e');
-      print('VideoPlayerWidget: Switching to fallback player');
+      print('FallbackVideoPlayerWidget: Initialization error: $e');
       if (mounted && !_isDisposed) {
         setState(() {
-          _useFallback = true;
-          _hasError = false;
-          _errorMessage = '';
+          _hasError = true;
+          _errorMessage = e.toString();
         });
       }
     }
@@ -138,17 +112,8 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 
   Future<void> _loadNewVideo() async {
     try {
-      await player.open(Media(widget.videoUrl));
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _hasError = false;
-          _errorMessage = '';
-        });
-        
-        if (widget.autoPlay) {
-          player.play();
-        }
-      }
+      await _controller?.dispose();
+      await _initializePlayer();
     } catch (e) {
       if (mounted && !_isDisposed) {
         setState(() {
@@ -160,27 +125,21 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   }
 
   void _togglePlayPause() {
-    if (_isDisposed) return;
+    print('FallbackVideoPlayerWidget: Toggling play/pause. Current state: $_isPlaying, Initialized: $_isInitialized');
     
-    print('VideoPlayerWidget: Toggling play/pause. Current state: $_isPlaying, Initialized: $_isInitialized');
-    
-    // If not initialized yet, try to initialize first
-    if (!_isInitialized && !_useFallback) {
-      print('VideoPlayerWidget: Player not initialized, initializing now...');
-      _initializePlayer();
-      return;
-    }
-    
-    if (_isPlaying) {
-      if (_isInitialized) {
-        player.pause();
-        print('VideoPlayerWidget: Pausing video');
+    if (_controller != null && _isInitialized) {
+      if (_isPlaying) {
+        _controller!.pause();
+        print('FallbackVideoPlayerWidget: Pausing video');
+      } else {
+        _controller!.play();
+        print('FallbackVideoPlayerWidget: Playing video');
       }
+      setState(() {
+        _isPlaying = !_isPlaying;
+      });
     } else {
-      if (_isInitialized) {
-        player.play();
-        print('VideoPlayerWidget: Playing video');
-      }
+      print('FallbackVideoPlayerWidget: Controller not ready or not initialized');
     }
   }
 
@@ -194,17 +153,6 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Use fallback player if media_kit failed
-    if (_useFallback) {
-      return FallbackVideoPlayerWidget(
-        videoUrl: widget.videoUrl,
-        autoPlay: widget.autoPlay,
-        looping: widget.looping,
-        muted: widget.muted,
-        showControls: widget.showControls,
-      );
-    }
-
     if (_hasError) {
       return Container(
         decoration: BoxDecoration(
@@ -222,7 +170,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Video Error',
+                'Video Error (Fallback)',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -245,10 +193,10 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                     _hasError = false;
                     _errorMessage = '';
                     _isInitialized = false;
-                    _useFallback = true;
                   });
+                  _initializePlayer();
                 },
-                child: const Text('Use Fallback Player'),
+                child: const Text('Retry'),
               ),
               const SizedBox(height: 8),
               Text(
@@ -294,10 +242,9 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
             // Video player
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Video(
-                controller: videoController,
-                controls: _showControls ? AdaptiveVideoControls : NoVideoControls,
-                fill: Colors.black,
+              child: AspectRatio(
+                aspectRatio: _controller!.value.aspectRatio,
+                child: VideoPlayer(_controller!),
               ),
             ),
             

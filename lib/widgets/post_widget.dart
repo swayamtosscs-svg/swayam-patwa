@@ -104,11 +104,13 @@ class _PostWidgetState extends State<PostWidget> {
         response = await ApiService.unlikePost(
           postId: widget.post.id,
           token: token,
+          userId: userId,
         );
       } else {
         response = await ApiService.likePost(
           postId: widget.post.id,
           token: token,
+          userId: userId,
         );
       }
 

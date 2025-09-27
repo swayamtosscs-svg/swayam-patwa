@@ -49,7 +49,10 @@ class _DPWidgetState extends State<DPWidget> {
   void didUpdateWidget(DPWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentImageUrl != widget.currentImageUrl) {
+      print('DPWidget: currentImageUrl changed from ${oldWidget.currentImageUrl} to ${widget.currentImageUrl}');
       _localImageUrl = widget.currentImageUrl;
+      // Reload DP to get the latest image
+      _loadDP();
     }
   }
 

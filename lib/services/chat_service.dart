@@ -104,6 +104,96 @@ class ChatService {
     }
   }
 
+  /// Get conversations from local storage (public method)
+  static Future<List<ChatThread>> getLocalConversations(String userId) async {
+    return await _getLocalConversations(userId);
+  }
+
+  /// Initialize conversations on app startup
+  static Future<List<ChatThread>> initializeConversations({
+    required String currentUserId,
+    required String token,
+  }) async {
+    try {
+      print('ChatService: Initializing conversations for user: $currentUserId');
+      
+      // Get local conversations first
+      final localConversations = await _getLocalConversations(currentUserId);
+      print('ChatService: Found ${localConversations.length} local conversations on startup');
+      
+      // Try to sync with API (but don't fail if it doesn't work)
+      try {
+        final apiConversations = await getAllConversations(
+          token: token,
+          currentUserId: currentUserId,
+        );
+        print('ChatService: Synced ${apiConversations.length} API conversations on startup');
+        
+        // Return the combined list (local conversations are prioritized)
+        final allConversations = <ChatThread>[];
+        final seenUserIds = <String>{};
+        
+        // Add local conversations first
+        for (final conversation in localConversations) {
+          allConversations.add(conversation);
+          seenUserIds.add(conversation.userId);
+        }
+        
+        // Add API conversations that aren't already in local storage
+        for (final conversation in apiConversations) {
+          if (!seenUserIds.contains(conversation.userId)) {
+            allConversations.add(conversation);
+            seenUserIds.add(conversation.userId);
+          }
+        }
+        
+        // Sort by last message time (most recent first)
+        allConversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+        
+        return allConversations;
+      } catch (apiError) {
+        print('ChatService: API sync failed on startup, using local conversations only: $apiError');
+        return localConversations;
+      }
+    } catch (e) {
+      print('ChatService: Error initializing conversations: $e');
+      return [];
+    }
+  }
+
+  /// Update conversation when a message is received
+  static Future<void> updateConversationOnMessageReceived({
+    required String currentUserId,
+    required String senderUserId,
+    required String senderUsername,
+    required String senderFullName,
+    required String senderAvatar,
+    required String lastMessage,
+    required DateTime lastMessageTime,
+    String? threadId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'conversation_${currentUserId}_$senderUserId';
+      
+      final conversationData = {
+        'id': threadId ?? '',
+        'userId': senderUserId,
+        'username': senderUsername,
+        'fullName': senderFullName,
+        'avatar': senderAvatar,
+        'lastMessage': lastMessage,
+        'lastMessageTime': lastMessageTime.toIso8601String(),
+        'unreadCount': 1, // Mark as unread when message is received
+      };
+      
+      await prefs.setString(key, jsonEncode(conversationData));
+      print('ChatService: Updated conversation on message received: $key');
+    } catch (e) {
+      print('ChatService: Error updating conversation on message received: $e');
+    }
+  }
+
   /// Get conversations from local storage
   static Future<List<ChatThread>> _getLocalConversations(String userId) async {
     try {

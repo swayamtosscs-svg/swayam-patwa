@@ -315,6 +315,7 @@ class _SearchScreenState extends State<SearchScreen> {
         final fullName = userData['fullName'] ?? 'No Name';
         final bio = userData['bio'] ?? '';
         final avatar = userData['avatar'] ?? '';
+        final userId = userData['_id'] ?? '';
         final followersCount = userData['followersCount'] ?? 0;
         final followingCount = userData['followingCount'] ?? 0;
         final postsCount = userData['postsCount'] ?? 0;
@@ -399,9 +400,24 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 _buildStatItem('Posts', postsCount.toString()),
                 SizedBox(width: isSmallScreen ? 12 : 16),
-                _buildStatItem('Followers', followersCount.toString()),
-                SizedBox(width: isSmallScreen ? 12 : 16),
-                _buildStatItem('Following', followingCount.toString()),
+                FutureBuilder<Map<String, int>>(
+                  future: userId.isNotEmpty ? Provider.of<AuthProvider>(context, listen: false).getUserCounts(userId) : Future.value({'followers': 0, 'following': 0}),
+                  builder: (context, snapshot) {
+                    int realFollowersCount = followersCount;
+                    int realFollowingCount = followingCount;
+                    if (snapshot.hasData && userId.isNotEmpty) {
+                      realFollowersCount = snapshot.data!['followers'] ?? followersCount;
+                      realFollowingCount = snapshot.data!['following'] ?? followingCount;
+                    }
+                    return Row(
+                      children: [
+                        _buildStatItem('Followers', realFollowersCount.toString()),
+                        SizedBox(width: isSmallScreen ? 12 : 16),
+                        _buildStatItem('Following', realFollowingCount.toString()),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
             
