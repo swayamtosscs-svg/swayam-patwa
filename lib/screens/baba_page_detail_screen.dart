@@ -770,39 +770,40 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
                           fontFamily: 'Poppins',
                         ),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          if (_selectedTabIndex == 0) {
-                            // Create Post
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => BabaPagePostCreationScreen(
-                                  babaPage: widget.babaPage,
+                      if (_isCurrentUserCreator())
+                        GestureDetector(
+                          onTap: () {
+                            if (_selectedTabIndex == 0) {
+                              // Create Post
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BabaPagePostCreationScreen(
+                                    babaPage: widget.babaPage,
+                                  ),
                                 ),
-                              ),
-                            ).then((_) {
-                              _loadPosts();
-                            });
-                          } else {
-                            // Create Reel
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => BabaPageReelUploadScreen(
-                                  babaPage: widget.babaPage,
-                                ),
-                              ),
-                            ).then((_) {
-                              // Add delay to allow server processing time
-                              Future.delayed(const Duration(seconds: 3), () {
-                                if (mounted) {
-                                  _loadReels();
-                                }
+                              ).then((_) {
+                                _loadPosts();
                               });
-                            });
-                          }
-                        },
+                            } else {
+                              // Create Reel
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BabaPageReelUploadScreen(
+                                    babaPage: widget.babaPage,
+                                  ),
+                                ),
+                              ).then((_) {
+                                // Add delay to allow server processing time
+                                Future.delayed(const Duration(seconds: 3), () {
+                                  if (mounted) {
+                                    _loadReels();
+                                  }
+                                });
+                              });
+                            }
+                          },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
@@ -852,7 +853,7 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
           ),
         ],
       ),
-      floatingActionButton: GestureDetector(
+      floatingActionButton: _isCurrentUserCreator() ? GestureDetector(
         onTap: () {
           print('Floating Action Button pressed for page: ${_currentBabaPage.name} (ID: ${_currentBabaPage.id})');
           // Show immediate feedback with page info
@@ -895,7 +896,7 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
             size: 28,
           ),
         ),
-      ),
+      ) : null,
     );
   }
 
@@ -1428,24 +1429,25 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
                     ],
                   ),
                 ),
-                // Delete Button
-                GestureDetector(
-                  onTap: () {
-                    _showDeletePostConfirmation(post);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      Icons.delete,
-                      color: Colors.red,
-                      size: 20,
+                // Delete Button - only show for page creator
+                if (_isCurrentUserCreator())
+                  GestureDetector(
+                    onTap: () {
+                      _showDeletePostConfirmation(post);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        Icons.delete,
+                        color: Colors.red,
+                        size: 20,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -1662,6 +1664,17 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
         );
       },
     );
+  }
+
+  /// Check if the current user is the creator of this Baba Ji page
+  bool _isCurrentUserCreator() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUser = authProvider.userProfile;
+    
+    if (currentUser == null) return false;
+    
+    // Compare current user ID with page creator ID
+    return currentUser.id == _currentBabaPage.creatorId;
   }
 
 }

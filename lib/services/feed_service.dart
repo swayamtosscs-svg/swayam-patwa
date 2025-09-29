@@ -3,8 +3,10 @@ import 'package:http/http.dart' as http;
 import '../models/post_model.dart';
 import '../models/baba_page_post_model.dart';
 import '../models/baba_page_reel_model.dart';
+import '../models/privacy_model.dart';
 import 'baba_page_post_service.dart';
 import 'baba_page_reel_service.dart';
+import 'privacy_service.dart';
 
 class FeedService {
   static const String _baseUrl = 'http://103.14.120.163:8081/api';
@@ -17,6 +19,88 @@ class FeedService {
   // Cache for Baba Ji posts
   static List<Post> _cachedBabaJiPosts = [];
   static DateTime? _lastBabaJiCacheTime;
+
+  /// Get social feed with privacy enforcement
+  static Future<List<Post>> getSocialFeedWithPrivacy({
+    required String token,
+    required String currentUserId,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      print('FeedService: Fetching social feed with privacy enforcement for user: $currentUserId');
+      
+      final response = await PrivacyService.getSocialFeedWithPrivacy(
+        page: page,
+        limit: limit,
+      );
+
+      if (response['success'] == true && response['data'] != null) {
+        final List<dynamic> postsData = response['data']['posts'] ?? [];
+        final List<Post> posts = [];
+
+        for (final postData in postsData) {
+          try {
+            final post = Post.fromJson(postData);
+            posts.add(post);
+          } catch (e) {
+            print('FeedService: Error parsing post: $e');
+            continue;
+          }
+        }
+
+        print('FeedService: Successfully fetched ${posts.length} social feed posts');
+        return posts;
+      } else {
+        print('FeedService: Failed to fetch social feed: ${response['message']}');
+        return [];
+      }
+    } catch (e) {
+      print('FeedService: Error fetching social feed: $e');
+      return [];
+    }
+  }
+
+  /// Get assets feed with privacy enforcement
+  static Future<List<Post>> getAssetsFeedWithPrivacy({
+    required String token,
+    required String currentUserId,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      print('FeedService: Fetching assets feed with privacy enforcement for user: $currentUserId');
+      
+      final response = await PrivacyService.getAssetsFeedWithPrivacy(
+        page: page,
+        limit: limit,
+      );
+
+      if (response['success'] == true && response['data'] != null) {
+        final List<dynamic> postsData = response['data']['posts'] ?? [];
+        final List<Post> posts = [];
+
+        for (final postData in postsData) {
+          try {
+            final post = Post.fromJson(postData);
+            posts.add(post);
+          } catch (e) {
+            print('FeedService: Error parsing post: $e');
+            continue;
+          }
+        }
+
+        print('FeedService: Successfully fetched ${posts.length} assets feed posts');
+        return posts;
+      } else {
+        print('FeedService: Failed to fetch assets feed: ${response['message']}');
+        return [];
+      }
+    } catch (e) {
+      print('FeedService: Error fetching assets feed: $e');
+      return [];
+    }
+  }
 
   /// Get feed posts from followed users using the working Home Feed API
   static Future<List<Post>> getFeedPosts({
@@ -94,6 +178,7 @@ class FeedService {
               );
               posts.add(post);
               print('FeedService: Created post: ${post.id} by ${post.username}');
+              print('FeedService: Post data: ${postData['_id']} - ${postData['content']}');
             } catch (e) {
               print('FeedService: Error creating post from data: $e');
               print('FeedService: Post data: $postData');
@@ -247,6 +332,8 @@ class FeedService {
                   thumbnailUrl: media['resourceType'] == 'video' ? (media['thumbnailUrl'] ?? media['secureUrl'] ?? (media['publicUrl'] != null ? 'http://103.14.120.163:8081${media['publicUrl']}' : null)) : null,
                 );
                 posts.add(post);
+                print('FeedService: Created media post: ${post.id} by ${post.username}');
+                print('FeedService: Media data: ${media['_id']} - ${media['title']}');
               } catch (e) {
                 print('FeedService: Fallback: Error creating post from media: $e');
               }
@@ -596,11 +683,86 @@ class FeedService {
         allBabaPosts.addAll(posts);
       }
 
-      // Sort by creation date (newest first)
-      allBabaPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      // Get reels from each Baba Ji page in parallel
+      final List<Post> allBabaReels = [];
+      final reelFutures = babaPages.map((babaPage) async {
+        final babaPageId = babaPage['_id'] ?? babaPage['id'];
+        if (babaPageId != null) {
+          try {
+            final reelsResponse = await BabaPageReelService.getBabaPageReels(
+              babaPageId: babaPageId,
+              token: token,
+              page: 1,
+              limit: 3, // Reduced limit for faster loading
+            );
 
-      print('FeedService: Found ${allBabaPosts.length} Baba Ji posts (optimized)');
-      return allBabaPosts;
+            if (reelsResponse['success'] == true) {
+              final List<Post> reels = [];
+              final reelsData = reelsResponse['data']['videos'] as List<dynamic>;
+              for (final reelData in reelsData) {
+                final reel = BabaPageReel.fromJson(reelData);
+                // Convert Baba Ji reel to regular Post for feed
+                final post = Post(
+                  id: 'baba_reel_${reel.id}',
+                  userId: reel.babaPageId,
+                  username: babaPage['name'] ?? 'Baba Ji',
+                  userAvatar: babaPage['avatar'] ?? '',
+                  caption: '${reel.title}\n\n${reel.description}',
+                  imageUrl: reel.thumbnail.url,
+                  videoUrl: reel.video.url,
+                  type: PostType.video,
+                  likes: reel.likesCount,
+                  comments: reel.commentsCount,
+                  shares: reel.sharesCount,
+                  isLiked: false,
+                  createdAt: reel.createdAt,
+                  hashtags: [],
+                  thumbnailUrl: reel.thumbnail.url,
+                  isBabaJiPost: true, // Mark as Baba Ji post
+                  isReel: true, // Mark as reel
+                  babaPageId: reel.babaPageId,
+                );
+                reels.add(post);
+              }
+              return reels;
+            }
+          } catch (e) {
+            print('FeedService: Error getting reels from Baba Ji page $babaPageId: $e');
+          }
+        }
+        return <Post>[];
+      });
+
+      // Wait for all reel loading to complete in parallel
+      final reelResults = await Future.wait(reelFutures);
+      for (final reels in reelResults) {
+        allBabaReels.addAll(reels);
+      }
+
+      // Combine posts and reels
+      final List<Post> allBabaContent = [...allBabaPosts, ...allBabaReels];
+
+      // Sort by creation date (newest first)
+      allBabaContent.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      print('FeedService: Found ${allBabaPosts.length} Baba Ji posts and ${allBabaReels.length} Baba Ji reels (optimized)');
+      
+      // Debug: Print details of loaded reels
+      if (allBabaReels.isNotEmpty) {
+        print('FeedService: Baba Ji Reels Details:');
+        for (final reel in allBabaReels) {
+          print('  - Reel ID: ${reel.id}');
+          print('  - Username: ${reel.username}');
+          print('  - Video URL: ${reel.videoUrl}');
+          print('  - Thumbnail: ${reel.thumbnailUrl}');
+          print('  - Caption: ${reel.caption}');
+          print('  - Created: ${reel.createdAt}');
+        }
+      } else {
+        print('FeedService: No Baba Ji reels found');
+      }
+      
+      return allBabaContent;
     } catch (e) {
       print('FeedService: Error getting Baba Ji posts (optimized): $e');
       return [];

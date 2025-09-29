@@ -306,15 +306,15 @@ class ThemeService extends ChangeNotifier {
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: hinduSaffronOrange,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
-          color: hinduSaffronOrange,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
-          color: hinduSaffronOrange,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
@@ -563,15 +563,15 @@ class ThemeService extends ChangeNotifier {
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: islamDarkGreen,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
-          color: islamDarkGreen,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
-          color: islamDarkGreen,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
@@ -820,15 +820,15 @@ class ThemeService extends ChangeNotifier {
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: christianDeepBlue,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
-          color: christianDeepBlue,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
-          color: christianDeepBlue,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
@@ -1077,15 +1077,15 @@ class ThemeService extends ChangeNotifier {
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: jainDeepRed,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
-          color: jainDeepRed,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
-          color: jainDeepRed,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
@@ -1334,15 +1334,15 @@ class ThemeService extends ChangeNotifier {
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: buddhistMonkOrange,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
-          color: buddhistMonkOrange,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
-          color: buddhistMonkOrange,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(
@@ -1591,15 +1591,15 @@ class ThemeService extends ChangeNotifier {
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: TextStyle(
-          color: defaultPrimary,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodyMedium: TextStyle(
-          color: defaultPrimary,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         bodySmall: TextStyle(
-          color: defaultPrimary,
+          color: Colors.black,
           fontFamily: 'Roboto', // System font
         ),
         labelLarge: TextStyle(

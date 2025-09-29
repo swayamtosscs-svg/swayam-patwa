@@ -6,7 +6,7 @@ import '../models/baba_page_post_model.dart';
 class BabaPagePostService {
   static const String baseUrl = 'http://103.14.120.163:8081/api';
 
-  /// Create a post for a Baba Ji page
+  /// Create a post for a Baba Ji page (only creator can create posts)
   static Future<BabaPagePostResponse> createBabaPagePost({
     required String babaPageId,
     required String content,
@@ -15,6 +15,15 @@ class BabaPagePostService {
   }) async {
     try {
       print('BabaPagePostService: Creating post for Baba Ji page: $babaPageId');
+      
+      // First, verify that the user is the creator of the page
+      final creatorCheck = await _verifyPageCreator(babaPageId, token);
+      if (!creatorCheck['success']) {
+        return BabaPagePostResponse(
+          success: false,
+          message: creatorCheck['message'] ?? 'Access denied',
+        );
+      }
       
       var request = http.MultipartRequest(
         'POST',
@@ -141,7 +150,7 @@ class BabaPagePostService {
   }
 
 
-  /// Delete a Baba Ji page post
+  /// Delete a Baba Ji page post (only creator can delete)
   static Future<BabaPagePostResponse> deleteBabaPagePost({
     required String babaPageId,
     required String postId,
@@ -149,6 +158,15 @@ class BabaPagePostService {
   }) async {
     try {
       print('BabaPagePostService: Deleting post: $postId from page: $babaPageId');
+      
+      // First, verify that the user is the creator of the page
+      final creatorCheck = await _verifyPageCreator(babaPageId, token);
+      if (!creatorCheck['success']) {
+        return BabaPagePostResponse(
+          success: false,
+          message: creatorCheck['message'] ?? 'Access denied',
+        );
+      }
       
       final response = await http.delete(
         Uri.parse('$baseUrl/baba-pages/$babaPageId/posts/$postId'),
@@ -177,6 +195,84 @@ class BabaPagePostService {
         success: false,
         message: 'Error deleting post: $e',
       );
+    }
+  }
+
+  /// Verify that the current user is the creator of the page
+  static Future<Map<String, dynamic>> _verifyPageCreator(String babaPageId, String token) async {
+    try {
+      // Get the page details
+      final response = await http.get(
+        Uri.parse('$baseUrl/baba-pages/$babaPageId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        return {
+          'success': false,
+          'message': 'Page not found or access denied',
+        };
+      }
+
+      final jsonResponse = jsonDecode(response.body);
+      if (!jsonResponse['success'] || jsonResponse['data'] == null) {
+        return {
+          'success': false,
+          'message': 'Page not found',
+        };
+      }
+
+      final pageData = jsonResponse['data'];
+      final pageCreatorId = pageData['creatorId'] ?? pageData['creator'] ?? pageData['createdBy'];
+
+      // Extract user ID from JWT token
+      final userId = _extractUserIdFromToken(token);
+      if (userId == null) {
+        return {
+          'success': false,
+          'message': 'Invalid authentication token',
+        };
+      }
+
+      // Check if current user is the creator
+      if (pageCreatorId != userId) {
+        return {
+          'success': false,
+          'message': 'Only the page creator can perform this action',
+        };
+      }
+
+      return {'success': true};
+    } catch (e) {
+      print('BabaPagePostService: Error verifying page creator: $e');
+      return {
+        'success': false,
+        'message': 'Error verifying permissions',
+      };
+    }
+  }
+
+  /// Extract user ID from JWT token
+  static String? _extractUserIdFromToken(String token) {
+    try {
+      // JWT tokens have 3 parts separated by dots
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      
+      // Decode the payload (second part)
+      final payload = parts[1];
+      // Add padding if needed
+      final paddedPayload = payload + '=' * (4 - payload.length % 4);
+      final decoded = utf8.decode(base64Url.decode(paddedPayload));
+      final payloadJson = jsonDecode(decoded);
+      
+      return payloadJson['userId'] as String?;
+    } catch (e) {
+      print('BabaPagePostService: Error extracting user ID from token: $e');
+      return null;
     }
   }
 }

@@ -314,8 +314,11 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
                   color: Colors.black,
                   fontFamily: 'Poppins',
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
+            const SizedBox(width: 8),
             Text(
               _getTimeAgo(thread.lastMessageTime),
               style: TextStyle(
@@ -340,12 +343,13 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (thread.unreadCount > 0)
+            if (thread.unreadCount > 0) ...[
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: Colors.white.withOpacity(0.4),
                     width: 1,
@@ -355,12 +359,13 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
                   thread.unreadCount.toString(),
                   style: const TextStyle(
                     color: Colors.black,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Poppins',
                   ),
                 ),
               ),
+            ],
           ],
         ),
         onTap: () async {

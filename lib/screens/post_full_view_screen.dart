@@ -4,10 +4,12 @@ import '../widgets/video_player_widget.dart';
 
 class PostFullViewScreen extends StatefulWidget {
   final Post post;
+  final bool showNavigationControls;
 
   const PostFullViewScreen({
     super.key,
     required this.post,
+    this.showNavigationControls = true,
   });
 
   @override
@@ -240,8 +242,8 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar
-            _buildTopBar(),
+            // Top Bar - only show if navigation controls are enabled
+            if (widget.showNavigationControls) _buildTopBar(),
             
             // Media Content
             Expanded(
@@ -273,8 +275,8 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
               ),
             ),
             
-            // Bottom Bar
-            _buildBottomBar(),
+            // Bottom Bar - only show if navigation controls are enabled
+            if (widget.showNavigationControls) _buildBottomBar(),
           ],
         ),
       ),

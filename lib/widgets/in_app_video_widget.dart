@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'video_player_widget.dart';
 import '../models/baba_page_reel_model.dart';
 import '../utils/app_theme.dart';
+import '../providers/auth_provider.dart';
+import '../services/baba_like_service.dart';
 
 class InAppVideoWidget extends StatefulWidget {
   final BabaPageReel reel;
@@ -24,15 +27,182 @@ class InAppVideoWidget extends StatefulWidget {
 class _InAppVideoWidgetState extends State<InAppVideoWidget> {
   bool _isPlaying = false;
   bool _showControls = true;
+  bool _isLiked = false;
+  int _likeCount = 0;
+  bool _isLoadingLike = false;
 
   @override
   void initState() {
     super.initState();
+    _likeCount = widget.reel.likesCount;
+    _loadLikeStatus();
   }
 
   @override
   void dispose() {
     super.dispose();
+  }
+
+  Future<void> _loadLikeStatus() async {
+    print('🔄 InAppVideoWidget: Loading like status...');
+    print('🔄 Reel ID: ${widget.reel.id}');
+    print('🔄 Baba Page ID: ${widget.reel.babaPageId}');
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+
+      print('🔄 User ID: $userId');
+
+      if (userId == null) {
+        print('❌ User ID is null during like status load');
+        return;
+      }
+
+      final response = await BabaLikeService.getBabaReelLikeStatus(
+        userId: userId,
+        reelId: widget.reel.id,
+        babaPageId: widget.reel.babaPageId,
+      );
+
+      print('🔄 Like status response: $response');
+
+      if (response != null && response['success'] == true && mounted) {
+        final data = response['data'] as Map<String, dynamic>?;
+        print('🔄 Like status data: $data');
+        print('🔄 Is liked: ${data?['isLiked']}');
+        print('🔄 Like count: ${data?['likesCount']}');
+        
+        setState(() {
+          _isLiked = data?['isLiked'] ?? false;
+          _likeCount = data?['likesCount'] ?? widget.reel.likesCount;
+        });
+        
+        print('🔄 Updated _isLiked: $_isLiked');
+        print('🔄 Updated _likeCount: $_likeCount');
+      } else {
+        print('❌ Failed to load like status');
+        print('❌ Response: $response');
+      }
+    } catch (e) {
+      print('❌ InAppVideoWidget: Error loading like status: $e');
+    }
+  }
+
+  Future<void> _handleLike() async {
+    if (_isLoadingLike) return;
+
+    print('🔥 InAppVideoWidget: Like button tapped!');
+    print('🔥 Current _isLiked state: $_isLiked');
+    print('🔥 Current _likeCount: $_likeCount');
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+
+      print('🔥 User ID: $userId');
+      print('🔥 Reel ID: ${widget.reel.id}');
+      print('🔥 Baba Page ID: ${widget.reel.babaPageId}');
+
+      if (userId == null) {
+        print('❌ User ID is null - user not logged in');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to like reels'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isLoadingLike = true;
+      });
+
+      Map<String, dynamic>? response;
+
+      if (_isLiked) {
+        print('🔥 Calling unlike API...');
+        response = await BabaLikeService.unlikeBabaReel(
+          userId: userId,
+          reelId: widget.reel.id,
+          babaPageId: widget.reel.babaPageId,
+        );
+      } else {
+        print('🔥 Calling like API...');
+        response = await BabaLikeService.likeBabaReel(
+          userId: userId,
+          reelId: widget.reel.id,
+          babaPageId: widget.reel.babaPageId,
+        );
+      }
+
+      print('🔥 API Response: $response');
+
+      if (response != null && response['success'] == true && mounted) {
+        final data = response['data'] as Map<String, dynamic>?;
+        print('🔥 Response data: $data');
+        print('🔥 New like count: ${data?['likesCount']}');
+        print('🔥 Is liked: ${data?['isLiked']}');
+        
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount = data?['likesCount'] ?? _likeCount;
+        });
+
+        print('🔥 Updated _isLiked: $_isLiked');
+        print('🔥 Updated _likeCount: $_likeCount');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
+              duration: const Duration(seconds: 2),
+              backgroundColor: _isLiked ? Colors.red : Colors.grey,
+            ),
+          );
+        }
+      } else {
+        print('❌ API call failed or response is null');
+        print('❌ Response: $response');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update like status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ InAppVideoWidget: Error handling like: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error updating like status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingLike = false;
+        });
+      }
+    }
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    } else {
+      return count.toString();
+    }
   }
 
   @override
@@ -94,6 +264,59 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                ),
+
+              // Like button and count on the right side
+              if (_showControls)
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: Column(
+                    children: [
+                      // Like button
+                      GestureDetector(
+                        onTap: _handleLike,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: _isLoadingLike
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : Icon(
+                                  _isLiked ? Icons.favorite : Icons.favorite_border,
+                                  color: _isLiked ? Colors.red : Colors.white,
+                                  size: 24,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Like count
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _formatCount(_likeCount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 

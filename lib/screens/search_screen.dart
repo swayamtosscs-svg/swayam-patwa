@@ -366,15 +366,20 @@ class _SearchScreenState extends State<SearchScreen> {
                   fontFamily: 'Poppins',
                 ),
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
             if (username.isNotEmpty)
-              Text(
-                '@$username',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black54,
-                  fontFamily: 'Poppins',
+              Flexible(
+                child: Text(
+                  '@$username',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black54,
+                    fontFamily: 'Poppins',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
           ],
@@ -396,78 +401,82 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ],
             const SizedBox(height: 8),
-            Row(
-              children: [
-                _buildStatItem('Posts', postsCount.toString()),
-                SizedBox(width: isSmallScreen ? 12 : 16),
-                FutureBuilder<Map<String, int>>(
-                  future: userId.isNotEmpty ? Provider.of<AuthProvider>(context, listen: false).getUserCounts(userId) : Future.value({'followers': 0, 'following': 0}),
-                  builder: (context, snapshot) {
-                    int realFollowersCount = followersCount;
-                    int realFollowingCount = followingCount;
-                    if (snapshot.hasData && userId.isNotEmpty) {
-                      realFollowersCount = snapshot.data!['followers'] ?? followersCount;
-                      realFollowingCount = snapshot.data!['following'] ?? followingCount;
-                    }
-                    return Row(
-                      children: [
-                        _buildStatItem('Followers', realFollowersCount.toString()),
-                        SizedBox(width: isSmallScreen ? 12 : 16),
-                        _buildStatItem('Following', realFollowingCount.toString()),
-                      ],
-                    );
-                  },
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return Wrap(
+                  spacing: isSmallScreen ? 8 : 12,
+                  runSpacing: 4,
+                  children: [
+                    _buildStatItem('Posts', postsCount.toString()),
+                    FutureBuilder<Map<String, int>>(
+                      future: userId.isNotEmpty ? Provider.of<AuthProvider>(context, listen: false).getUserCounts(userId) : Future.value({'followers': 0, 'following': 0}),
+                      builder: (context, snapshot) {
+                        int realFollowersCount = followersCount;
+                        int realFollowingCount = followingCount;
+                        if (snapshot.hasData && userId.isNotEmpty) {
+                          realFollowersCount = snapshot.data!['followers'] ?? followersCount;
+                          realFollowingCount = snapshot.data!['following'] ?? followingCount;
+                        }
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildStatItem('Followers', realFollowersCount.toString()),
+                            SizedBox(width: isSmallScreen ? 8 : 12),
+                            _buildStatItem('Following', realFollowingCount.toString()),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
             
             // Action Buttons
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // Message Button
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      // Add conversation to local storage
-                      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                      if (authProvider.userProfile != null) {
-                        await ChatService.addConversation(
-                          currentUserId: authProvider.userProfile!.id,
-                          otherUserId: userData['_id'] ?? '',
-                          otherUsername: username,
-                          otherFullName: fullName,
-                          otherAvatar: avatar,
-                        );
-                      }
-                      
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatScreen(
-                            recipientUserId: userData['_id'] ?? '',
-                            recipientUsername: username,
-                            recipientFullName: fullName,
-                            recipientAvatar: avatar,
-                            threadId: null, // New conversation
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.message, size: 18),
-                    label: const Text('Message'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  // Add conversation to local storage
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  if (authProvider.userProfile != null) {
+                    await ChatService.addConversation(
+                      currentUserId: authProvider.userProfile!.id,
+                      otherUserId: userData['_id'] ?? '',
+                      otherUsername: username,
+                      otherFullName: fullName,
+                      otherAvatar: avatar,
+                    );
+                  }
+                  
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatScreen(
+                        recipientUserId: userData['_id'] ?? '',
+                        recipientUsername: username,
+                        recipientFullName: fullName,
+                        recipientAvatar: avatar,
+                        threadId: null, // New conversation
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
                     ),
+                  );
+                },
+                icon: const Icon(Icons.message, size: 16),
+                label: const Text('Message'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    vertical: isSmallScreen ? 6 : 8,
+                    horizontal: 16,
                   ),
                 ),
-              ],
+              ),
             ),
           ],
         ),

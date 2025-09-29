@@ -136,4 +136,28 @@ class NotificationModel {
       return 'Just now';
     }
   }
+
+  /// Get follower name from notification data
+  String get followerName {
+    if (data != null) {
+      return data!['followerName'] ?? data!['follower_name'] ?? '';
+    }
+    return '';
+  }
+
+  /// Get follower ID from notification data
+  String get followerId {
+    if (data != null) {
+      return data!['followerId'] ?? data!['follower_id'] ?? '';
+    }
+    return '';
+  }
+
+  /// Get formatted message with follower name
+  String get formattedMessage {
+    if (type.toLowerCase() == 'follow' && followerName.isNotEmpty) {
+      return '$followerName started following you';
+    }
+    return message.isNotEmpty ? message : 'Someone started following you';
+  }
 }

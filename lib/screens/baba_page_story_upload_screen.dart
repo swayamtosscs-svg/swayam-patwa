@@ -166,6 +166,11 @@ class _BabaPageStoryUploadScreenState extends State<BabaPageStoryUploadScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
       
+      print('BabaPageStoryUploadScreen: Token available: ${token != null}');
+      if (token != null) {
+        print('BabaPageStoryUploadScreen: Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+      }
+      
       if (token == null) {
         _showErrorSnackBar('User not authenticated');
         return;

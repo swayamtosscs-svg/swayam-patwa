@@ -61,12 +61,24 @@ class BabaPageStoryService {
   }) async {
     try {
       print('BabaPageStoryService: Uploading story with URL: $url');
+      print('BabaPageStoryService: Token provided: ${token != null && token.isNotEmpty}');
+      if (token != null && token.isNotEmpty) {
+        print('BabaPageStoryService: Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+      }
       
       // Create multipart request for story upload
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$url/baba-pages/$babaPageId/stories'),
       );
+
+      // Add authentication header if token is provided
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+        print('BabaPageStoryService: Added Authorization header with token');
+      } else {
+        print('BabaPageStoryService: No token provided for authentication');
+      }
 
       // Add the media file
       request.files.add(await http.MultipartFile.fromPath('media', mediaFile.path));
@@ -90,9 +102,21 @@ class BabaPageStoryService {
         return BabaPageStoryUploadResponse.fromJson(jsonResponse);
       } else {
         print('BabaPageStoryService: Upload failed with status: ${response.statusCode}');
+        
+        // Parse error response for better error message
+        String errorMessage = 'Upload failed with status: ${response.statusCode}';
+        try {
+          final errorResponse = json.decode(responseData);
+          if (errorResponse['message'] != null) {
+            errorMessage = errorResponse['message'];
+          }
+        } catch (e) {
+          print('BabaPageStoryService: Could not parse error response: $e');
+        }
+        
         return BabaPageStoryUploadResponse(
           success: false,
-          message: 'Upload failed with status: ${response.statusCode}',
+          message: errorMessage,
         );
       }
     } catch (e) {
@@ -109,32 +133,45 @@ class BabaPageStoryService {
     int limit = 10,
   }) async {
     try {
+      print('=== GET BABA PAGE STORIES DEBUG ===');
       print('BabaPageStoryService: Fetching stories for Baba page $babaPageId');
+      print('BabaPageStoryService: Page: $page, Limit: $limit');
+      print('BabaPageStoryService: Token provided: ${token != null}');
+      if (token != null) {
+        print('BabaPageStoryService: Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+      }
       
       // Try HTTPS first
       try {
+        final url = '$_baseUrl/baba-pages/$babaPageId/stories?page=$page&limit=$limit';
+        print('BabaPageStoryService: Making HTTPS request to: $url');
+        
         final response = await http.get(
-          Uri.parse('$_baseUrl/baba-pages/$babaPageId/stories?page=$page&limit=$limit'),
+          Uri.parse(url),
           headers: token != null ? {'Authorization': token} : {},
         );
 
-        print('BabaPageStoryService: Stories response status: ${response.statusCode}');
-        print('BabaPageStoryService: Stories response body: ${response.body}');
+        print('BabaPageStoryService: HTTPS Stories response status: ${response.statusCode}');
+        print('BabaPageStoryService: HTTPS Stories response body: ${response.body}');
 
         if (response.statusCode == 200) {
           final jsonResponse = json.decode(response.body);
+          print('BabaPageStoryService: Parsed JSON response: $jsonResponse');
           
           if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
             // Handle the API response format: data is directly an array of stories
             final storiesData = jsonResponse['data'] as List<dynamic>? ?? [];
-            print('BabaPageStoryService: Retrieved ${storiesData.length} stories from API');
+            print('BabaPageStoryService: Retrieved ${storiesData.length} stories from HTTPS API');
+            if (storiesData.isNotEmpty) {
+              print('BabaPageStoryService: First story data: ${storiesData.first}');
+            }
             return storiesData.map((storyJson) => BabaPageStory.fromJson(storyJson)).toList();
           } else {
-            print('BabaPageStoryService: API returned error: ${jsonResponse['message']}');
+            print('BabaPageStoryService: HTTPS API returned error: ${jsonResponse['message']}');
             return [];
           }
         } else {
-          print('BabaPageStoryService: Failed to fetch stories with status: ${response.statusCode}');
+          print('BabaPageStoryService: Failed to fetch stories with HTTPS status: ${response.statusCode}');
           return [];
         }
       } catch (e) {
@@ -142,8 +179,11 @@ class BabaPageStoryService {
         
         // Try HTTP fallback
         try {
+          final fallbackUrl = '$_fallbackUrl/baba-pages/$babaPageId/stories?page=$page&limit=$limit';
+          print('BabaPageStoryService: Making HTTP fallback request to: $fallbackUrl');
+          
           final response = await http.get(
-            Uri.parse('$_fallbackUrl/baba-pages/$babaPageId/stories?page=$page&limit=$limit'),
+            Uri.parse(fallbackUrl),
             headers: token != null ? {'Authorization': token} : {},
           );
 
@@ -152,11 +192,15 @@ class BabaPageStoryService {
 
           if (response.statusCode == 200) {
             final jsonResponse = json.decode(response.body);
+            print('BabaPageStoryService: HTTP Parsed JSON response: $jsonResponse');
             
             if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
               // Handle the API response format: data is directly an array of stories
               final storiesData = jsonResponse['data'] as List<dynamic>? ?? [];
               print('BabaPageStoryService: Retrieved ${storiesData.length} stories from HTTP API');
+              if (storiesData.isNotEmpty) {
+                print('BabaPageStoryService: HTTP First story data: ${storiesData.first}');
+              }
               return storiesData.map((storyJson) => BabaPageStory.fromJson(storyJson)).toList();
             } else {
               print('BabaPageStoryService: HTTP API returned error: ${jsonResponse['message']}');
@@ -173,6 +217,8 @@ class BabaPageStoryService {
       }
     } catch (e) {
       print('BabaPageStoryService: Error fetching stories: $e');
+      print('BabaPageStoryService: Stack trace: ${StackTrace.current}');
+      print('=== END GET BABA PAGE STORIES DEBUG ===');
       return [];
     }
   }
@@ -241,8 +287,13 @@ class BabaPageStoryService {
     int limit = 20,
   }) async {
     try {
+      print('=== BABA PAGE STORY SERVICE DEBUG ===');
       print('BabaPageStoryService: Fetching all Babaji stories for home page');
       print('BabaPageStoryService: Token available: ${token != null}');
+      if (token != null) {
+        print('BabaPageStoryService: Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+      }
+      print('BabaPageStoryService: Page: $page, Limit: $limit');
       
       List<Story> allStories = [];
       
@@ -254,6 +305,7 @@ class BabaPageStoryService {
       print('BabaPageStoryService: Using Baba page ID: $babaPageId');
       
       // Get stories from this Baba page
+      print('BabaPageStoryService: Calling getBabaPageStories...');
       final babaPageStories = await getBabaPageStories(
         babaPageId: babaPageId,
         token: token,
@@ -263,9 +315,28 @@ class BabaPageStoryService {
       
       print('BabaPageStoryService: Retrieved ${babaPageStories.length} stories from Baba page $babaPageId');
       
+      if (babaPageStories.isEmpty) {
+        print('BabaPageStoryService: No stories found for Baba page $babaPageId');
+        print('This could mean:');
+        print('1. No stories uploaded to this Baba page');
+        print('2. Stories have expired');
+        print('3. API endpoint issue');
+        print('4. Wrong Baba page ID');
+        return [];
+      }
+      
       // Convert Baba page stories to regular Story objects
-      for (final babaStory in babaPageStories) {
-        print('BabaPageStoryService: Converting story ${babaStory.id} with media: ${babaStory.media.url}');
+      print('BabaPageStoryService: Converting ${babaPageStories.length} stories...');
+      for (int i = 0; i < babaPageStories.length; i++) {
+        final babaStory = babaPageStories[i];
+        print('BabaPageStoryService: Converting story $i:');
+        print('  - Baba Story ID: ${babaStory.id}');
+        print('  - Baba Page ID: ${babaStory.babaPageId}');
+        print('  - Media URL: ${babaStory.media.url}');
+        print('  - Media Type: ${babaStory.media.type}');
+        print('  - Is Active: ${babaStory.isActive}');
+        print('  - Created At: ${babaStory.createdAt}');
+        print('  - Expires At: ${babaStory.expiresAt}');
         
         final story = Story(
           id: babaStory.id,
@@ -290,6 +361,7 @@ class BabaPageStoryService {
       }
       
       print('BabaPageStoryService: Converted ${allStories.length} Baba page stories to regular Story objects');
+      print('=== END BABA PAGE STORY SERVICE DEBUG ===');
       return allStories;
       
     } catch (e) {

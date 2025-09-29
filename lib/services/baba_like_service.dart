@@ -4,6 +4,14 @@ import 'package:http/http.dart' as http;
 class BabaLikeService {
   static const String _baseUrl = 'http://103.14.120.163:8081/api';
 
+  /// Helper function to clean reel ID by removing baba_reel_ prefix
+  static String _cleanReelId(String reelId) {
+    if (reelId.startsWith('baba_reel_')) {
+      return reelId.substring('baba_reel_'.length);
+    }
+    return reelId;
+  }
+
   /// Like a Baba Ji post
   static Future<Map<String, dynamic>?> likeBabaPost({
     required String userId,
@@ -117,7 +125,7 @@ class BabaLikeService {
     }
   }
 
-  /// Like a Baba Ji reel
+  /// Like a Baba Ji reel (using video contentType)
   static Future<Map<String, dynamic>?> likeBabaReel({
     required String userId,
     required String reelId,
@@ -126,21 +134,24 @@ class BabaLikeService {
     try {
       final url = Uri.parse('$_baseUrl/baba-pages/$babaPageId/like');
       
+      // Clean the reel ID by removing baba_reel_ prefix if present
+      final cleanReelId = _cleanReelId(reelId);
+      
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'contentId': reelId, // Use the actual reel ID, not babaPageId
-          'contentType': 'reel',
+          'contentId': cleanReelId, // Use the cleaned reel ID
+          'contentType': 'video', // Use video contentType for reels
           'userId': userId,
           'action': 'like',
         }),
       );
 
-      print('BabaLikeService: Like Baba Ji reel - URL: $url');
-      print('BabaLikeService: Like Baba Ji reel - ReelId: $reelId, BabaPageId: $babaPageId, UserId: $userId');
+      print('BabaLikeService: Like Baba Ji reel (using video API) - URL: $url');
+      print('BabaLikeService: Like Baba Ji reel - Original ReelId: $reelId, Cleaned ReelId: $cleanReelId, BabaPageId: $babaPageId, UserId: $userId');
       print('BabaLikeService: Like Baba Ji reel response status: ${response.statusCode}');
       print('BabaLikeService: Like Baba Ji reel response body: ${response.body}');
 
@@ -157,7 +168,7 @@ class BabaLikeService {
     }
   }
 
-  /// Unlike a Baba Ji reel
+  /// Unlike a Baba Ji reel (using video contentType)
   static Future<Map<String, dynamic>?> unlikeBabaReel({
     required String userId,
     required String reelId,
@@ -166,21 +177,24 @@ class BabaLikeService {
     try {
       final url = Uri.parse('$_baseUrl/baba-pages/$babaPageId/like');
       
+      // Clean the reel ID by removing baba_reel_ prefix if present
+      final cleanReelId = _cleanReelId(reelId);
+      
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'contentId': reelId, // Use the actual reel ID, not babaPageId
-          'contentType': 'reel',
+          'contentId': cleanReelId, // Use the cleaned reel ID
+          'contentType': 'video', // Use video contentType for reels
           'userId': userId,
           'action': 'unlike',
         }),
       );
 
-      print('BabaLikeService: Unlike Baba Ji reel - URL: $url');
-      print('BabaLikeService: Unlike Baba Ji reel - ReelId: $reelId, BabaPageId: $babaPageId, UserId: $userId');
+      print('BabaLikeService: Unlike Baba Ji reel (using video API) - URL: $url');
+      print('BabaLikeService: Unlike Baba Ji reel - Original ReelId: $reelId, Cleaned ReelId: $cleanReelId, BabaPageId: $babaPageId, UserId: $userId');
       print('BabaLikeService: Unlike Baba Ji reel response status: ${response.statusCode}');
       print('BabaLikeService: Unlike Baba Ji reel response body: ${response.body}');
 
@@ -197,14 +211,17 @@ class BabaLikeService {
     }
   }
 
-  /// Get like status for a Baba Ji reel
+  /// Get like status for a Baba Ji reel (using video contentType)
   static Future<Map<String, dynamic>?> getBabaReelLikeStatus({
     required String userId,
     required String reelId,
     required String babaPageId,
   }) async {
     try {
-      final url = Uri.parse('$_baseUrl/baba-pages/$babaPageId/like?contentId=$reelId&contentType=reel&userId=$userId');
+      // Clean the reel ID by removing baba_reel_ prefix if present
+      final cleanReelId = _cleanReelId(reelId);
+      
+      final url = Uri.parse('$_baseUrl/baba-pages/$babaPageId/like?contentId=$cleanReelId&contentType=video&userId=$userId');
       
       final response = await http.get(
         url,
@@ -213,7 +230,8 @@ class BabaLikeService {
         },
       );
 
-      print('BabaLikeService: Get reel like status - URL: $url');
+      print('BabaLikeService: Get reel like status (using video API) - URL: $url');
+      print('BabaLikeService: Get reel like status - Original ReelId: $reelId, Cleaned ReelId: $cleanReelId, BabaPageId: $babaPageId, UserId: $userId');
       print('BabaLikeService: Get reel like status response status: ${response.statusCode}');
       print('BabaLikeService: Get reel like status response body: ${response.body}');
 

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:provider/provider.dart';
 import '../models/baba_page_reel_model.dart';
 import '../utils/app_theme.dart';
 import '../utils/video_manager.dart';
+import '../providers/auth_provider.dart';
+import '../services/baba_like_service.dart';
 import 'fallback_video_player_widget.dart';
 
 class SingleVideoWidget extends StatefulWidget {
@@ -35,12 +38,18 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
   bool _showControls = true;
   bool _useFallback = false;
   final VideoManager _videoManager = VideoManager();
+  
+  // Like functionality
+  bool _isLiked = false;
+  int _likeCount = 0;
+  bool _isLoadingLike = false;
 
   @override
   void initState() {
     super.initState();
     _initializePlayer();
     _setupVideoManager();
+    _loadLikeStatus();
   }
 
   @override
@@ -50,6 +59,125 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
       player.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _loadLikeStatus() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+
+      if (userId == null) return;
+
+      final response = await BabaLikeService.getBabaReelLikeStatus(
+        userId: userId,
+        reelId: widget.reel.id,
+        babaPageId: widget.reel.babaPageId,
+      );
+
+      if (response != null && response['success'] == true && mounted) {
+        final data = response['data'] as Map<String, dynamic>?;
+        setState(() {
+          _isLiked = data?['isLiked'] ?? false;
+          _likeCount = data?['likesCount'] ?? widget.reel.likesCount;
+        });
+      }
+    } catch (e) {
+      print('SingleVideoWidget: Error loading like status: $e');
+    }
+  }
+
+  Future<void> _handleLike() async {
+    if (_isLoadingLike) return;
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+
+      if (userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to like reels'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isLoadingLike = true;
+      });
+
+      Map<String, dynamic>? response;
+
+      if (_isLiked) {
+        response = await BabaLikeService.unlikeBabaReel(
+          userId: userId,
+          reelId: widget.reel.id,
+          babaPageId: widget.reel.babaPageId,
+        );
+      } else {
+        response = await BabaLikeService.likeBabaReel(
+          userId: userId,
+          reelId: widget.reel.id,
+          babaPageId: widget.reel.babaPageId,
+        );
+      }
+
+      if (response != null && response['success'] == true && mounted) {
+        final data = response['data'] as Map<String, dynamic>?;
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount = data?['likesCount'] ?? _likeCount;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isLiked ? 'Liked! ❤️' : 'Unliked! 💔'),
+              backgroundColor: _isLiked ? Colors.red : Colors.grey,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update like status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('SingleVideoWidget: Error handling like: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error updating like status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingLike = false;
+        });
+      }
+    }
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    } else {
+      return count.toString();
+    }
   }
 
   void _setupVideoManager() {
@@ -238,13 +366,30 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
                       children: [
                         // Like button
                         IconButton(
-                          onPressed: () {
-                            // Handle like
-                          },
-                          icon: const Icon(
-                            Icons.favorite_border,
+                          onPressed: _isLoadingLike ? null : _handleLike,
+                          icon: _isLoadingLike
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : Icon(
+                                  _isLiked ? Icons.favorite : Icons.favorite_border,
+                                  color: _isLiked ? Colors.red : Colors.white,
+                                  size: 24,
+                                ),
+                        ),
+                        
+                        // Like count
+                        Text(
+                          _formatCount(_likeCount),
+                          style: const TextStyle(
                             color: Colors.white,
-                            size: 24,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         
@@ -459,13 +604,30 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
                       children: [
                         // Like button
                         IconButton(
-                          onPressed: () {
-                            // Handle like
-                          },
-                          icon: const Icon(
-                            Icons.favorite_border,
+                          onPressed: _isLoadingLike ? null : _handleLike,
+                          icon: _isLoadingLike
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : Icon(
+                                  _isLiked ? Icons.favorite : Icons.favorite_border,
+                                  color: _isLiked ? Colors.red : Colors.white,
+                                  size: 24,
+                                ),
+                        ),
+                        
+                        // Like count
+                        Text(
+                          _formatCount(_likeCount),
+                          style: const TextStyle(
                             color: Colors.white,
-                            size: 24,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         

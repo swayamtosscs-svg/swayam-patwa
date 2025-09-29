@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/google_auth_service.dart';
 import '../models/post_model.dart'; // Fixed import path
 import '../models/message_model.dart';
+import '../services/notification_service.dart';
 import 'dart:io';
 
 class AuthProvider extends ChangeNotifier {
@@ -718,7 +719,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Follow a user using R-Gram API
-  Future<bool> followUser(String targetUserId) async {
+  Future<bool> followUser(String targetUserId, {String? followerName}) async {
     if (_authToken == null) {
       _error = 'Please login to follow users';
       return false;
@@ -731,6 +732,9 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (response['success'] == true) {
+        // Create follow notification
+        await _createFollowNotification(targetUserId, followerName);
+        
         // Refresh own profile to update following count
         await _loadUserProfile();
         
@@ -755,6 +759,24 @@ class AuthProvider extends ChangeNotifier {
       _error = 'Network error: $e';
       print('Follow user error: $e');
       return false;
+    }
+  }
+
+  /// Create follow notification
+  Future<void> _createFollowNotification(String targetUserId, String? followerName) async {
+    try {
+      if (_authToken == null || _userProfile == null) return;
+
+      final followerNameToUse = followerName ?? _userProfile!.name ?? _userProfile!.username ?? 'Someone';
+
+      await NotificationService.createFollowNotification(
+        followerId: _userProfile!.id,
+        followerName: followerNameToUse,
+        targetUserId: targetUserId,
+        token: _authToken!,
+      );
+    } catch (e) {
+      print('Error creating follow notification: $e');
     }
   }
 

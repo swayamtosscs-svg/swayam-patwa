@@ -253,13 +253,39 @@ class BabaPageService {
     }
   }
 
-  /// Delete a Baba Ji page
+  /// Delete a Baba Ji page (only creator can delete)
   static Future<BabaPageResponse> deleteBabaPage({
     required String pageId,
     required String token,
   }) async {
     try {
       print('BabaPageService: Deleting Baba Ji page: $pageId');
+      
+      // First, get the page to verify creator access
+      final pageResponse = await getBabaPageById(pageId: pageId, token: token);
+      if (!pageResponse.success || pageResponse.data == null) {
+        return BabaPageResponse(
+          success: false,
+          message: 'Page not found or access denied',
+        );
+      }
+
+      // Extract user ID from JWT token
+      final userId = _extractUserIdFromToken(token);
+      if (userId == null) {
+        return BabaPageResponse(
+          success: false,
+          message: 'Invalid authentication token',
+        );
+      }
+
+      // Check if current user is the creator
+      if (pageResponse.data!.creatorId != userId) {
+        return BabaPageResponse(
+          success: false,
+          message: 'Only the page creator can delete this page',
+        );
+      }
       
       final response = await http.delete(
         Uri.parse('$baseUrl/baba-pages/$pageId'),
@@ -288,6 +314,27 @@ class BabaPageService {
         success: false,
         message: 'Error deleting Baba Ji page: $e',
       );
+    }
+  }
+
+  /// Extract user ID from JWT token
+  static String? _extractUserIdFromToken(String token) {
+    try {
+      // JWT tokens have 3 parts separated by dots
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      
+      // Decode the payload (second part)
+      final payload = parts[1];
+      // Add padding if needed
+      final paddedPayload = payload + '=' * (4 - payload.length % 4);
+      final decoded = utf8.decode(base64Url.decode(paddedPayload));
+      final payloadJson = jsonDecode(decoded);
+      
+      return payloadJson['userId'] as String?;
+    } catch (e) {
+      print('BabaPageService: Error extracting user ID from token: $e');
+      return null;
     }
   }
 

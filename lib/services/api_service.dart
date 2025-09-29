@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'local_storage_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'cache_service.dart';
 import 'custom_http_client.dart';
 // Note: No model imports required in this service file
@@ -900,9 +900,9 @@ class ApiService {
 
     // TERTIARY endpoint - Alternative server (fallback)
     try {
-      print('Trying TERTIARY deletion endpoint: DELETE https://api-rgram1.vercel.app/api/posts/$mediaId');
+      print('Trying TERTIARY deletion endpoint: DELETE http://103.14.120.163:8081/api/posts/$mediaId');
       final response = await http.delete(
-        Uri.parse('https://api-rgram1.vercel.app/api/posts/$mediaId'),
+        Uri.parse('http://103.14.120.163:8081/api/posts/$mediaId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -1115,36 +1115,211 @@ class ApiService {
     }
   }
 
-  // Like/Unlike Post APIs
+  // Determine the correct like endpoint based on post source
+  static Future<String?> getCorrectLikeEndpoint({
+    required String postId,
+    required String token,
+  }) async {
+    try {
+      // First try the posts API
+      final postsResponse = await http.get(
+        Uri.parse('http://103.14.120.163:8081/api/posts/$postId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (postsResponse.statusCode == 200) {
+        return 'http://103.14.120.163:8081/api/posts/$postId/like';
+      }
+      
+      // If not found in posts API, try the media API
+      final mediaResponse = await http.get(
+        Uri.parse('http://103.14.120.163:8081/api/media/$postId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (mediaResponse.statusCode == 200) {
+        return 'http://103.14.120.163:8081/api/media/$postId/like';
+      }
+      
+      return null; // Post not found in either API
+    } catch (e) {
+      print('Error determining correct like endpoint: $e');
+      return null;
+    }
+  }
+
+  // Get like status for local/mock posts
+  static Future<Map<String, dynamic>> _getLocalPostLikeStatus({
+    required String postId,
+  }) async {
+    try {
+      // Use SharedPreferences to get local likes
+      final prefs = await SharedPreferences.getInstance();
+      final likeCountsKey = 'like_counts';
+      
+      // Get current like counts
+      final likeCountsJson = prefs.getString(likeCountsKey) ?? '{}';
+      final Map<String, dynamic> likeCounts = Map<String, dynamic>.from(jsonDecode(likeCountsJson));
+      
+      int currentCount = likeCounts[postId] ?? 0;
+      
+      print('Local Post Like Status: post $postId - Count: $currentCount');
+      
+      return {
+        'success': true,
+        'message': 'Local like status retrieved',
+        'data': {
+          'likesCount': currentCount,
+          'liked': false, // We don't track individual user likes for local posts
+        },
+      };
+    } catch (e) {
+      print('Error getting local post like status: $e');
+      return {
+        'success': false,
+        'message': 'Error getting local like status',
+        'data': {
+          'likesCount': 0,
+          'liked': false,
+        },
+      };
+    }
+  }
+
+  // Handle likes for local/mock posts that don't exist on server
+  static Future<Map<String, dynamic>> _handleLocalPostLike({
+    required String postId,
+    required String userId,
+    required String action, // 'like' or 'unlike'
+  }) async {
+    try {
+      // Use SharedPreferences to store local likes
+      final prefs = await SharedPreferences.getInstance();
+      final likedPostsKey = 'liked_posts_$userId';
+      final likeCountsKey = 'like_counts';
+      
+      // Get current liked posts
+      final likedPostsJson = prefs.getString(likedPostsKey) ?? '[]';
+      final List<dynamic> likedPosts = jsonDecode(likedPostsJson);
+      
+      // Get current like counts
+      final likeCountsJson = prefs.getString(likeCountsKey) ?? '{}';
+      final Map<String, dynamic> likeCounts = Map<String, dynamic>.from(jsonDecode(likeCountsJson));
+      
+      bool isLiked = likedPosts.contains(postId);
+      int currentCount = likeCounts[postId] ?? 0;
+      
+      if (action == 'like' && !isLiked) {
+        likedPosts.add(postId);
+        likeCounts[postId] = currentCount + 1;
+        isLiked = true;
+        currentCount++;
+      } else if (action == 'unlike' && isLiked) {
+        likedPosts.remove(postId);
+        likeCounts[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
+        isLiked = false;
+        currentCount = (currentCount - 1).clamp(0, double.infinity).toInt();
+      }
+      
+      // Save updated data
+      await prefs.setString(likedPostsKey, jsonEncode(likedPosts));
+      await prefs.setString(likeCountsKey, jsonEncode(likeCounts));
+      
+      print('Local Post Like: $action post $postId - Count: $currentCount, Liked: $isLiked');
+      
+      return {
+        'success': true,
+        'message': action == 'like' ? 'Liked locally' : 'Unliked locally',
+        'data': {
+          'likesCount': currentCount,
+          'liked': isLiked,
+        },
+      };
+    } catch (e) {
+      print('Error handling local post like: $e');
+      return {
+        'success': false,
+        'message': 'Error handling local like',
+        'data': {
+          'likesCount': 0,
+          'liked': false,
+        },
+      };
+    }
+  }
+
+  // Check if post exists before liking (check both posts and media APIs)
+  static Future<bool> postExists({
+    required String postId,
+    required String token,
+  }) async {
+    try {
+      // First try the posts API
+      final postsResponse = await http.get(
+        Uri.parse('http://103.14.120.163:8081/api/posts/$postId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (postsResponse.statusCode == 200) {
+        return true;
+      }
+      
+      // If not found in posts API, try the media API
+      final mediaResponse = await http.get(
+        Uri.parse('http://103.14.120.163:8081/api/media/$postId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      return mediaResponse.statusCode == 200;
+    } catch (e) {
+      print('Error checking if post exists: $e');
+      return false;
+    }
+  }
+
+  // Like/Unlike Post APIs - Using Real API Endpoints with Multi-Endpoint Strategy
   static Future<Map<String, dynamic>> likePost({
     required String postId,
     required String token,
     required String userId,
   }) async {
-    // Try multiple possible endpoints for liking posts
+    print('Like Post API: Using multi-endpoint strategy for user posts');
+    
+    // First check if this is a local/mock post
+    if (postId.startsWith('mock_') || postId.startsWith('local_')) {
+      print('Like Post API: Detected local/mock post, using local storage fallback');
+      return await _handleLocalPostLike(postId: postId, userId: userId, action: 'like');
+    }
+    
+    // Try multiple endpoints in order of preference
     final endpoints = [
-      'http://103.14.120.163:8081/api/posts/$postId/like',
       'http://103.14.120.163:8081/api/feed/like/$postId',
-      'http://103.14.120.163:8081/api/user/posts/$postId/like',
-      'https://api-rgram1.vercel.app/api/posts/$postId/like',
+      'http://103.14.120.163:8081/api/media/like/$postId',
+      'http://103.14.120.163:8081/api/posts/like/$postId',
     ];
-
+    
     for (final endpoint in endpoints) {
       try {
-        print('Trying like endpoint: $endpoint');
+        print('Like Post API: Trying endpoint: $endpoint');
         
         final response = await http.post(
           Uri.parse(endpoint),
           headers: {
-            'Authorization': 'Bearer $token',
+            'Authorization': token, // Direct token, not Bearer
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({
-            'contentId': postId,
-            'contentType': 'post',
-            'userId': userId,
-            'action': 'like',
-          }),
         );
 
         print('Like Post API - URL: $endpoint');
@@ -1157,7 +1332,7 @@ class ApiService {
           print('Like Post API succeeded with endpoint: $endpoint');
           return result;
         } else if (response.statusCode == 404) {
-          print('Like Post API: Endpoint $endpoint not found (404), trying next...');
+          print('Like Post API: Post not found in $endpoint, trying next...');
           continue; // Try next endpoint
         } else {
           print('Like Post API: Endpoint $endpoint failed with ${response.statusCode}, trying next...');
@@ -1168,16 +1343,10 @@ class ApiService {
         continue; // Try next endpoint
       }
     }
-
-    // If all endpoints fail, use local fallback
-    print('Like Post API: All endpoints failed, using local fallback');
-    return {
-      'success': true,
-      'message': 'Post liked successfully (local fallback)',
-      'data': {
-        'likesCount': 1,
-      },
-    };
+    
+    // If all endpoints fail, check if this might be a local post
+    print('Like Post API: All endpoints failed, checking if local post...');
+    return await _handleLocalPostLike(postId: postId, userId: userId, action: 'like');
   }
 
   static Future<Map<String, dynamic>> unlikePost({
@@ -1185,30 +1354,31 @@ class ApiService {
     required String token,
     required String userId,
   }) async {
-    // Try multiple possible endpoints for unliking posts
+    print('Unlike Post API: Using multi-endpoint strategy for user posts');
+    
+    // First check if this is a local/mock post
+    if (postId.startsWith('mock_') || postId.startsWith('local_')) {
+      print('Unlike Post API: Detected local/mock post, using local storage fallback');
+      return await _handleLocalPostLike(postId: postId, userId: userId, action: 'unlike');
+    }
+    
+    // Try multiple endpoints in order of preference
     final endpoints = [
-      'http://103.14.120.163:8081/api/posts/$postId/like',
       'http://103.14.120.163:8081/api/feed/like/$postId',
-      'http://103.14.120.163:8081/api/user/posts/$postId/like',
-      'https://api-rgram1.vercel.app/api/posts/$postId/like',
+      'http://103.14.120.163:8081/api/media/like/$postId',
+      'http://103.14.120.163:8081/api/posts/like/$postId',
     ];
-
+    
     for (final endpoint in endpoints) {
       try {
-        print('Trying unlike endpoint: $endpoint');
+        print('Unlike Post API: Trying endpoint: $endpoint');
         
-        final response = await http.post(
+        final response = await http.delete(
           Uri.parse(endpoint),
           headers: {
-            'Authorization': 'Bearer $token',
+            'Authorization': token, // Direct token, not Bearer
             'Content-Type': 'application/json',
           },
-          body: jsonEncode({
-            'contentId': postId,
-            'contentType': 'post',
-            'userId': userId,
-            'action': 'unlike',
-          }),
         );
 
         print('Unlike Post API - URL: $endpoint');
@@ -1221,7 +1391,7 @@ class ApiService {
           print('Unlike Post API succeeded with endpoint: $endpoint');
           return result;
         } else if (response.statusCode == 404) {
-          print('Unlike Post API: Endpoint $endpoint not found (404), trying next...');
+          print('Unlike Post API: Post not found in $endpoint, trying next...');
           continue; // Try next endpoint
         } else {
           print('Unlike Post API: Endpoint $endpoint failed with ${response.statusCode}, trying next...');
@@ -1232,16 +1402,10 @@ class ApiService {
         continue; // Try next endpoint
       }
     }
-
-    // If all endpoints fail, use local fallback
-    print('Unlike Post API: All endpoints failed, using local fallback');
-    return {
-      'success': true,
-      'message': 'Post unliked successfully (local fallback)',
-      'data': {
-        'likesCount': 0,
-      },
-    };
+    
+    // If all endpoints fail, check if this might be a local post
+    print('Unlike Post API: All endpoints failed, checking if local post...');
+    return await _handleLocalPostLike(postId: postId, userId: userId, action: 'unlike');
   }
 
   static Future<Map<String, dynamic>> togglePostLike({
@@ -1261,61 +1425,57 @@ class ApiService {
     required String postId,
     required String token,
   }) async {
-    try {
-      // Try multiple possible endpoints for like status
-      final endpoints = [
-        'http://103.14.120.163:8081/api/posts/$postId/like-status',
-        'http://103.14.120.163:8081/api/posts/$postId/likes/status',
-        'http://103.14.120.163:8081/api/user/posts/$postId/like-status',
-      ];
+    print('Get Post Like Status API: Using multi-endpoint strategy for user posts');
+    
+    // First check if this is a local/mock post
+    if (postId.startsWith('mock_') || postId.startsWith('local_')) {
+      print('Get Post Like Status API: Detected local/mock post, checking local storage');
+      return await _getLocalPostLikeStatus(postId: postId);
+    }
+    
+    // Try multiple endpoints in order of preference
+    final endpoints = [
+      'http://103.14.120.163:8081/api/feed/like/$postId',
+      'http://103.14.120.163:8081/api/media/like/$postId',
+      'http://103.14.120.163:8081/api/posts/like/$postId',
+    ];
+    
+    for (final endpoint in endpoints) {
+      try {
+        print('Get Post Like Status API: Trying endpoint: $endpoint');
+        
+        final response = await http.get(
+          Uri.parse(endpoint),
+          headers: {
+            'Authorization': token, // Direct token, not Bearer
+            'Content-Type': 'application/json',
+          },
+        );
 
-      for (final endpoint in endpoints) {
-        try {
-          final response = await http.get(
-            Uri.parse(endpoint),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-          );
+        print('Get Post Like Status API - URL: $endpoint');
+        print('Get Post Like Status API response status: ${response.statusCode}');
+        print('Get Post Like Status API response body: ${response.body}');
 
-          print('Get Post Like Status API - URL: $endpoint');
-          print('Get Post Like Status API response status: ${response.statusCode}');
-          print('Get Post Like Status API response body: ${response.body}');
-
-          if (response.statusCode == 200) {
-            return jsonDecode(response.body);
-          } else if (response.statusCode == 404) {
-            print('Get Post Like Status API: Endpoint $endpoint not found (404), trying next...');
-            continue; // Try next endpoint
-          }
-        } catch (e) {
-          print('Get Post Like Status API: Error with endpoint $endpoint: $e, trying next...');
+        if (response.statusCode == 200) {
+          final result = jsonDecode(response.body);
+          print('Get Post Like Status API succeeded with endpoint: $endpoint');
+          return result;
+        } else if (response.statusCode == 404) {
+          print('Get Post Like Status API: Post not found in $endpoint, trying next...');
+          continue; // Try next endpoint
+        } else {
+          print('Get Post Like Status API: Endpoint $endpoint failed with ${response.statusCode}, trying next...');
           continue; // Try next endpoint
         }
+      } catch (e) {
+        print('Get Post Like Status API: Error with endpoint $endpoint: $e, trying next...');
+        continue; // Try next endpoint
       }
-
-      // If all endpoints fail, return default status
-      print('Get Post Like Status API: All endpoints failed, returning default status');
-      return {
-        'success': true,
-        'message': 'Like status retrieved from local storage (API endpoint not available)',
-        'data': {
-          'liked': false,
-          'likeCount': 0,
-        },
-      };
-    } catch (e) {
-      print('Get Post Like Status API error: $e');
-      return {
-        'success': true,
-        'message': 'Like status retrieved from local storage',
-        'data': {
-          'liked': false,
-          'likeCount': 0,
-        },
-      };
     }
+    
+    // If all endpoints fail, check if this might be a local post
+    print('Get Post Like Status API: All endpoints failed, checking if local post...');
+    return await _getLocalPostLikeStatus(postId: postId);
   }
 
   static Future<Map<String, dynamic>> getPostLikes({
@@ -1325,11 +1485,12 @@ class ApiService {
     int limit = 20,
   }) async {
     try {
-      // Try multiple possible endpoints for post likes
+      // Use multiple likes endpoints to try different variations (including media API)
       final endpoints = [
-        'http://103.14.120.163:8081/api/posts/$postId/likes?page=$page&limit=$limit',
-        'http://103.14.120.163:8081/api/posts/$postId/likers?page=$page&limit=$limit',
-        'http://103.14.120.163:8081/api/user/posts/$postId/likes?page=$page&limit=$limit',
+        'http://103.14.120.163:8081/api/feed/like/$postId',
+        'http://103.14.120.163:8081/api/posts/$postId/like',
+        'http://103.14.120.163:8081/api/media/$postId/like',
+        'http://103.14.120.163:8081/api/like/$postId',
       ];
 
       for (final endpoint in endpoints) {
@@ -1338,7 +1499,7 @@ class ApiService {
             Uri.parse(endpoint),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
+              'Authorization': token, // Note: This API uses token directly, not Bearer
             },
           );
 

@@ -8,6 +8,7 @@ import 'providers/auth_provider.dart';
 import 'screens/followers_screen.dart';
 import 'screens/following_screen.dart';
 import 'screens/post_full_view_screen.dart';
+import 'screens/post_slider_screen.dart';
 import 'utils/snackbar_helper.dart';
 import 'services/user_media_service.dart';
 import 'services/api_service.dart';
@@ -450,7 +451,10 @@ class _ProfileUIState extends State<ProfileUI> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => PostFullViewScreen(post: post)));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => PostSliderScreen(
+          posts: [post], // Single post for now
+          initialIndex: 0,
+        )));
       },
       onLongPress: () {
         _maybeShowDeleteOptions(post);

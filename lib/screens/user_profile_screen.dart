@@ -9,6 +9,7 @@ import '../services/chat_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/post_full_view_screen.dart';
 import '../utils/avatar_utils.dart';
+import '../widgets/follow_button.dart';
 import 'package:flutter/foundation.dart'; // Added for kDebugMode
 
 class UserProfileScreen extends StatefulWidget {
@@ -425,9 +426,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           label,
           style: const TextStyle(
             color: Color(0xFF4A2C2A), // Deep Brown
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w400,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -618,76 +622,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       return const SizedBox.shrink();
     }
 
-    // Instagram-style Follow button
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: _isLoadingFollowRequest ? null : () async {
-          final authProvider = Provider.of<AuthProvider>(context, listen: false);
-          bool success;
-          
-          if (_isFollowing) {
-            // Unfollow the user
-            success = await authProvider.unfollowUser(_targetUserId);
-          } else {
-            // Follow the user
-            success = await authProvider.followUser(_targetUserId);
-          }
-
-          if (success) {
-            if (mounted) {
-              setState(() {
-                _isFollowing = !_isFollowing;
-              });
-              
-              // Refresh the following status to ensure consistency
-              await _checkFollowingStatus();
-              
-              // Refresh real counts after follow/unfollow action
-              await _loadRealCounts();
-            }
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(_isFollowing ? 'Following ${widget.username}' : 'Unfollowed ${widget.username}'),
-                backgroundColor: const Color(0xFF6366F1),
-              ),
-            );
-          } else {
-            final errorMessage = Provider.of<AuthProvider>(context, listen: false).error ?? 'Action failed';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(errorMessage),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        },
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFD4AF37), width: 1), // Muted Gold border
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-        ),
-        child: _isLoadingFollowRequest
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Color(0xFF4A2C2A),
-                  strokeWidth: 2,
-                ),
-              )
-            : Text(
-                _isFollowing ? 'Following' : 'Follow',
-                style: const TextStyle(
-                  color: Color(0xFF4A2C2A), // Deep Brown
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-      ),
+    // Use the FollowButton widget that handles friend requests
+    return FollowButton(
+      targetUserId: _targetUserId,
+      targetUserName: widget.username,
+      isPrivate: false, // You can make this dynamic based on user settings
+      isFollowing: _isFollowing,
+      onFollowChanged: () {
+        // Refresh the following status when follow state changes
+        _checkFollowingStatus();
+        _loadRealCounts();
+      },
     );
   }
 
@@ -699,7 +644,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       });
       
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final success = await authProvider.followUser(_targetUserId);
+      final success = await authProvider.followUser(_targetUserId, followerName: widget.username);
       
       if (success) {
         if (mounted) {

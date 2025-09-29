@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
 import '../screens/post_full_view_screen.dart';
+import '../screens/post_slider_screen.dart';
 import 'baba_comment_dialog.dart';
 import 'user_comment_dialog.dart';
 import 'image_slider_widget.dart';
@@ -125,21 +126,22 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           );
         }
       } else {
-        // Handle regular user posts - use local storage for persistent likes
-        final isLikedLocally = await UserLikeService.isPostLiked(widget.post.id);
-        if (mounted) {
-          setState(() {
-            _isLiked = isLikedLocally;
-            // Keep the original like count from post data
-            _likeCount = widget.post.likes;
-          });
+        // Handle regular user posts - use API to get like status
+        // For Baba Ji posts, remove the prefix to get the original post ID
+        String actualPostId = widget.post.id;
+        if (widget.post.isBabaJiPost) {
+          actualPostId = widget.post.id.replaceFirst('baba_', '');
         }
-        return; // Skip server response handling for user posts
+        
+        response = await ApiService.getPostLikeStatus(
+          postId: actualPostId,
+          token: token,
+        );
       }
 
       if (response != null && response['success'] == true && mounted) {
         setState(() {
-          _isLiked = response?['data']?['isLiked'] ?? response?['isLiked'] ?? false;
+          _isLiked = response?['data']?['liked'] ?? response?['data']?['isLiked'] ?? response?['isLiked'] ?? false;
           // Update like count from server response if available
           if (response?['data']?['likesCount'] != null) {
             _likeCount = response?['data']?['likesCount'] ?? _likeCount;
@@ -486,11 +488,14 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
               height: 300, // Reduced height to prevent stretching and show more content
               showCounter: true,
               onTap: () {
-                // Navigate to full screen image viewer
+                // Navigate to post slider view
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => PostFullViewScreen(post: widget.post),
+                    builder: (context) => PostSliderScreen(
+                      posts: [widget.post], // Single post for now
+                      initialIndex: 0,
+                    ),
                   ),
                 );
               },
@@ -541,18 +546,16 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
                       fontFamily: 'Poppins',
                     ),
                   ),
-                  if (_likeCount > 0) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '$_likeCount',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color: _isLiked ? Colors.red : const Color(0xFF666666),
-                        fontFamily: 'Poppins',
-                      ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$_likeCount',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
+                      color: _isLiked ? Colors.red : const Color(0xFF666666),
+                      fontFamily: 'Poppins',
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -673,16 +676,25 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           }
         }
       } else {
-        // Handle regular user posts using API service
+        // Handle regular user posts - use the working like API
+        // For Baba Ji posts, remove the prefix to get the original post ID
+        String actualPostId = widget.post.id;
+        if (widget.post.isBabaJiPost) {
+          actualPostId = widget.post.id.replaceFirst('baba_', '');
+        }
+        
+        print('EnhancedPostWidget: Attempting to like post with ID: $actualPostId (original: ${widget.post.id})');
+        print('EnhancedPostWidget: Post isBabaJiPost: ${widget.post.isBabaJiPost}');
+        
         if (_isLiked) {
           response = await ApiService.unlikePost(
-            postId: widget.post.id,
+            postId: actualPostId,
             token: token,
             userId: userId,
           );
         } else {
           response = await ApiService.likePost(
-            postId: widget.post.id,
+            postId: actualPostId,
             token: token,
             userId: userId,
           );
@@ -712,15 +724,26 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
             SnackBar(
               content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
               duration: const Duration(seconds: 2),
+              backgroundColor: _isLiked ? Colors.green : Colors.blue,
             ),
           );
         }
       } else {
         if (mounted) {
+          String errorMessage = response?['message'] ?? 'Failed to like post';
+          
+          // Provide more specific error messages based on the response
+          if (errorMessage.contains('Post not found')) {
+            errorMessage = 'This post is not available on the server. Like saved locally.';
+          } else if (errorMessage.contains('locally')) {
+            errorMessage = 'Like saved locally (offline mode)';
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response?['message'] ?? 'Failed to like post'),
-              backgroundColor: Colors.red,
+              content: Text(errorMessage),
+              backgroundColor: errorMessage.contains('locally') ? Colors.orange : Colors.red,
+              duration: const Duration(seconds: 3),
             ),
           );
         }

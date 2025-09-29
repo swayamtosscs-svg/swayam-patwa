@@ -6,6 +6,8 @@ import 'dart:math';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import '../services/notification_service.dart';
+import '../services/baba_page_service.dart';
+import '../services/follow_state_service.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
@@ -17,11 +19,13 @@ import '../widgets/single_video_widget.dart';
 import '../widgets/app_loader.dart';
 import '../widgets/image_slider_widget.dart';
 import '../widgets/skeleton_loader.dart';
+import '../widgets/notification_bell_widget.dart';
 import '../utils/app_theme.dart';
 import '../utils/font_theme.dart';
 import '../screens/story_upload_screen.dart';
 import '../screens/story_viewer_screen.dart';
 import '../screens/post_full_view_screen.dart';
+import '../screens/post_slider_screen.dart';
 import '../screens/live_stream_screen.dart';
 import '../services/story_service.dart';
 // Removed local story service import to prevent showing old local stories
@@ -142,12 +146,21 @@ class _HomeScreenState extends State<HomeScreen> {
             _posts = uniquePosts.values.take(_maxPostsInMemory).toList();
             _isLoadingPosts = false; // Always clear loading state
           });
-          print('HomeScreen: Loaded ${posts.length} posts from followed users');
-          if (posts.isNotEmpty) {
-            print('HomeScreen: Posts data: ${posts.map((p) => '${p.username}: ${p.caption}').toList()}');
-          } else {
-            print('HomeScreen: No posts available - showing empty state');
+        print('HomeScreen: Loaded ${posts.length} posts from followed users');
+        if (posts.isNotEmpty) {
+          print('HomeScreen: Posts data: ${posts.map((p) => '${p.username}: ${p.caption}').toList()}');
+          
+          // Debug: Check for Baba Ji reels
+          final babjiReels = posts.where((p) => p.isBabaJiPost && p.isReel).toList();
+          print('HomeScreen: Found ${babjiReels.length} Baba Ji reels in feed');
+          for (final reel in babjiReels) {
+            print('  - Baba Ji Reel: ${reel.id} by ${reel.username}');
+            print('    Video URL: ${reel.videoUrl}');
+            print('    Thumbnail: ${reel.thumbnailUrl}');
           }
+        } else {
+          print('HomeScreen: No posts available - showing empty state');
+        }
         }
       } else {
         print('HomeScreen: No user profile found');
@@ -369,6 +382,29 @@ class _HomeScreenState extends State<HomeScreen> {
           } catch (e) {
             print('Error getting followed users: $e');
           }
+          
+          // Load Babaji stories for home page - only if user is following Baba Ji (optimized)
+          try {
+            final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
+            print('Optimized loading - User is following Baba Ji: $isFollowingBabaJi');
+            if (isFollowingBabaJi) {
+              print('Loading Babaji stories for home page (optimized)...');
+              final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
+                token: authProvider.authToken,
+                page: 1,
+                limit: 5, // Reduced limit for faster loading
+              );
+              print('Optimized loading - Loaded ${babajiStories.length} Babaji stories');
+              if (babajiStories.isNotEmpty) {
+                allStories.addAll(babajiStories);
+                print('Added ${babajiStories.length} Babaji stories to home page (optimized)');
+              }
+            } else {
+              print('Optimized loading - User is not following Baba Ji, skipping Babaji stories');
+            }
+          } catch (e) {
+            print('Error loading Babaji stories (optimized): $e');
+          }
         } catch (e) {
           print('Error loading stories from story API: $e');
         }
@@ -470,21 +506,54 @@ class _HomeScreenState extends State<HomeScreen> {
             // Fallback: if we can't get followed users, just show current user's stories
           }
           
-          // Load Babaji stories for home page
+          // Load Babaji stories for home page - only if user is following Baba Ji
           try {
-            print('Loading Babaji stories for home page...');
+            print('Checking if user is following Baba Ji...');
+            final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
+            print('User is following Baba Ji: $isFollowingBabaJi');
+            
+            // Always load Baba Ji stories for home page display
+            print('=== LOADING BABA JI STORIES ===');
+            print('Token available: ${authProvider.authToken != null}');
+            if (authProvider.authToken != null) {
+              print('Token preview: ${authProvider.authToken!.substring(0, authProvider.authToken!.length > 20 ? 20 : authProvider.authToken!.length)}...');
+            }
+            
             final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
               token: authProvider.authToken,
               page: 1,
               limit: 10,
             );
-            print('Loaded ${babajiStories.length} Babaji stories');
+            print('=== BABA JI STORIES RESULT ===');
+            print('Loaded ${babajiStories.length} Baba Ji stories');
             
             if (babajiStories.isNotEmpty) {
               allStories.addAll(babajiStories);
-              print('Added ${babajiStories.length} Babaji stories to home page');
+              print('Added ${babajiStories.length} Baba Ji stories to allStories');
+              print('Total stories now: ${allStories.length}');
+              
+              // Debug: Print details of each Baba Ji story
+              print('=== BABA JI STORY DETAILS ===');
+              for (int i = 0; i < babajiStories.length; i++) {
+                final story = babajiStories[i];
+                print('Story $i:');
+                print('  - ID: ${story.id}');
+                print('  - Author ID: ${story.authorId}');
+                print('  - Author Name: ${story.authorName}');
+                print('  - Author Username: ${story.authorUsername}');
+                print('  - Media: ${story.media}');
+                print('  - Type: ${story.type}');
+                print('  - Created: ${story.createdAt}');
+                print('  - Is Active: ${story.isActive}');
+                print('  - Expires At: ${story.expiresAt}');
+              }
             } else {
-              print('No Babaji stories found');
+              print('=== NO BABA JI STORIES FOUND ===');
+              print('This could mean:');
+              print('1. No stories uploaded to Baba page');
+              print('2. API connection issue');
+              print('3. Wrong Baba page ID');
+              print('4. Stories expired or inactive');
             }
           } catch (e) {
             print('Error loading Babaji stories: $e');
@@ -511,6 +580,8 @@ class _HomeScreenState extends State<HomeScreen> {
           if (babajiStories.isNotEmpty) {
             allStories.addAll(babajiStories);
             print('Added ${babajiStories.length} Babaji stories as fallback');
+          } else {
+            print('No Babaji stories available as fallback');
           }
         } catch (e) {
           print('Error loading Babaji stories as fallback: $e');
@@ -519,20 +590,51 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // Sort stories by creation date (newest first) - only if we have stories
       if (allStories.isNotEmpty) {
+        print('=== SORTING AND GROUPING STORIES ===');
+        print('Total stories before sorting: ${allStories.length}');
+        
         allStories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         print('HomeScreen: Total stories loaded: ${allStories.length}');
+        
+        // Debug: Print all stories before grouping
+        print('=== ALL STORIES BEFORE GROUPING ===');
+        for (int i = 0; i < allStories.length; i++) {
+          final story = allStories[i];
+          print('Story $i:');
+          print('  - ID: ${story.id}');
+          print('  - Author ID: ${story.authorId}');
+          print('  - Author Name: ${story.authorName}');
+          print('  - Author Username: ${story.authorUsername}');
+          print('  - Media: ${story.media}');
+          print('  - Type: ${story.type}');
+          print('  - Is Active: ${story.isActive}');
+        }
         
         // Group stories by user
         _groupedStories = StoryService.groupStoriesByUser(allStories);
         print('HomeScreen: Grouped stories into ${_groupedStories.length} user sections');
         
         // Debug: Print details of each user's story section
+        print('=== GROUPED STORIES ===');
         _groupedStories.forEach((userId, userStories) {
           final firstStory = userStories.first;
-          print('HomeScreen: User ${firstStory.authorName} (${firstStory.authorUsername}) has ${userStories.length} stories');
+          print('User Section: ${firstStory.authorName} (${firstStory.authorUsername})');
+          print('  - User ID: $userId');
+          print('  - Author ID: ${firstStory.authorId}');
+          print('  - Stories count: ${userStories.length}');
           userStories.forEach((story) {
-            print('  - Story ${story.id}: ${story.type} - ${story.media}');
+            print('    - Story ${story.id}: ${story.type} - ${story.media}');
           });
+        });
+        
+        // Special debug for Baba Ji stories
+        final babajiStories = allStories.where((story) => 
+          story.authorName.toLowerCase().contains('baba') || 
+          story.authorUsername.toLowerCase().contains('babaji')
+        ).toList();
+        print('HomeScreen: Found ${babajiStories.length} Baba Ji stories in allStories');
+        babajiStories.forEach((story) {
+          print('  - Baba Ji Story: ${story.id} by ${story.authorName} (${story.authorUsername})');
         });
         
         // Debug: Show current user info
@@ -724,6 +826,48 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Helper method to check if user is following Baba Ji
+  Future<bool> _isUserFollowingBabaJi(String token, String? userId) async {
+    try {
+      if (userId == null) {
+        print('HomeScreen: No user ID available, cannot check Baba Ji follow status');
+        return false;
+      }
+
+      print('HomeScreen: Checking if user $userId is following Baba Ji...');
+      
+      // Get Baba pages to check follow status
+      final babaPagesResponse = await BabaPageService.getBabaPages(token: token, page: 1, limit: 50);
+      
+      if (babaPagesResponse.success && babaPagesResponse.pages.isNotEmpty) {
+        // Find the main Baba Ji page (assuming it's the first one or has a specific identifier)
+        // For now, we'll check if any Baba page is being followed
+        for (final babaPage in babaPagesResponse.pages) {
+          // Use FollowStateService to get the correct follow state
+          final isFollowing = await FollowStateService.getFollowState(
+            userId: userId,
+            pageId: babaPage.id,
+            serverState: babaPage.isFollowing,
+          );
+          
+          if (isFollowing) {
+            print('HomeScreen: User is following Baba Ji page: ${babaPage.name} (${babaPage.id})');
+            return true;
+          }
+        }
+        
+        print('HomeScreen: User is not following any Baba Ji pages');
+        return false;
+      } else {
+        print('HomeScreen: Failed to get Baba pages: ${babaPagesResponse.message}');
+        return false;
+      }
+    } catch (e) {
+      print('HomeScreen: Error checking Baba Ji follow status: $e');
+      return false;
+    }
+  }
+
 
 
 
@@ -849,56 +993,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.search, color: Colors.black, size: 24),
                 tooltip: 'Search Users',
               ),
-              // Notification Icon with Badge
-              Stack(
-                children: [
-                  IconButton(
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationsScreen(),
-                        ),
-                      );
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.favorite_border, color: Colors.black, size: 24),
-                    tooltip: 'Notifications',
-                  ),
-                  // Unread notification badge
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: FutureBuilder<int>(
-                      future: _getUnreadNotificationCount(),
-                      builder: (context, snapshot) {
-                        final count = snapshot.data ?? 0;
-                        if (count == 0) return const SizedBox.shrink();
-                        
-                        return Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            count > 99 ? '99+' : count.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+              // Notification Bell Widget
+              const NotificationBellWidget(
+                size: 24,
+                color: Colors.black,
               ),
               // Message Icon with Badge
               Stack(
@@ -1900,10 +1998,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openPostInFullView(Post post) {
+    // Find the index of the current post in the posts list
+    final postIndex = _posts.indexWhere((p) => p.id == post.id);
+    
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PostFullViewScreen(post: post),
+        builder: (context) => PostSliderScreen(
+          posts: _posts,
+          initialIndex: postIndex >= 0 ? postIndex : 0,
+        ),
       ),
     );
   }

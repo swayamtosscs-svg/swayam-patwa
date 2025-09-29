@@ -932,6 +932,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             color: Colors.black,
             fontFamily: 'Poppins',
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          textAlign: TextAlign.center,
         ),
       ],
     );

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'dart:ui';
-import '../providers/auth_provider.dart';
-import '../services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/notification_model.dart';
-import '../screens/user_profile_screen.dart';
-import '../utils/responsive_utils.dart';
+import '../services/notification_service.dart';
+import '../widgets/notification_item_widget.dart';
+import 'follow_requests_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -14,73 +12,105 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  List<NotificationModel> _notifications = [];
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<NotificationModel> _allNotifications = [];
+  List<NotificationModel> _unreadNotifications = [];
   bool _isLoading = false;
-  bool _hasMore = true;
+  bool _isLoadingMore = false;
   int _currentPage = 1;
-  static const int _pageSize = 20;
+  final int _pageSize = 20;
+  bool _hasMoreData = true;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadNotifications();
-    // Mark all notifications as read when screen is opened
-    _markAllAsReadOnOpen();
+    _markNotificationsAsViewed();
   }
 
-  Future<void> _loadNotifications({bool refresh = false}) async {
-    if (_isLoading) return;
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
-    if (refresh) {
-      _currentPage = 1;
-      _hasMore = true;
+  Future<void> _markNotificationsAsViewed() async {
+    try {
+      await NotificationService.markNotificationsAsViewed();
+    } catch (e) {
+      print('Error marking notifications as viewed: $e');
     }
+  }
+
+  Future<void> _loadNotifications({bool loadMore = false}) async {
+    if (_isLoading && !loadMore) return;
+    if (_isLoadingMore && loadMore) return;
 
     setState(() {
-      _isLoading = true;
+      if (loadMore) {
+        _isLoadingMore = true;
+      } else {
+        _isLoading = true;
+        _currentPage = 1;
+        _hasMoreData = true;
+      }
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.authToken;
-
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please login to view notifications'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
+        throw Exception('No authentication token found');
       }
 
-      final notifications = await NotificationService.getNotifications(
+      final page = loadMore ? _currentPage + 1 : 1;
+
+      final allNotifications = await NotificationService.getNotifications(
         token: token,
-        page: _currentPage,
+        page: page,
+        limit: _pageSize,
+      );
+
+      final unreadNotifications =
+          await NotificationService.getUnreadNotifications(
+        token: token,
+        page: page,
         limit: _pageSize,
       );
 
       if (mounted) {
         setState(() {
-          if (refresh) {
-            _notifications = notifications;
+          if (loadMore) {
+            _allNotifications.addAll(allNotifications);
+            _unreadNotifications.addAll(unreadNotifications);
+            _currentPage = page;
           } else {
-            _notifications.addAll(notifications);
+            _allNotifications = allNotifications;
+            _unreadNotifications = unreadNotifications;
+            _currentPage = 1;
           }
-          _hasMore = notifications.length == _pageSize;
-          _currentPage++;
+
+          _hasMoreData = allNotifications.length == _pageSize;
           _isLoading = false;
+          _isLoadingMore = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _isLoadingMore = false;
         });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading notifications: $e'),
+            content: Text(
+              'Error loading notifications: $e',
+              style: const TextStyle(color: Colors.black),
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -88,450 +118,259 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Future<void> _markAsRead(NotificationModel notification) async {
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.authToken;
-
-      if (token == null) return;
-
-      final success = await NotificationService.markAsRead(
-        notificationId: notification.id,
-        token: token,
-      );
-
-      if (success && mounted) {
-        setState(() {
-          final index =
-              _notifications.indexWhere((n) => n.id == notification.id);
-          if (index != -1) {
-            _notifications[index] =
-                _notifications[index].copyWith(isRead: true);
-          }
-        });
-      }
-    } catch (e) {
-      print('Error marking notification as read: $e');
-    }
-  }
-
   Future<void> _markAllAsRead() async {
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.authToken;
-
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
       if (token == null) return;
 
       final success = await NotificationService.markAllAsRead(token: token);
-
       if (success && mounted) {
-        setState(() {
-          _notifications = _notifications
-              .map((n) => n.copyWith(isRead: true))
-              .toList();
-        });
+        await _loadNotifications();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('All notifications marked as read'),
+            content: Text(
+              'All notifications marked as read',
+              style: TextStyle(color: Colors.black),
+            ),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error marking all as read: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _markAllAsReadOnOpen() async {
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.authToken;
-
-      if (token == null) return;
-
-      // Silently mark all notifications as read when screen opens
-      await NotificationService.markAllAsRead(token: token);
-    } catch (e) {
-      print('Error marking all notifications as read on open: $e');
-    }
-  }
-
-  void _handleNotificationTap(NotificationModel notification) {
-    // Mark as read first
-    _markAsRead(notification);
-
-    // Handle different notification types
-    switch (notification.type.toLowerCase()) {
-      case 'follow':
-      case 'friend_request':
-        // Navigate to user profile
-        if (notification.targetId != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => UserProfileScreen(
-                userId: notification.targetId!,
-                username: notification.data?['username'] ?? 'User',
-                fullName: notification.data?['fullName'] ?? 'User',
-                avatar: notification.data?['avatar'] ?? '',
-                bio: notification.data?['bio'] ?? '',
-                followersCount: notification.data?['followersCount'] ?? 0,
-                followingCount: notification.data?['followingCount'] ?? 0,
-                postsCount: notification.data?['postsCount'] ?? 0,
-                isPrivate: notification.data?['isPrivate'] ?? false,
-              ),
-            ),
-          );
-        }
-        break;
-      case 'like':
-      case 'comment':
-      case 'mention':
-        // Navigate to post view
-        if (notification.targetId != null) {
-          // TODO: Navigate to post view screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Navigate to ${notification.type}'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-        break;
-      default:
-        // Show notification details
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(notification.message),
-            backgroundColor: Colors.blue,
+            content: Text(
+              'Error marking notifications as read: $e',
+              style: TextStyle(color: Colors.black),
+            ),
+            backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _onNotificationTapped(NotificationModel notification) async {
+    if (!notification.isRead) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('auth_token');
+        if (token != null) {
+          await NotificationService.markAsRead(
+            notificationId: notification.id,
+            token: token,
+          );
+
+          setState(() {
+            final index =
+                _allNotifications.indexWhere((n) => n.id == notification.id);
+            if (index != -1) {
+              _allNotifications[index] = notification.copyWith(isRead: true);
+            }
+
+            _unreadNotifications.removeWhere((n) => n.id == notification.id);
+          });
+        }
+      } catch (e) {
+        print('Error marking notification as read: $e');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/Signup page bg.jpeg'),
-            fit: BoxFit.cover,
+      backgroundColor: const Color(0xFFF0EBE1),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF0EBE1),
+        elevation: 0,
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Custom App Bar
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const FollowRequestsScreen(),
                 ),
-                child: ClipRRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Padding(
+              );
+            },
+            icon: const Icon(Icons.person_add, color: Colors.black),
+            tooltip: 'Follow Requests',
+          ),
+          if (_unreadNotifications.isNotEmpty)
+            TextButton(
+              onPressed: _markAllAsRead,
+              child: const Text(
+                'Mark all read',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.black54,
+          indicatorColor: Colors.black,
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('All', style: TextStyle(color: Colors.black)),
+                  if (_allNotifications.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back,
-                                color: Colors.black),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          Expanded(
-                            child: Text(
-                              'Notifications',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w600,
-                                fontSize:
-                                    ResponsiveUtils.getResponsiveFontSize(
-                                        context, 20),
-                                color: Colors.black,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          if (_notifications.any((n) => !n.isRead))
-                            IconButton(
-                              onPressed: _markAllAsRead,
-                              icon: const Icon(Icons.done_all,
-                                  color: Colors.black),
-                              tooltip: 'Mark all as read',
-                            )
-                          else
-                            const SizedBox(width: 48),
-                        ],
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _allNotifications.length.toString(),
+                        style: const TextStyle(
+                          color: Colors.white, // changed to white for better contrast
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
-              // Main Content
-              Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => _loadNotifications(refresh: true),
-                  child: _notifications.isEmpty && !_isLoading
-                      ? _buildEmptyState()
-                      : _buildNotificationsList(),
-                ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Unread', style: TextStyle(color: Colors.black)),
+                  if (_unreadNotifications.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _unreadNotifications.length.toString(),
+                        style: const TextStyle(
+                          color: Colors.white, // changed to white for better contrast
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.all(20),
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.2),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 15,
-              spreadRadius: 3,
-              offset: const Offset(0, 8),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.notifications_none,
-                  size: 80,
-                  color: Colors.black.withOpacity(0.6),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No notifications yet',
-                  style: TextStyle(
-                    fontSize:
-                        ResponsiveUtils.getResponsiveFontSize(context, 20),
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'You\'ll see notifications about likes, comments, and friend requests here',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize:
-                        ResponsiveUtils.getResponsiveFontSize(context, 14),
-                    color: Colors.black.withOpacity(0.7),
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
-    );
-  }
-
-  Widget _buildNotificationsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _notifications.length + (_hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index == _notifications.length) {
-          if (_hasMore) {
-            return Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Colors.black),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-          return const SizedBox.shrink();
-        }
-
-        final notification = _notifications[index];
-        return _buildNotificationItem(notification);
-      },
-    );
-  }
-
-  Widget _buildNotificationItem(NotificationModel notification) {
-    // Custom readable message
-    String displayMessage;
-    switch (notification.type.toLowerCase()) {
-      case 'follow':
-        displayMessage =
-            "${notification.data?['username'] ?? 'Someone'} started following you";
-        break;
-      case 'friend_request':
-        displayMessage =
-            "${notification.data?['username'] ?? 'Someone'} sent you a friend request";
-        break;
-      case 'like':
-        displayMessage =
-            "${notification.data?['username'] ?? 'Someone'} liked your post";
-        break;
-      case 'comment':
-        displayMessage =
-            "${notification.data?['username'] ?? 'Someone'} commented on your post";
-        break;
-      case 'mention':
-        displayMessage =
-            "${notification.data?['username'] ?? 'Someone'} mentioned you in a post";
-        break;
-      default:
-        displayMessage = notification.message.isNotEmpty
-            ? notification.message
-            : 'You have a new notification';
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildNotificationsList(_allNotifications),
+          _buildNotificationsList(_unreadNotifications),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              radius: 24,
-              backgroundColor: Color(
-                  int.parse(notification.color.replaceAll('#', '0xFF'))),
-              child: Text(
-                notification.icon,
-                style: const TextStyle(
-                  fontSize: 20,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            title: Text(
-              notification.title.isNotEmpty
-                  ? notification.title
-                  : 'Notification',
-              style: TextStyle(
-                fontSize: ResponsiveUtils.getResponsiveFontSize(context, 16),
-                fontWeight:
-                    notification.isRead ? FontWeight.w500 : FontWeight.w600,
-                color: Colors.black,
-                fontFamily: 'Poppins',
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(
-                  displayMessage,
-                  style: TextStyle(
-                    fontSize:
-                        ResponsiveUtils.getResponsiveFontSize(context, 14),
-                    color: Colors.black,
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  notification.timeAgo,
-                  style: TextStyle(
-                    fontSize:
-                        ResponsiveUtils.getResponsiveFontSize(context, 12),
-                    color: Colors.black,
-                    fontFamily: 'Poppins',
-                  ),
-                ),
-              ],
-            ),
-            trailing: notification.isRead
-                ? null
-                : Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-            onTap: () => _handleNotificationTap(notification),
-          ),
+    );
+  }
+
+  Widget _buildNotificationsList(List<NotificationModel> notifications) {
+    if (_isLoading && notifications.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Colors.black,
         ),
+      );
+    }
+
+    if (notifications.isEmpty && !_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(
+              Icons.notifications_none,
+              size: 64,
+              color: Colors.black54,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No notifications',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'When you get notifications, they\'ll appear here',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _loadNotifications(),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: notifications.length + (_hasMoreData ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == notifications.length) {
+            if (_isLoadingMore) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(
+                    color: Colors.black,
+                  ),
+                ),
+              );
+            } else if (_hasMoreData) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _loadNotifications(loadMore: true);
+              });
+              return const SizedBox.shrink();
+            } else {
+              return const SizedBox.shrink();
+            }
+          }
+
+          final notification = notifications[index];
+          return NotificationItemWidget(
+            notification: notification,
+            onTap: () => _onNotificationTapped(notification),
+          );
+        },
       ),
     );
   }

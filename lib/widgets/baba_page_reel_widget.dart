@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/baba_page_reel_model.dart';
 import '../utils/app_theme.dart';
 import '../screens/fullscreen_reel_viewer_screen.dart';
+import '../providers/auth_provider.dart';
+import '../services/baba_like_service.dart';
 import 'video_player_widget.dart';
 
 class BabaPageReelWidget extends StatefulWidget {
@@ -26,7 +29,130 @@ class BabaPageReelWidget extends StatefulWidget {
 
 class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
   bool _isPlaying = false;
+  bool _isLiked = false;
+  int _likeCount = 0;
+  bool _isLoadingLike = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _likeCount = widget.reel.likesCount;
+    _loadLikeStatus();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _loadLikeStatus() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+
+      if (userId == null) return;
+
+      final response = await BabaLikeService.getBabaReelLikeStatus(
+        userId: userId,
+        reelId: widget.reel.id,
+        babaPageId: widget.reel.babaPageId,
+      );
+
+      if (response != null && response['success'] == true && mounted) {
+        final data = response['data'] as Map<String, dynamic>?;
+        setState(() {
+          _isLiked = data?['isLiked'] ?? false;
+          _likeCount = data?['likesCount'] ?? widget.reel.likesCount;
+        });
+      }
+    } catch (e) {
+      print('BabaPageReelWidget: Error loading like status: $e');
+    }
+  }
+
+  Future<void> _handleLike() async {
+    if (_isLoadingLike) return;
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+
+      if (userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to like reels'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isLoadingLike = true;
+      });
+
+      Map<String, dynamic>? response;
+
+      if (_isLiked) {
+        response = await BabaLikeService.unlikeBabaReel(
+          userId: userId,
+          reelId: widget.reel.id,
+          babaPageId: widget.reel.babaPageId,
+        );
+      } else {
+        response = await BabaLikeService.likeBabaReel(
+          userId: userId,
+          reelId: widget.reel.id,
+          babaPageId: widget.reel.babaPageId,
+        );
+      }
+
+      if (response != null && response['success'] == true && mounted) {
+        final data = response['data'] as Map<String, dynamic>?;
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount = data?['likesCount'] ?? _likeCount;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
+              duration: const Duration(seconds: 2),
+              backgroundColor: _isLiked ? Colors.red : Colors.grey,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update like status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('BabaPageReelWidget: Error handling like: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error updating like status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingLike = false;
+        });
+      }
+    }
+  }
 
   void _togglePlayPause() {
     // This will be handled by the VideoPlayerWidget
@@ -215,7 +341,7 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
         children: [
           _buildStatItem(Icons.visibility, widget.reel.viewsCount),
           const SizedBox(width: 16),
-          _buildStatItem(Icons.favorite, widget.reel.likesCount, onTap: widget.onLike),
+          _buildStatItem(Icons.favorite, _likeCount, onTap: _handleLike, isLoading: _isLoadingLike),
           const SizedBox(width: 16),
           _buildStatItem(Icons.comment, widget.reel.commentsCount),
           const SizedBox(width: 16),
@@ -234,26 +360,38 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
     );
   }
 
-  Widget _buildStatItem(IconData icon, int count, {VoidCallback? onTap}) {
+  Widget _buildStatItem(IconData icon, int count, {VoidCallback? onTap, bool isLoading = false}) {
+    final isLikeButton = icon == Icons.favorite && onTap != null;
+    
     return GestureDetector(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: onTap != null && icon == Icons.favorite 
-                ? (widget.reel.likesCount > 0 ? Colors.red : AppTheme.textSecondary)
-                : AppTheme.textSecondary,
-          ),
+          if (isLoading && isLikeButton)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.textSecondary),
+              ),
+            )
+          else
+            Icon(
+              icon,
+              size: 16,
+              color: isLikeButton 
+                  ? (_isLiked ? Colors.red : AppTheme.textSecondary)
+                  : AppTheme.textSecondary,
+            ),
           const SizedBox(width: 4),
           Text(
             _formatCount(count),
             style: TextStyle(
               fontSize: 12,
-              color: onTap != null && icon == Icons.favorite 
-                  ? (widget.reel.likesCount > 0 ? Colors.red : AppTheme.textSecondary)
+              color: isLikeButton 
+                  ? (_isLiked ? Colors.red : AppTheme.textSecondary)
                   : AppTheme.textSecondary,
               fontFamily: 'Poppins',
             ),

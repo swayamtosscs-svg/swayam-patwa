@@ -7,6 +7,7 @@ class BabaPage {
   final String location;
   final String religion;
   final String website;
+  final String creatorId; // Added creator field
   final int followersCount;
   final int postsCount;
   final int videosCount;
@@ -25,6 +26,7 @@ class BabaPage {
     required this.location,
     required this.religion,
     required this.website,
+    required this.creatorId,
     required this.followersCount,
     required this.postsCount,
     required this.videosCount,
@@ -45,6 +47,7 @@ class BabaPage {
       location: json['location'] ?? '',
       religion: json['religion'] ?? '',
       website: json['website'] ?? '',
+      creatorId: json['creatorId'] ?? json['creator'] ?? json['createdBy'] ?? '',
       followersCount: json['followersCount'] ?? 0,
       postsCount: json['postsCount'] ?? 0,
       videosCount: json['videosCount'] ?? 0,
@@ -66,6 +69,7 @@ class BabaPage {
       'location': location,
       'religion': religion,
       'website': website,
+      'creatorId': creatorId,
       'followersCount': followersCount,
       'postsCount': postsCount,
       'videosCount': videosCount,
@@ -86,6 +90,7 @@ class BabaPage {
     String? location,
     String? religion,
     String? website,
+    String? creatorId,
     int? followersCount,
     int? postsCount,
     int? videosCount,
@@ -104,6 +109,7 @@ class BabaPage {
       location: location ?? this.location,
       religion: religion ?? this.religion,
       website: website ?? this.website,
+      creatorId: creatorId ?? this.creatorId,
       followersCount: followersCount ?? this.followersCount,
       postsCount: postsCount ?? this.postsCount,
       videosCount: videosCount ?? this.videosCount,

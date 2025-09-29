@@ -34,6 +34,10 @@ class FollowRequest {
     );
   }
 
+  factory FollowRequest.fromJson(Map<String, dynamic> data) {
+    return FollowRequest.fromMap(data);
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

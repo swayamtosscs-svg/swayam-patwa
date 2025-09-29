@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../screens/user_profile_screen.dart';
 
 class DiscoverUsersScreen extends StatefulWidget {
@@ -180,6 +181,9 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
             _followingStatus[userId] = true;
           });
           
+          // Create follow notification
+          await _createFollowNotification(userId, username, token, currentUserId);
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Started following $username'),
@@ -208,6 +212,30 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
           _isProcessingFollow[userId] = false;
         });
       }
+    }
+  }
+
+  /// Create follow notification
+  Future<void> _createFollowNotification(String targetUserId, String username, String token, String? currentUserId) async {
+    try {
+      if (currentUserId == null) return;
+
+      // Get current user info from auth provider
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUser = authProvider.userProfile;
+      
+      if (currentUser == null) return;
+
+      final followerName = currentUser.name ?? currentUser.username ?? 'Someone';
+
+      await NotificationService.createFollowNotification(
+        followerId: currentUserId,
+        followerName: followerName,
+        targetUserId: targetUserId,
+        token: token,
+      );
+    } catch (e) {
+      print('Error creating follow notification: $e');
     }
   }
 

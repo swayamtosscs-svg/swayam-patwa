@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'video_player_widget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 import '../models/post_model.dart';
 import '../services/api_service.dart';
@@ -10,6 +12,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
 import '../screens/post_full_view_screen.dart';
+import '../screens/post_slider_screen.dart';
 import 'image_slider_widget.dart';
 import 'user_comment_dialog.dart';
 
@@ -55,16 +58,38 @@ class _PostWidgetState extends State<PostWidget> {
 
   Future<void> _loadLikeStatus() async {
     try {
-      final isLikedLocally = await UserLikeService.isPostLiked(widget.post.id);
-      if (mounted) {
+      print('PostWidget: Loading like status for post ${widget.post.id}');
+      
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final userId = authProvider.userProfile?.id;
+      final token = authProvider.authToken;
+      
+      if (userId == null || token == null) {
+        print('PostWidget: User not authenticated, skipping like status load');
+        return;
+      }
+      
+      // Use API to get like status
+      final response = await ApiService.getPostLikeStatus(
+        postId: widget.post.id,
+        token: token,
+      );
+      
+      print('PostWidget: API response: $response');
+      
+      if (response['success'] == true && mounted) {
         setState(() {
-          _isLiked = isLikedLocally;
-          // Keep the original like count from post data
-          _likeCount = widget.post.likes;
+          _isLiked = response['data']?['liked'] ?? response['data']?['isLiked'] ?? false;
+          _likeCount = response['data']?['likesCount'] ?? response['data']?['likeCount'] ?? widget.post.likes;
         });
+        
+        print('PostWidget: Final state - liked=$_isLiked, count=$_likeCount');
+      } else {
+        print('PostWidget: Failed to load like status: ${response['message']}');
+        // Keep default values from post data
       }
     } catch (e) {
-      print('Error loading like status: $e');
+      print('PostWidget: Error loading like status: $e');
     }
   }
 
@@ -132,15 +157,26 @@ class _PostWidgetState extends State<PostWidget> {
             SnackBar(
               content: Text(_isLiked ? 'Liked!' : 'Unliked!'),
               duration: const Duration(seconds: 2),
+              backgroundColor: _isLiked ? Colors.green : Colors.blue,
             ),
           );
         }
       } else {
         if (mounted) {
+          String errorMessage = response?['message'] ?? 'Failed to like post';
+          
+          // Provide more specific error messages based on the response
+          if (errorMessage.contains('Post not found')) {
+            errorMessage = 'This post is not available on the server. Like saved locally.';
+          } else if (errorMessage.contains('locally')) {
+            errorMessage = 'Like saved locally (offline mode)';
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response?['message'] ?? 'Failed to like post'),
-              backgroundColor: Colors.red,
+              content: Text(errorMessage),
+              backgroundColor: errorMessage.contains('locally') ? Colors.orange : Colors.red,
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -161,11 +197,14 @@ class _PostWidgetState extends State<PostWidget> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        // Navigate to full screen post view
+        // Navigate to post slider view
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PostFullViewScreen(post: widget.post),
+            builder: (context) => PostSliderScreen(
+              posts: [widget.post], // Single post for now
+              initialIndex: 0,
+            ),
           ),
         );
       },
@@ -525,7 +564,7 @@ class _PostWidgetState extends State<PostWidget> {
           // Like Button
           _buildActionButton(
             icon: _isLiked ? Icons.favorite : Icons.favorite_border,
-            label: '$_likeCount',
+            label: _likeCount > 0 ? '$_likeCount' : 'Like',
             onTap: _handleLike,
             color: _isLiked ? Colors.red : const Color(0xFF666666),
           ),
@@ -621,7 +660,7 @@ class _PostWidgetState extends State<PostWidget> {
       child: Row(
         children: [
           // Likes
-          if (widget.post.likes > 0) ...[
+          if (_likeCount > 0) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12), // Reduced padding
               child: Row(
@@ -641,7 +680,7 @@ class _PostWidgetState extends State<PostWidget> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${widget.post.likes} likes',
+                    '$_likeCount likes',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
