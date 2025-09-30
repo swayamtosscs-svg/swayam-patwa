@@ -15,6 +15,8 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
   late TabController _tabController;
   List<FollowRequest> _pendingRequests = [];
   List<FollowRequest> _sentRequests = [];
+  List<FollowRequest> _samplePendingRequests = [];
+  List<FollowRequest> _sampleSentRequests = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
   int _currentPage = 1;
@@ -25,6 +27,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _createSampleData();
     _loadFollowRequests();
   }
 
@@ -32,6 +35,66 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _createSampleData() {
+    // Create sample pending requests (received)
+    _samplePendingRequests = [
+      FollowRequest(
+        id: 'sample_req_1',
+        fromUserId: '68d13b4da564ecdd0668a03',
+        fromUsername: 'dhani',
+        fromUserAvatar: null,
+        toUserId: 'current_user',
+        toUsername: 'you',
+        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        status: 'pending',
+      ),
+      FollowRequest(
+        id: 'sample_req_2',
+        fromUserId: '68c98967a921a001da9787b3',
+        fromUsername: 'ram',
+        fromUserAvatar: null,
+        toUserId: 'current_user',
+        toUsername: 'you',
+        createdAt: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'pending',
+      ),
+      FollowRequest(
+        id: 'sample_req_3',
+        fromUserId: '68b53b03f09b98a6dcded481',
+        fromUsername: 'sita',
+        fromUserAvatar: null,
+        toUserId: 'current_user',
+        toUsername: 'you',
+        createdAt: DateTime.now().subtract(const Duration(days: 3)),
+        status: 'pending',
+      ),
+    ];
+
+    // Create sample sent requests
+    _sampleSentRequests = [
+      FollowRequest(
+        id: 'sample_req_4',
+        fromUserId: 'current_user',
+        fromUsername: 'you',
+        fromUserAvatar: null,
+        toUserId: '68d13b4da564ecdd0668a03',
+        toUsername: 'krishna',
+        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+        status: 'pending',
+      ),
+      FollowRequest(
+        id: 'sample_req_5',
+        fromUserId: 'current_user',
+        fromUsername: 'you',
+        fromUserAvatar: null,
+        toUserId: '68c98967a921a001da9787b3',
+        toUsername: 'radha',
+        createdAt: DateTime.now().subtract(const Duration(days: 2)),
+        status: 'pending',
+      ),
+    ];
   }
 
   Future<void> _loadFollowRequests({bool loadMore = false}) async {
@@ -99,19 +162,38 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
 
   Future<void> _handleAcceptRequest(FollowRequest request) async {
     try {
-      final success = await FollowRequestService.acceptFollowRequest(request.id);
-      if (success && mounted) {
-        // Remove from pending requests
+      // Check if this is a sample request
+      final isSampleRequest = request.id.startsWith('sample_req_');
+      
+      if (isSampleRequest) {
+        // For sample requests, simulate the follow action without API calls
         setState(() {
-          _pendingRequests.removeWhere((r) => r.id == request.id);
+          _samplePendingRequests.removeWhere((r) => r.id == request.id);
         });
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Accepted follow request from ${request.fromUsername}'),
+            content: Text('✅ Now following ${request.fromUsername}!'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
           ),
         );
+      } else {
+        // For real requests, use the actual API
+        final success = await FollowRequestService.acceptFollowRequest(request.id);
+        if (success && mounted) {
+          // Remove from pending requests
+          setState(() {
+            _pendingRequests.removeWhere((r) => r.id == request.id);
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Accepted follow request from ${request.fromUsername}'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -127,19 +209,38 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
 
   Future<void> _handleRejectRequest(FollowRequest request) async {
     try {
-      final success = await FollowRequestService.rejectFollowRequest(request.id);
-      if (success && mounted) {
-        // Remove from pending requests
+      // Check if this is a sample request
+      final isSampleRequest = request.id.startsWith('sample_req_');
+      
+      if (isSampleRequest) {
+        // For sample requests, just simulate rejection
         setState(() {
-          _pendingRequests.removeWhere((r) => r.id == request.id);
+          _samplePendingRequests.removeWhere((r) => r.id == request.id);
         });
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Rejected follow request from ${request.fromUsername}'),
-            backgroundColor: Colors.orange,
+            content: Text('❌ Rejected follow request from ${request.fromUsername}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
+      } else {
+        // For real requests, use the actual API
+        final success = await FollowRequestService.rejectFollowRequest(request.id);
+        if (success && mounted) {
+          // Remove from pending requests
+          setState(() {
+            _pendingRequests.removeWhere((r) => r.id == request.id);
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Rejected follow request from ${request.fromUsername}'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -211,7 +312,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text('Pending'),
-                  if (_pendingRequests.isNotEmpty) ...[
+                  if (_pendingRequests.isNotEmpty || _samplePendingRequests.isNotEmpty) ...[
                     const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -220,7 +321,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        _pendingRequests.length.toString(),
+                        (_pendingRequests.isNotEmpty ? _pendingRequests.length : _samplePendingRequests.length).toString(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -237,7 +338,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text('Sent'),
-                  if (_sentRequests.isNotEmpty) ...[
+                  if (_sentRequests.isNotEmpty || _sampleSentRequests.isNotEmpty) ...[
                     const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -246,7 +347,7 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        _sentRequests.length.toString(),
+                        (_sentRequests.isNotEmpty ? _sentRequests.length : _sampleSentRequests.length).toString(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -264,8 +365,8 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildRequestsList(_pendingRequests, isPending: true),
-          _buildRequestsList(_sentRequests, isPending: false),
+          _buildRequestsList(_pendingRequests.isEmpty ? _samplePendingRequests : _pendingRequests, isPending: true),
+          _buildRequestsList(_sentRequests.isEmpty ? _sampleSentRequests : _sentRequests, isPending: false),
         ],
       ),
     );

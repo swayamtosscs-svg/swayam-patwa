@@ -4,6 +4,8 @@ import '../models/notification_model.dart';
 import '../services/notification_service.dart';
 import '../widgets/notification_item_widget.dart';
 import 'follow_requests_screen.dart';
+import 'test_follow_request_demo.dart';
+import 'test_rupesh_follow_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -180,6 +182,62 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
   }
 
+  Future<void> _onNotificationDeleted(NotificationModel notification) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      if (token != null) {
+        final success = await NotificationService.deleteNotification(
+          notificationId: notification.id,
+          token: token,
+        );
+
+        if (success && mounted) {
+          setState(() {
+            _allNotifications.removeWhere((n) => n.id == notification.id);
+            _unreadNotifications.removeWhere((n) => n.id == notification.id);
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Notification deleted',
+                style: TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to delete notification',
+                style: TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        print('Error deleting notification: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error deleting notification: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -211,6 +269,30 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             },
             icon: const Icon(Icons.person_add, color: Colors.black),
             tooltip: 'Follow Requests',
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TestFollowRequestDemo(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.science, color: Colors.black),
+            tooltip: 'Demo Follow Requests',
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TestRupeshFollowScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.person_search, color: Colors.black),
+            tooltip: 'Test Follow Button',
           ),
           if (_unreadNotifications.isNotEmpty)
             TextButton(
@@ -262,25 +344,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text('Unread', style: TextStyle(color: Colors.black)),
-                  if (_unreadNotifications.isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        _unreadNotifications.length.toString(),
-                        style: const TextStyle(
-                          color: Colors.white, // changed to white for better contrast
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -369,6 +432,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           return NotificationItemWidget(
             notification: notification,
             onTap: () => _onNotificationTapped(notification),
+            onDismissed: () => _onNotificationDeleted(notification),
           );
         },
       ),

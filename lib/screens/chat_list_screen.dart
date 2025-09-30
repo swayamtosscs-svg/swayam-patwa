@@ -6,6 +6,7 @@ import '../models/user_model.dart';
 import '../models/chat_thread_model.dart';
 import '../services/chat_service.dart';
 import '../widgets/user_avatar_widget.dart';
+import '../widgets/dp_widget.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
 
@@ -296,12 +297,18 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: UserAvatarWidget(
-          avatarUrl: thread.avatar,
-          userName: thread.username,
+        leading: DPWidget(
+          currentImageUrl: thread.avatar,
+          userId: thread.userId,
+          token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+          userName: thread.fullName,
+          onImageChanged: (String newImageUrl) {
+            // Update the avatar if needed
+            print('ChatListScreen: Avatar changed to: $newImageUrl');
+          },
           size: 50,
           borderColor: Colors.white.withOpacity(0.2),
-          borderWidth: 2,
+          showEditButton: false, // Don't show edit button for other users' profiles
         ),
         title: Row(
           children: [

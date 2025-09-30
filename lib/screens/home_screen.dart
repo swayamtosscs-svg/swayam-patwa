@@ -18,6 +18,7 @@ import '../widgets/in_app_video_widget.dart';
 import '../widgets/single_video_widget.dart';
 import '../widgets/app_loader.dart';
 import '../widgets/image_slider_widget.dart';
+import '../widgets/dp_widget.dart';
 import '../widgets/skeleton_loader.dart';
 import '../widgets/notification_bell_widget.dart';
 import '../utils/app_theme.dart';
@@ -80,6 +81,83 @@ class _HomeScreenState extends State<HomeScreen> {
     _clearLocalStories(); // Clear any old local stories first
     _loadInitialData(); // Load stories and posts in parallel
     _scrollController.addListener(_onScroll);
+    
+    // Force load Babaji stories on app start
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureBabajiStoriesVisible();
+    });
+  }
+  
+  // Ensure Babaji stories are visible
+  Future<void> _ensureBabajiStoriesVisible() async {
+    print('=== ENSURING BABAJI STORIES VISIBLE ===');
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.authToken != null) {
+        // Check if we already have Babaji stories
+        final hasBabajiStories = _stories.any((story) => 
+          story.authorName.toLowerCase().contains('baba') || 
+          story.authorUsername.toLowerCase().contains('babaji')
+        );
+        
+        if (!hasBabajiStories) {
+          print('No Babaji stories found, loading them...');
+          final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
+            token: authProvider.authToken,
+            page: 1,
+            limit: 10,
+          );
+          
+          if (babajiStories.isNotEmpty) {
+            setState(() {
+              _stories.addAll(babajiStories);
+              _groupedStories = StoryService.groupStoriesByUser(_stories);
+            });
+            print('Added ${babajiStories.length} Babaji stories to ensure visibility');
+          } else {
+            print('Still no real Babaji stories found from API');
+            print('Dhani Baba needs to upload stories to see them here');
+          }
+        } else {
+          print('Babaji stories already present');
+        }
+      }
+    } catch (e) {
+      print('Error ensuring Babaji stories visible: $e');
+    }
+    print('=== END ENSURING BABAJI STORIES VISIBLE ===');
+  }
+  
+  // Manual method to force load Babaji stories
+  Future<void> _forceLoadBabajiStories() async {
+    print('=== MANUAL FORCE LOAD BABAJI STORIES ===');
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.authToken != null) {
+        print('Manually loading Babaji stories...');
+        final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
+          token: authProvider.authToken,
+          page: 1,
+          limit: 10,
+        );
+        
+        if (babajiStories.isNotEmpty) {
+          setState(() {
+            _stories.addAll(babajiStories);
+            _groupedStories = StoryService.groupStoriesByUser(_stories);
+          });
+          print('Manual load: Added ${babajiStories.length} Babaji stories');
+        } else {
+          print('Manual load: No real stories from API');
+          print('Dhani Baba needs to upload stories first');
+        }
+      } else {
+        print('Manual load: No auth token available');
+      }
+    } catch (e) {
+      print('Manual load error: $e');
+    }
+    print('=== END MANUAL FORCE LOAD ===');
   }
 
   // Load initial data in parallel for faster startup
@@ -548,12 +626,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 print('  - Expires At: ${story.expiresAt}');
               }
             } else {
-              print('=== NO BABA JI STORIES FOUND ===');
-              print('This could mean:');
-              print('1. No stories uploaded to Baba page');
+              print('=== NO REAL BABA JI STORIES FOUND ===');
+              print('This means:');
+              print('1. Dhani Baba has not uploaded any stories yet');
               print('2. API connection issue');
               print('3. Wrong Baba page ID');
               print('4. Stories expired or inactive');
+              print('5. Need to check if stories are uploaded to correct Baba page');
+              print('No fake stories will be shown - only real uploaded stories');
             }
           } catch (e) {
             print('Error loading Babaji stories: $e');
@@ -581,10 +661,12 @@ class _HomeScreenState extends State<HomeScreen> {
             allStories.addAll(babajiStories);
             print('Added ${babajiStories.length} Babaji stories as fallback');
           } else {
-            print('No Babaji stories available as fallback');
+            print('No real Babaji stories available as fallback');
+            print('Dhani Baba needs to upload stories first');
           }
         } catch (e) {
           print('Error loading Babaji stories as fallback: $e');
+          print('No fake stories will be created - only real uploaded stories');
         }
       }
       
@@ -1307,20 +1389,19 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              radius: 25,
-              backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.1),
-              child: avatar.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        avatar,
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(),
-                      ),
-                    )
-                  : _buildDefaultAvatar(),
+            leading:             // Profile Picture using DPWidget
+            DPWidget(
+              currentImageUrl: avatar,
+              userId: userData['_id'] ?? '',
+              token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+              userName: fullName,
+              onImageChanged: (String newImageUrl) {
+                // Update the avatar if needed
+                print('HomeScreen: Avatar changed to: $newImageUrl');
+              },
+              size: 50,
+              borderColor: const Color(0xFF6366F1),
+              showEditButton: false, // Don't show edit button for other users' profiles
             ),
             title: Row(
               children: [
@@ -2025,7 +2106,7 @@ class _HomeScreenState extends State<HomeScreen> {
           followersCount: 0, // Default value
           followingCount: 0, // Default value
           postsCount: 0, // Default value
-          isPrivate: false, // Default to public, will be updated when user profile is loaded
+          isPrivate: post.isPrivate ?? false, // Use the actual privacy status from post
         ),
       ),
     );

@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_response_model.dart';
 import '../models/message_model.dart';
@@ -423,7 +425,7 @@ class ChatService {
       }
       
       final response = await http.get(
-        Uri.parse('$baseUrl/quick-message?threadId=$threadId&limit=50'),
+        Uri.parse('$baseUrl/enhanced-message?threadId=$threadId&limit=50'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -443,6 +445,23 @@ class ChatService {
           for (final messageData in messagesData) {
             try {
               final sender = messageData['sender'] ?? {};
+              final recipient = messageData['recipient'];
+              
+              // Handle recipient field - it can be a Map or String
+              String recipientId = '';
+              if (recipient is Map<String, dynamic>) {
+                recipientId = recipient['_id'] ?? '';
+              } else if (recipient is String) {
+                recipientId = recipient;
+              }
+              
+              // Debug: Log media information
+              final messageType = messageData['messageType'] ?? 'text';
+              final mediaUrl = messageData['mediaUrl'];
+              if (messageType == 'image' || messageType == 'video') {
+                print('ChatService: Found $messageType message with mediaUrl: $mediaUrl');
+              }
+              
               final message = Message(
                 id: messageData['_id'] ?? '',
                 threadId: messageData['thread'] ?? '',
@@ -452,9 +471,11 @@ class ChatService {
                   fullName: sender['fullName'] ?? '',
                   avatar: sender['avatar'] ?? '',
                 ),
-                recipient: messageData['recipient'] ?? '',
+                recipient: recipientId,
                 content: messageData['content'] ?? '',
-                messageType: messageData['messageType'] ?? 'text',
+                messageType: messageType,
+                mediaUrl: mediaUrl,
+                mediaInfo: messageData['mediaInfo'],
                 isRead: messageData['isRead'] ?? false,
                 isDeleted: messageData['isDeleted'] ?? false,
                 reactions: messageData['reactions'] ?? [],
@@ -585,6 +606,59 @@ class ChatService {
     }
   }
 
+  /// Delete a message (soft delete)
+  static Future<Map<String, dynamic>> deleteMessage({
+    required String messageId,
+    required String token,
+    String deleteType = 'soft',
+  }) async {
+    try {
+      print('ChatService: Deleting message: $messageId');
+      print('ChatService: Delete type: $deleteType');
+      
+      final response = await http.delete(
+        Uri.parse('$baseUrl/enhanced-message'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'messageId': messageId,
+          'deleteType': deleteType,
+        }),
+      );
+
+      print('ChatService: Delete message response status: ${response.statusCode}');
+      print('ChatService: Delete message response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['success'] == true) {
+          print('ChatService: Message deleted successfully');
+          return jsonResponse;
+        } else {
+          print('ChatService: Delete message failed: ${jsonResponse['message']}');
+          return {
+            'success': false,
+            'message': jsonResponse['message'] ?? 'Failed to delete message',
+          };
+        }
+      } else {
+        print('ChatService: Delete message failed: ${response.statusCode} - ${response.body}');
+        return {
+          'success': false,
+          'message': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('ChatService: Error deleting message: $e');
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+      };
+    }
+  }
+
   /// Create or get a conversation thread between two users
   static Future<String?> createOrGetThread({
     required String currentUserId,
@@ -594,10 +668,8 @@ class ChatService {
     try {
       print('ChatService: Creating/getting thread between $currentUserId and $otherUserId');
       
-      // Try to get existing thread by checking if there are any messages between users
-      // First, try to get messages for a potential existing thread
+      // First, check if we have a stored conversation with thread ID
       try {
-        // Check if we have a stored conversation with thread ID
         final prefs = await SharedPreferences.getInstance();
         final key = 'conversation_${currentUserId}_$otherUserId';
         final existingData = prefs.getString(key);
@@ -606,14 +678,75 @@ class ChatService {
           final conversationData = jsonDecode(existingData);
           final threadId = conversationData['id'];
           if (threadId != null && threadId.isNotEmpty && !threadId.startsWith('temp_')) {
-            print('ChatService: Found existing thread ID: $threadId');
-            return threadId;
+            print('ChatService: Found existing thread ID in local storage: $threadId');
+            
+            // Verify this thread still exists on the server by trying to get messages
+            try {
+              final messages = await getMessagesByThreadId(
+                threadId: threadId,
+                token: token,
+              );
+              if (messages.isNotEmpty) {
+                print('ChatService: Verified thread exists on server with ${messages.length} messages');
+                return threadId;
+              } else {
+                print('ChatService: Thread ID exists but no messages found, will check server for other threads');
+              }
+            } catch (e) {
+              print('ChatService: Error verifying thread on server: $e');
+            }
           }
         }
         
-        // If no existing thread, create a temporary one that will be replaced when first message is sent
+        // If no local thread or verification failed, try to find existing messages on server
+        print('ChatService: Checking server for existing messages between users');
+        print('ChatService: Looking for conversation between $currentUserId and $otherUserId');
+        try {
+          // Try to get all conversations and find one between these users
+          final conversations = await getAllConversations(
+            token: token,
+            currentUserId: currentUserId,
+          );
+          
+          print('ChatService: Retrieved ${conversations.length} conversations from server');
+          for (int i = 0; i < conversations.length; i++) {
+            final conv = conversations[i];
+            print('ChatService: Conversation $i - User ID: ${conv.userId}, Thread ID: ${conv.id}, Last Message: ${conv.lastMessage}');
+          }
+          
+          // Look for a conversation with the other user
+          for (final conversation in conversations) {
+            print('ChatService: Checking conversation with user ${conversation.userId} against target ${otherUserId}');
+            if (conversation.userId == otherUserId) {
+              print('ChatService: Found existing conversation with ${conversation.userId}, thread ID: ${conversation.id}');
+              
+              // Verify this thread has messages
+              try {
+                print('ChatService: Verifying thread ${conversation.id} has messages...');
+                final messages = await getMessagesByThreadId(
+                  threadId: conversation.id,
+                  token: token,
+                );
+                print('ChatService: Thread ${conversation.id} has ${messages.length} messages');
+                if (messages.isNotEmpty) {
+                  print('ChatService: Found existing thread with ${messages.length} messages - returning thread ID');
+                  return conversation.id;
+                } else {
+                  print('ChatService: Thread ${conversation.id} exists but has no messages');
+                }
+              } catch (e) {
+                print('ChatService: Error verifying conversation thread ${conversation.id}: $e');
+              }
+            }
+          }
+          print('ChatService: No conversation found with user $otherUserId');
+        } catch (e) {
+          print('ChatService: Error checking server for existing conversations: $e');
+        }
+        
+        // If no existing thread found, create a temporary one
         final tempThreadId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
-        print('ChatService: Created temporary thread ID: $tempThreadId');
+        print('ChatService: No existing thread found, created temporary thread ID: $tempThreadId');
         return tempThreadId;
         
       } catch (e) {
@@ -672,58 +805,6 @@ class ChatService {
       }
     } catch (e) {
       print('ChatService: Error updating message: $e');
-      return {
-        'success': false,
-        'message': 'Network error: $e',
-      };
-    }
-  }
-
-  /// Delete a message
-  static Future<Map<String, dynamic>> deleteMessage({
-    required String messageId,
-    required String token,
-    required String deleteType,
-  }) async {
-    try {
-      print('ChatService: Deleting message: $messageId');
-      
-      final response = await http.delete(
-        Uri.parse('$baseUrl/quick-message'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'messageId': messageId,
-          'deleteType': deleteType,
-        }),
-      );
-
-      print('ChatService: Delete message response status: ${response.statusCode}');
-      print('ChatService: Delete message response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        if (jsonResponse['success'] == true) {
-          print('ChatService: Message deleted successfully');
-          return jsonResponse;
-        } else {
-          print('ChatService: Delete message failed: ${jsonResponse['message']}');
-          return {
-            'success': false,
-            'message': jsonResponse['message'] ?? 'Failed to delete message',
-          };
-        }
-      } else {
-        print('ChatService: Delete message failed: ${response.statusCode} - ${response.body}');
-        return {
-          'success': false,
-          'message': 'HTTP ${response.statusCode}: ${response.body}',
-        };
-      }
-    } catch (e) {
-      print('ChatService: Error deleting message: $e');
       return {
         'success': false,
         'message': 'Network error: $e',
@@ -792,6 +873,8 @@ class ChatService {
         'recipient': message.recipient,
         'content': message.content,
         'messageType': message.messageType,
+        'mediaUrl': message.mediaUrl,
+        'mediaInfo': message.mediaInfo,
         'isRead': message.isRead,
         'isDeleted': message.isDeleted,
         'reactions': message.reactions,
@@ -832,6 +915,8 @@ class ChatService {
               recipient: messageData['recipient'] ?? '',
               content: messageData['content'] ?? '',
               messageType: messageData['messageType'] ?? 'text',
+              mediaUrl: messageData['mediaUrl'],
+              mediaInfo: messageData['mediaInfo'],
               isRead: messageData['isRead'] ?? false,
               isDeleted: messageData['isDeleted'] ?? false,
               reactions: messageData['reactions'] ?? [],
@@ -866,6 +951,139 @@ class ChatService {
       print('ChatService: Cleared cached messages for thread: $threadId');
     } catch (e) {
       print('ChatService: Error clearing cached messages: $e');
+    }
+  }
+
+  /// Send media message (image/video) using the send-media API
+  static Future<Map<String, dynamic>> sendMediaMessage({
+    required dynamic file, // File or XFile
+    required String toUserId,
+    required String content,
+    required String messageType, // 'image' or 'video'
+    required String token,
+    String? currentUserId,
+  }) async {
+    try {
+      print('ChatService: Sending media message to user: $toUserId');
+      print('ChatService: Message type: $messageType');
+      print('ChatService: Content: $content');
+
+      // Create multipart request
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/send-media'),
+      );
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add form fields
+      request.fields['toUserId'] = toUserId;
+      request.fields['content'] = content;
+      request.fields['messageType'] = messageType;
+
+      // Add file
+      if (file is File) {
+        final fileName = file.path.split('/').last;
+        final contentType = _getContentType(fileName);
+        
+        request.files.add(
+          http.MultipartFile(
+            'file',
+            file.readAsBytes().asStream(),
+            file.lengthSync(),
+            filename: fileName,
+            contentType: MediaType.parse(contentType),
+          ),
+        );
+      } else {
+        return {
+          'success': false,
+          'message': 'File type not supported: ${file.runtimeType}',
+        };
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('ChatService: Send media response status: ${response.statusCode}');
+      print('ChatService: Send media response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['success'] == true) {
+          print('ChatService: Media message sent successfully');
+          
+          // Store conversation locally if we have thread info
+          if (jsonResponse['data']?['threadId'] != null) {
+            print('ChatService: Thread ID from send media response: ${jsonResponse['data']['threadId']}');
+            
+            // Store this conversation for future reference
+            if (currentUserId != null) {
+              await _storeMessageConversation(
+                currentUserId: currentUserId,
+                otherUserId: toUserId,
+                threadId: jsonResponse['data']['threadId'],
+                lastMessage: content,
+                lastMessageTime: DateTime.now(),
+              );
+              
+              // Also update any existing conversation with the threadId
+              await _updateConversationThreadId(
+                currentUserId,
+                toUserId,
+                jsonResponse['data']['threadId'],
+              );
+            }
+          }
+          
+          return jsonResponse;
+        } else {
+          print('ChatService: Send media message failed: ${jsonResponse['message']}');
+          return {
+            'success': false,
+            'message': jsonResponse['message'] ?? 'Failed to send media message',
+          };
+        }
+      } else {
+        print('ChatService: Send media message failed: ${response.statusCode} - ${response.body}');
+        return {
+          'success': false,
+          'message': 'HTTP ${response.statusCode}: ${response.body}',
+        };
+      }
+    } catch (e) {
+      print('ChatService: Error sending media message: $e');
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+      };
+    }
+  }
+
+  /// Get content type based on file extension
+  static String _getContentType(String fileName) {
+    final extension = fileName.toLowerCase().split('.').last;
+    
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'webm':
+        return 'video/webm';
+      default:
+        return 'application/octet-stream';
     }
   }
 }

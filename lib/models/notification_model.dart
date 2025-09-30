@@ -24,6 +24,70 @@ class NotificationModel {
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
+    // Debug print to see what data we're getting
+    print('NotificationModel.fromJson: $json');
+    
+    // Extract follower information from the main JSON if available
+    Map<String, dynamic>? enhancedData = json['data'];
+    
+    // If this is a notification with user info, try to extract user info from main JSON
+    final notificationType = (json['type'] ?? '').toLowerCase();
+    if (notificationType == 'follow' || 
+        notificationType == 'like' || 
+        notificationType == 'comment' ||
+        notificationType == 'video' ||
+        notificationType == 'reel' ||
+        notificationType == 'share' ||
+        notificationType == 'mention') {
+      enhancedData = enhancedData ?? <String, dynamic>{};
+      
+      // Try to get user info from various possible locations
+      final userName = json['followerName'] ?? 
+                      json['follower_name'] ?? 
+                      json['userName'] ?? 
+                      json['user_name'] ?? 
+                      json['name'] ?? 
+                      json['username'] ?? 
+                      json['fullName'] ?? 
+                      json['full_name'] ?? 
+                      json['posterName'] ?? 
+                      json['poster_name'] ?? 
+                      json['authorName'] ?? 
+                      json['author_name'] ?? '';
+      
+      final userId = json['followerId'] ?? 
+                    json['follower_id'] ?? 
+                    json['userId'] ?? 
+                    json['user_id'] ?? 
+                    json['posterId'] ?? 
+                    json['poster_id'] ?? 
+                    json['authorId'] ?? 
+                    json['author_id'] ?? '';
+      
+      final userProfileImage = json['followerProfileImage'] ?? 
+                              json['follower_profile_image'] ?? 
+                              json['profileImage'] ?? 
+                              json['profile_image'] ?? 
+                              json['avatar'] ?? 
+                              json['posterProfileImage'] ?? 
+                              json['poster_profile_image'] ?? 
+                              json['authorProfileImage'] ?? 
+                              json['author_profile_image'] ?? '';
+      
+      // Add user info to data if found
+      if (userName.isNotEmpty) {
+        enhancedData!['followerName'] = userName;
+      }
+      if (userId.isNotEmpty) {
+        enhancedData!['followerId'] = userId;
+      }
+      if (userProfileImage.isNotEmpty) {
+        enhancedData!['followerProfileImage'] = userProfileImage;
+      }
+      
+      print('NotificationModel.fromJson - Enhanced data for $notificationType notification: $enhancedData');
+    }
+    
     return NotificationModel(
       id: json['_id'] ?? json['id'] ?? '',
       type: json['type'] ?? '',
@@ -36,7 +100,7 @@ class NotificationModel {
       createdAt: json['createdAt'] != null 
           ? DateTime.parse(json['createdAt']) 
           : DateTime.now(),
-      data: json['data'],
+      data: enhancedData,
     );
   }
 
@@ -96,6 +160,10 @@ class NotificationModel {
         return '📢';
       case 'share':
         return '📤';
+      case 'video':
+        return '🎥';
+      case 'reel':
+        return '🎬';
       default:
         return '🔔';
     }
@@ -116,6 +184,10 @@ class NotificationModel {
         return '#FF6348';
       case 'share':
         return '#5352ED';
+      case 'video':
+        return '#9C27B0';
+      case 'reel':
+        return '#E91E63';
       default:
         return '#6366F1';
     }
@@ -140,24 +212,130 @@ class NotificationModel {
   /// Get follower name from notification data
   String get followerName {
     if (data != null) {
-      return data!['followerName'] ?? data!['follower_name'] ?? '';
+      print('NotificationModel.followerName - data: $data');
+      
+      // Try multiple possible field names
+      final followerName = data!['followerName'] ?? 
+             data!['follower_name'] ?? 
+             data!['userName'] ?? 
+             data!['user_name'] ?? 
+             data!['name'] ?? 
+             data!['username'] ?? 
+             data!['fullName'] ?? 
+             data!['full_name'] ?? 
+             data!['posterName'] ?? 
+             data!['poster_name'] ?? 
+             data!['authorName'] ?? 
+             data!['author_name'] ?? '';
+      
+      print('NotificationModel.followerName - extracted: $followerName');
+      return followerName;
     }
+    
+    // Fallback: Try to extract follower name from the message
+    if ((type.toLowerCase() == 'follow' || 
+         type.toLowerCase() == 'like' || 
+         type.toLowerCase() == 'comment' ||
+         type.toLowerCase() == 'video' ||
+         type.toLowerCase() == 'reel' ||
+         type.toLowerCase() == 'share') && message.isNotEmpty) {
+      
+      // Look for patterns like "John Doe started following you", "John Doe liked your post", etc.
+      final patterns = [
+        RegExp(r'^([^]+?)\s+started\s+following\s+you', caseSensitive: false),
+        RegExp(r'^([^]+?)\s+liked\s+your\s+post', caseSensitive: false),
+        RegExp(r'^([^]+?)\s+commented\s+on\s+your\s+post', caseSensitive: false),
+        RegExp(r'^([^]+?)\s+posted\s+a\s+new\s+video', caseSensitive: false),
+        RegExp(r'^([^]+?)\s+shared\s+your\s+post', caseSensitive: false),
+      ];
+      
+      for (final pattern in patterns) {
+        final match = pattern.firstMatch(message);
+        if (match != null && match.group(1) != null) {
+          final extractedName = match.group(1)!.trim();
+          print('NotificationModel.followerName - extracted from message: $extractedName');
+          return extractedName;
+        }
+      }
+    }
+    
     return '';
   }
 
   /// Get follower ID from notification data
   String get followerId {
     if (data != null) {
-      return data!['followerId'] ?? data!['follower_id'] ?? '';
+      return data!['followerId'] ?? 
+             data!['follower_id'] ?? 
+             data!['userId'] ?? 
+             data!['user_id'] ?? '';
+    }
+    return '';
+  }
+
+  /// Get follower profile image from notification data
+  String get followerProfileImage {
+    if (data != null) {
+      return data!['followerProfileImage'] ?? 
+             data!['follower_profile_image'] ?? 
+             data!['profileImage'] ?? 
+             data!['profile_image'] ?? 
+             data!['avatar'] ?? '';
     }
     return '';
   }
 
   /// Get formatted message with follower name
   String get formattedMessage {
-    if (type.toLowerCase() == 'follow' && followerName.isNotEmpty) {
-      return '$followerName started following you';
+    if (type.toLowerCase() == 'follow') {
+      if (followerName.isNotEmpty) {
+        return '$followerName started following you';
+      } else if (message.isNotEmpty) {
+        return message;
+      } else {
+        return 'Someone started following you';
+      }
+    } else if (type.toLowerCase() == 'like') {
+      if (followerName.isNotEmpty) {
+        return '$followerName liked your post';
+      } else if (message.isNotEmpty) {
+        return message;
+      } else {
+        return 'Someone liked your post';
+      }
+    } else if (type.toLowerCase() == 'comment') {
+      if (followerName.isNotEmpty) {
+        return '$followerName commented on your post';
+      } else if (message.isNotEmpty) {
+        return message;
+      } else {
+        return 'Someone commented on your post';
+      }
+    } else if (type.toLowerCase() == 'video' || type.toLowerCase() == 'reel') {
+      if (followerName.isNotEmpty) {
+        return '$followerName posted a new video';
+      } else if (message.isNotEmpty) {
+        return message;
+      } else {
+        return 'Someone posted a new video';
+      }
+    } else if (type.toLowerCase() == 'share') {
+      if (followerName.isNotEmpty) {
+        return '$followerName shared your post';
+      } else if (message.isNotEmpty) {
+        return message;
+      } else {
+        return 'Someone shared your post';
+      }
     }
-    return message.isNotEmpty ? message : 'Someone started following you';
+    return message.isNotEmpty ? message : 'You have a new notification';
+  }
+
+  /// Get display title with user name for follow notifications
+  String get displayTitle {
+    if (type.toLowerCase() == 'follow' && followerName.isNotEmpty) {
+      return 'New Follower';
+    }
+    return title.isNotEmpty ? title : 'Notification';
   }
 }

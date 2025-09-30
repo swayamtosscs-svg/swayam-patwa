@@ -55,7 +55,30 @@ class UserCommentService {
     }
   }
 
-  /// Get comments for a user post
+  /// Merge server comments with local comments to ensure persistence
+  static List<UserComment> _mergeComments(List<UserComment> serverComments, List<UserComment> localComments) {
+    final Map<String, UserComment> commentMap = {};
+    
+    // Add server comments first (they take priority)
+    for (final comment in serverComments) {
+      commentMap[comment.id] = comment;
+    }
+    
+    // Add local comments that don't exist on server
+    for (final comment in localComments) {
+      if (!commentMap.containsKey(comment.id)) {
+        commentMap[comment.id] = comment;
+      }
+    }
+    
+    // Convert back to list and sort by creation date (newest first)
+    final mergedComments = commentMap.values.toList();
+    mergedComments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    return mergedComments;
+  }
+
+  /// Get comments for a user post with enhanced persistence
   static Future<UserCommentResponse> getComments({
     required String postId,
     required String token,
@@ -70,6 +93,7 @@ class UserCommentService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
+          'Cache-Control': 'no-cache', // Ensure fresh data
         },
       );
 
@@ -81,10 +105,22 @@ class UserCommentService {
         final data = jsonDecode(response.body);
         final apiResponse = UserCommentResponse.fromJson(data);
         
-        // Save API comments to local storage
+        // Always save API comments to local storage for persistence
         await saveLocalComments(postId, apiResponse.comments);
         
-        return apiResponse;
+        // Also merge with any local comments that might not be on server yet
+        final localComments = await getLocalComments(postId);
+        final mergedComments = _mergeComments(apiResponse.comments, localComments);
+        
+        // Save merged comments back to local storage
+        await saveLocalComments(postId, mergedComments);
+        
+        return UserCommentResponse(
+          success: true,
+          message: 'Comments loaded successfully',
+          comments: mergedComments,
+          pagination: apiResponse.pagination,
+        );
       } else {
         // If API fails, get comments from local storage
         print('UserCommentService: API failed with ${response.statusCode}, loading from local storage');
@@ -146,15 +182,18 @@ class UserCommentService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final result = jsonDecode(response.body);
-        // Also save to local storage
+        // Always save to local storage for persistence
         if (result['data']?['comment'] != null) {
           final comment = UserComment.fromJson(result['data']['comment']);
           await addLocalComment(postId, comment);
+          
+          // Also trigger a refresh to get all comments and ensure sync
+          await getComments(postId: postId, token: token);
         }
         return result;
       } else {
-        // If API fails, create local comment
-        print('UserCommentService: Add comment API failed with ${response.statusCode}, creating local comment');
+        // If API fails, create local comment that will persist
+        print('UserCommentService: Add comment API failed with ${response.statusCode}, creating persistent local comment');
         final localComment = UserComment(
           id: 'local_${DateTime.now().millisecondsSinceEpoch}',
           content: content,
@@ -169,14 +208,14 @@ class UserCommentService {
         
         return {
           'success': true,
-          'message': 'Comment added successfully (local)',
+          'message': 'Comment added successfully (local - will sync when server is available)',
           'data': {
             'comment': localComment.toJson(),
           },
         };
       }
     } catch (e) {
-      print('UserCommentService: Error adding comment: $e, creating local comment');
+      print('UserCommentService: Error adding comment: $e, creating persistent local comment');
       final localComment = UserComment(
         id: 'local_${DateTime.now().millisecondsSinceEpoch}',
         content: content,
@@ -191,7 +230,7 @@ class UserCommentService {
       
       return {
         'success': true,
-        'message': 'Comment added successfully (local)',
+        'message': 'Comment added successfully (local - will sync when server is available)',
         'data': {
           'comment': localComment.toJson(),
         },

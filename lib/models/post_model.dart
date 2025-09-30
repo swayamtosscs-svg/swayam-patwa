@@ -28,6 +28,7 @@ class Post {
   final bool isBabaJiPost;
   final bool isReel;
   final String? babaPageId;
+  final bool isPrivate;
 
   Post({
     required this.id,
@@ -55,6 +56,7 @@ class Post {
     this.isBabaJiPost = false,
     this.isReel = false,
     this.babaPageId,
+    this.isPrivate = false,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -87,6 +89,7 @@ class Post {
       isBabaJiPost: json['isBabaJiPost'] ?? false,
       isReel: json['isReel'] ?? false,
       babaPageId: json['babaPageId'],
+      isPrivate: json['isPrivate'] ?? false,
     );
   }
 
@@ -117,6 +120,7 @@ class Post {
       'isBabaJiPost': isBabaJiPost,
       'isReel': isReel,
       'babaPageId': babaPageId,
+      'isPrivate': isPrivate,
     };
   }
 
@@ -146,6 +150,7 @@ class Post {
     bool? isBabaJiPost,
     bool? isReel,
     String? babaPageId,
+    bool? isPrivate,
   }) {
     return Post(
       id: id ?? this.id,
@@ -173,6 +178,7 @@ class Post {
       isBabaJiPost: isBabaJiPost ?? this.isBabaJiPost,
       isReel: isReel ?? this.isReel,
       babaPageId: babaPageId ?? this.babaPageId,
+      isPrivate: isPrivate ?? this.isPrivate,
     );
   }
 } 

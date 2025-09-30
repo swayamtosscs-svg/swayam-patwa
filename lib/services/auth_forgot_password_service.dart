@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthForgotPasswordService {
-  static const String baseUrl = 'http://103.14.120.163:8081/api/auth';
+  static const String baseUrl = 'http://103.14.120.163:8081';
+  static const String authApiUrl = 'http://103.14.120.163:8081/api/auth';
 
   /// Send forgot password request
   static Future<Map<String, dynamic>> sendForgotPasswordRequest({
@@ -28,27 +29,62 @@ class AuthForgotPasswordService {
         };
       }
 
-      final url = '$baseUrl/forgot-password';
-      print('AuthForgotPasswordService: Request URL: $url');
-      
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode({
-          'email': email,
-        }),
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw Exception('Request timed out');
-        },
-      );
+      // Try multiple possible endpoints for forgot password
+      final endpoints = [
+        '$authApiUrl/forgot-password',
+        '$baseUrl/forgot-password.php',
+        '$baseUrl/api/auth/forgot-password',
+        '$baseUrl/reset-password.php',
+        '$baseUrl/api/reset-password',
+      ];
 
-      print('AuthForgotPasswordService: Response status: ${response.statusCode}');
-      print('AuthForgotPasswordService: Response body: ${response.body}');
+      http.Response? response;
+      String? usedEndpoint;
+
+      for (final endpoint in endpoints) {
+        try {
+          print('AuthForgotPasswordService: Trying endpoint: $endpoint');
+          
+          response = await http.post(
+            Uri.parse(endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: json.encode({
+              'email': email,
+            }),
+          ).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw Exception('Request timed out');
+            },
+          );
+
+          print('AuthForgotPasswordService: Response status for $endpoint: ${response.statusCode}');
+          
+          // If we get a valid response (not 405 Method Not Allowed), use this endpoint
+          if (response.statusCode != 405) {
+            usedEndpoint = endpoint;
+            break;
+          }
+        } catch (e) {
+          print('AuthForgotPasswordService: Failed endpoint $endpoint: $e');
+          continue;
+        }
+      }
+
+      if (response == null) {
+        return {
+          'success': false,
+          'message': 'All forgot password endpoints are unavailable. Please try again later.',
+          'error': 'No Available Endpoints',
+        };
+      }
+
+      print('AuthForgotPasswordService: Using endpoint: $usedEndpoint');
+      print('AuthForgotPasswordService: Final response status: ${response.statusCode}');
+      print('AuthForgotPasswordService: Final response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
@@ -89,8 +125,27 @@ class AuthForgotPasswordService {
           'message': 'Too many password reset requests. Please wait a few minutes before trying again.',
           'error': 'Rate Limited',
         };
+      } else if (response.statusCode == 405) {
+        print('AuthForgotPasswordService: Method not allowed');
+        return {
+          'success': false,
+          'message': 'Forgot password service is not available. Please try the OTP method instead.',
+          'error': 'Method Not Allowed',
+        };
       } else if (response.statusCode == 500) {
         print('AuthForgotPasswordService: Server error');
+        try {
+          final errorResponse = json.decode(response.body);
+          if (errorResponse['message']?.contains('Email service error') == true) {
+            return {
+              'success': false,
+              'message': 'Email service is temporarily unavailable. Please try again later or contact support.',
+              'error': 'Email Service Error',
+            };
+          }
+        } catch (e) {
+          // Fall through to default error message
+        }
         return {
           'success': false,
           'message': 'Server is temporarily unavailable. Please try again in a few minutes.',

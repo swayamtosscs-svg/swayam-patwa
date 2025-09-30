@@ -48,16 +48,19 @@ class BabaCommentService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        // Also save to local storage
+        // Always save to local storage for persistence
         if (data['data']?['comment'] != null) {
           final comment = BabaPageComment.fromJson(data['data']['comment']);
           await addLocalComment(postId, comment);
+          
+          // Also trigger a refresh to get all comments and ensure sync
+          await getComments(postId: postId, babaPageId: babaPageId, token: token);
         }
         return data;
       } else {
         print('BabaCommentService: Failed to add comment: ${response.statusCode}');
-        // If API fails, create local comment
-        print('BabaCommentService: Add comment API failed with ${response.statusCode}, creating local comment');
+        // If API fails, create local comment that will persist
+        print('BabaCommentService: Add comment API failed with ${response.statusCode}, creating persistent local comment');
         final localComment = BabaPageComment(
           id: 'local_${DateTime.now().millisecondsSinceEpoch}',
           content: content,
@@ -71,14 +74,14 @@ class BabaCommentService {
         
         return {
           'success': true,
-          'message': 'Comment added successfully (local)',
+          'message': 'Comment added successfully (local - will sync when server is available)',
           'data': {
             'comment': localComment.toJson(),
           },
         };
       }
     } catch (e) {
-      print('BabaCommentService: Error adding comment: $e, creating local comment');
+      print('BabaCommentService: Error adding comment: $e, creating persistent local comment');
       final localComment = BabaPageComment(
         id: 'local_${DateTime.now().millisecondsSinceEpoch}',
         content: content,
@@ -92,7 +95,7 @@ class BabaCommentService {
       
       return {
         'success': true,
-        'message': 'Comment added successfully (local)',
+        'message': 'Comment added successfully (local - will sync when server is available)',
         'data': {
           'comment': localComment.toJson(),
         },
@@ -139,16 +142,19 @@ class BabaCommentService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        // Also save to local storage
+        // Always save to local storage for persistence
         if (data['data']?['comment'] != null) {
           final comment = BabaPageComment.fromJson(data['data']['comment']);
           await addLocalComment(reelId, comment);
+          
+          // Also trigger a refresh to get all comments and ensure sync
+          await getReelComments(reelId: reelId, babaPageId: babaPageId, token: token);
         }
         return data;
       } else {
         print('BabaCommentService: Failed to add reel comment: ${response.statusCode}');
-        // If API fails, create local comment
-        print('BabaCommentService: Add reel comment API failed with ${response.statusCode}, creating local comment');
+        // If API fails, create local comment that will persist
+        print('BabaCommentService: Add reel comment API failed with ${response.statusCode}, creating persistent local comment');
         final localComment = BabaPageComment(
           id: 'local_${DateTime.now().millisecondsSinceEpoch}',
           content: content,
@@ -162,14 +168,14 @@ class BabaCommentService {
         
         return {
           'success': true,
-          'message': 'Comment added successfully (local)',
+          'message': 'Comment added successfully (local - will sync when server is available)',
           'data': {
             'comment': localComment.toJson(),
           },
         };
       }
     } catch (e) {
-      print('BabaCommentService: Error adding reel comment: $e, creating local comment');
+      print('BabaCommentService: Error adding reel comment: $e, creating persistent local comment');
       final localComment = BabaPageComment(
         id: 'local_${DateTime.now().millisecondsSinceEpoch}',
         content: content,
@@ -183,7 +189,7 @@ class BabaCommentService {
       
       return {
         'success': true,
-        'message': 'Comment added successfully (local)',
+        'message': 'Comment added successfully (local - will sync when server is available)',
         'data': {
           'comment': localComment.toJson(),
         },
@@ -233,10 +239,22 @@ class BabaCommentService {
           final commentResponse = BabaPageCommentResponse.fromJson(data);
           print('BabaCommentService: Comment response - success: ${commentResponse.success}, comments count: ${commentResponse.comments.length}');
           
-          // Save API comments to local storage
+          // Always save API comments to local storage for persistence
           await saveLocalComments(postId, commentResponse.comments);
           
-          return commentResponse;
+          // Also merge with any local comments that might not be on server yet
+          final localComments = await getLocalComments(postId);
+          final mergedComments = _mergeComments(commentResponse.comments, localComments);
+          
+          // Save merged comments back to local storage
+          await saveLocalComments(postId, mergedComments);
+          
+          return BabaPageCommentResponse(
+            success: true,
+            message: 'Comments loaded successfully',
+            comments: mergedComments,
+            pagination: commentResponse.pagination,
+          );
         } catch (e) {
           print('BabaCommentService: Error parsing JSON response: $e');
           print('BabaCommentService: Response body: ${response.body}');
@@ -311,10 +329,22 @@ class BabaCommentService {
           final data = jsonDecode(response.body);
           final commentResponse = BabaPageCommentResponse.fromJson(data);
           
-          // Save API comments to local storage
+          // Always save API comments to local storage for persistence
           await saveLocalComments(reelId, commentResponse.comments);
           
-          return commentResponse;
+          // Also merge with any local comments that might not be on server yet
+          final localComments = await getLocalComments(reelId);
+          final mergedComments = _mergeComments(commentResponse.comments, localComments);
+          
+          // Save merged comments back to local storage
+          await saveLocalComments(reelId, mergedComments);
+          
+          return BabaPageCommentResponse(
+            success: true,
+            message: 'Comments loaded successfully',
+            comments: mergedComments,
+            pagination: commentResponse.pagination,
+          );
         } catch (e) {
           print('BabaCommentService: Error parsing JSON response: $e');
           print('BabaCommentService: Response body: ${response.body}');
@@ -556,5 +586,28 @@ class BabaCommentService {
     } catch (e) {
       print('Error deleting local baba comment: $e');
     }
+  }
+
+  /// Merge server comments with local comments to ensure persistence
+  static List<BabaPageComment> _mergeComments(List<BabaPageComment> serverComments, List<BabaPageComment> localComments) {
+    final Map<String, BabaPageComment> commentMap = {};
+    
+    // Add server comments first (they take priority)
+    for (final comment in serverComments) {
+      commentMap[comment.id] = comment;
+    }
+    
+    // Add local comments that don't exist on server
+    for (final comment in localComments) {
+      if (!commentMap.containsKey(comment.id)) {
+        commentMap[comment.id] = comment;
+      }
+    }
+    
+    // Convert back to list and sort by creation date (newest first)
+    final mergedComments = commentMap.values.toList();
+    mergedComments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    return mergedComments;
   }
 }

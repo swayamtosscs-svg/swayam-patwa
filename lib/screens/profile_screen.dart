@@ -1711,7 +1711,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           followersCount: 0, // Default value
           followingCount: 0, // Default value
           postsCount: 0, // Default value
-          isPrivate: false, // Default to public, will be updated when user profile is loaded
+          isPrivate: post.isPrivate ?? false, // Use the actual privacy status from post
         ),
       ),
     );

@@ -164,7 +164,8 @@ class FollowRequestService {
   }
 
   /// Follow a user directly (for public accounts)
-  static Future<bool> followUser(String targetUserId, {String? followerName}) async {
+  /// Returns: true if successful, false if failed, null if follow request already sent (private account)
+  static Future<bool?> followUser(String targetUserId, {String? followerName}) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.post(
@@ -178,6 +179,17 @@ class FollowRequestService {
         // Create follow notification
         await _createFollowNotification(targetUserId, followerName);
         return true;
+      } else if (response.statusCode == 400) {
+        // Check if it's a "follow request already sent" response
+        try {
+          final responseBody = jsonDecode(response.body);
+          if (responseBody['message']?.toString().toLowerCase().contains('follow request already sent') == true) {
+            print('FollowRequestService: Follow request already sent - this is a private account');
+            return null; // Special return value indicating follow request already sent
+          }
+        } catch (e) {
+          print('Error parsing follow response: $e');
+        }
       }
       return false;
     } catch (e) {

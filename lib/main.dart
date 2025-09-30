@@ -19,6 +19,7 @@ import 'screens/religion_selection_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/otp_verification_screen.dart';
 import 'screens/video_test_screen.dart';
+import 'screens/forgot_password_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -86,6 +87,7 @@ class DivineConnectApp extends StatelessWidget {
               },
               '/notifications': (context) => const NotificationsScreen(),
               '/video-test': (context) => const VideoTestScreen(),
+              '/forgot-password': (context) => const ForgotPasswordScreen(),
             },
           );
         },

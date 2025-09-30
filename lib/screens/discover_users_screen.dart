@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../screens/user_profile_screen.dart';
+import '../widgets/follow_button.dart';
 
 class DiscoverUsersScreen extends StatefulWidget {
   const DiscoverUsersScreen({super.key});
@@ -16,7 +17,6 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
   List<Map<String, dynamic>> _usersWithPosts = [];
   bool _isLoading = false;
   Map<String, bool> _followingStatus = {};
-  Map<String, bool> _isProcessingFollow = {};
 
   @override
   void initState() {
@@ -79,6 +79,17 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
         'postsCount': 12,
         'isPrivate': false,
       },
+      {
+        '_id': 'rupesh_private',
+        'username': 'rupesh_private',
+        'fullName': 'Rupesh Private',
+        'bio': 'Private account - follow request required',
+        'avatar': '',
+        'followersCount': 45,
+        'followingCount': 12,
+        'postsCount': 8,
+        'isPrivate': true,
+      },
     ];
 
     if (mounted) {
@@ -119,101 +130,6 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
     }
   }
 
-  Future<void> _toggleFollow(String userId, String username) async {
-    if (_isProcessingFollow[userId] == true) return; // Prevent multiple clicks
-    
-    setState(() {
-      _isProcessingFollow[userId] = true;
-    });
-
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final token = authProvider.authToken;
-      final currentUserId = authProvider.userProfile?.id;
-
-      if (token == null || currentUserId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please login to follow users'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      final isCurrentlyFollowing = _followingStatus[userId] ?? false;
-      
-      if (isCurrentlyFollowing) {
-        // Unfollow user
-        final response = await ApiService.unfollowRGramUser(
-          targetUserId: userId,
-          token: token,
-        );
-
-        if (response['success'] == true) {
-          setState(() {
-            _followingStatus[userId] = false;
-          });
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Unfollowed $username'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to unfollow: ${response['message'] ?? 'Unknown error'}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } else {
-        // Follow user
-        final response = await ApiService.followRGramUser(
-          targetUserId: userId,
-          token: token,
-        );
-
-        if (response['success'] == true) {
-          setState(() {
-            _followingStatus[userId] = true;
-          });
-          
-          // Create follow notification
-          await _createFollowNotification(userId, username, token, currentUserId);
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Started following $username'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to follow: ${response['message'] ?? 'Unknown error'}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessingFollow[userId] = false;
-        });
-      }
-    }
-  }
 
   /// Create follow notification
   Future<void> _createFollowNotification(String targetUserId, String username, String token, String? currentUserId) async {
@@ -330,7 +246,6 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
     final postsCount = user['postsCount'] ?? 0;
     final userId = user['_id'] ?? '';
     final isFollowing = _followingStatus[userId] ?? false;
-    final isProcessing = _isProcessingFollow[userId] ?? false;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -388,29 +303,17 @@ class _DiscoverUsersScreenState extends State<DiscoverUsersScreen> {
                 SizedBox(
                   width: 100,
                   height: 40,
-                  child: ElevatedButton(
-                    onPressed: isProcessing ? null : () => _toggleFollow(userId, username),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isFollowing ? Colors.grey[200] : const Color(0xFF6366F1),
-                      foregroundColor: isFollowing ? Colors.grey[700] : Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                    child: isProcessing
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            isFollowing ? 'Following' : 'Follow',
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                  child: FollowButton(
+                    targetUserId: userId,
+                    targetUserName: username,
+                    isPrivate: user['isPrivate'] ?? false,
+                    isFollowing: isFollowing,
+                    onFollowChanged: () {
+                      // Update the following status when follow state changes
+                      setState(() {
+                        _followingStatus[userId] = !isFollowing;
+                      });
+                    },
                   ),
                 ),
               ],

@@ -1,126 +1,66 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:ui';
-import '../providers/auth_provider.dart';
-import '../utils/app_theme.dart';
+import '../services/auth_forgot_password_service.dart';
 import '../utils/responsive_utils.dart';
-import '../screens/home_screen.dart';
-import '../screens/forgot_password_screen.dart';
 import '../services/theme_service.dart';
+import 'forgot_password_otp_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   bool _isLoading = false;
-  bool _isGoogleLoading = false;
-  bool _isForgotPasswordLoading = false;
   String? _error;
-  bool _isUsernameLogin = false;
-  bool _isPasswordVisible = false;
+  String? _successMessage;
 
-  Future<void> _login() async {
-    print('LoginScreen: Login method called');
+  Future<void> _sendResetEmail() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isLoading = true;
       _error = null;
+      _successMessage = null;
     });
 
     try {
-      // Debug: Log the request data
-      final requestData = {
-        if (_isUsernameLogin) 'username': _emailController.text else 'email': _emailController.text,
-        'password': _passwordController.text,
-      };
-      print('Login request data: $requestData');
-      
-      // Real API call to login endpoint
-      final response = await http.post(
-        Uri.parse('http://103.14.120.163:8081/api/auth/login'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(requestData),
+      final result = await AuthForgotPasswordService.sendForgotPasswordRequest(
+        email: _emailController.text.trim(),
       );
 
-      // Debug: Log the response
-      print('Login response status: ${response.statusCode}');
-      print('Login response body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print('Parsed response data: $data');
+      if (result['success'] == true) {
+        setState(() {
+          _successMessage = result['message'] ?? 'Password reset link sent successfully to your email';
+          _error = null;
+        });
         
-        if (data['success'] == true) {
-          // Check if required data exists
-          final token = data['data']?['token'];
-          final user = data['data']?['user'];
-          
-          if (token != null && user != null) {
-            // Login successful - store token and redirect to spiritual path
-            final authProvider = Provider.of<AuthProvider>(context, listen: false);
-            await authProvider.handleSuccessfulLogin(token, user);
-            
-            // Show success message
-            final userName = user['fullName'] ?? user['username'] ?? 'User';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Welcome back, $userName!'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-            
-            // Navigate to spiritual section
-            print('Navigating to spiritual section...');
-            try {
-              Navigator.pushReplacementNamed(context, '/home');
-            } catch (e) {
-              print('Named route navigation failed: $e, trying direct navigation');
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
-              );
-            }
-          } else {
-            // Missing required data
-            setState(() {
-              _error = 'Invalid response: Missing token or user data';
-            });
-            print('Missing data - Token: $token, User: $user');
-          }
-        } else {
-          setState(() {
-            _error = data['message'] ?? 'Login failed';
-          });
-        }
+        // Show success snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_successMessage!),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        
+        // Clear the email field
+        _emailController.clear();
       } else {
-        // Try to get the actual error message from the API
-        try {
-          final errorData = jsonDecode(response.body);
-          setState(() {
-            _error = errorData['message'] ?? 'Network error. Status: ${response.statusCode}';
-          });
-        } catch (e) {
-          setState(() {
-            _error = 'Network error. Status: ${response.statusCode}';
-          });
-        }
+        setState(() {
+          _error = result['message'] ?? 'Failed to send password reset link';
+          _successMessage = null;
+        });
       }
     } catch (e) {
       setState(() {
-        _error = 'Error: $e';
+        _error = 'An error occurred: ${e.toString()}';
+        _successMessage = null;
       });
     } finally {
       setState(() {
@@ -157,7 +97,33 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           const SizedBox(height: 20),
                           
-                          // App Logo/Icon (Top Center) - Smaller icon
+                          // Back Button
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.black,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 20),
+                          
+                          // App Logo/Icon
                           Container(
                             width: 60,
                             height: 60,
@@ -184,14 +150,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           
-                          const SizedBox(height: 4),
-                            
-                          // Main Content Card - Semi-transparent white card with message screen styling
+                          const SizedBox(height: 20),
+                          
+                          // Main Content Card
                           Expanded(
                             child: Container(
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1), // Match message screen opacity
+                                color: Colors.white.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
                                   color: Colors.white.withOpacity(0.2),
@@ -211,16 +177,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: BackdropFilter(
                                   filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: const EdgeInsets.all(24),
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        // Title - Centered
+                                        // Title
                                         Center(
                                           child: Text(
-                                            'Welcome Back to RGRAM',
+                                            'Reset Your Password',
                                             style: TextStyle(
-                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 22),
+                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 24),
                                               fontWeight: FontWeight.bold,
                                               color: Colors.black,
                                               fontFamily: 'Poppins',
@@ -229,25 +195,25 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                         ),
                                         
-                                        const SizedBox(height: 4),
+                                        const SizedBox(height: 8),
                                         
-                                        // Tagline - Message screen style
+                                        // Description
                                         Center(
                                           child: Text(
-                                            'Connecting Hearts, Spreading Harmony Worldwide',
+                                            'Enter your email address and we\'ll send you a link to reset your password',
                                             style: TextStyle(
-                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 13),
+                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 14),
                                               color: Colors.black.withOpacity(0.8),
                                               fontFamily: 'Poppins',
-                                              height: 1.2,
+                                              height: 1.4,
                                             ),
                                             textAlign: TextAlign.center,
                                           ),
                                         ),
                                         
-                                        const SizedBox(height: 20),
+                                        const SizedBox(height: 32),
                                         
-                                        // Username or Email Field - Message screen style
+                                        // Email Field
                                         Container(
                                           decoration: BoxDecoration(
                                             color: Colors.white.withOpacity(0.1),
@@ -267,9 +233,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                           child: TextFormField(
                                             controller: _emailController,
+                                            keyboardType: TextInputType.emailAddress,
                                             validator: (value) {
                                               if (value == null || value.isEmpty) {
-                                                return 'Please enter your username or email';
+                                                return 'Please enter your email address';
+                                              }
+                                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                                return 'Please enter a valid email address';
                                               }
                                               return null;
                                             },
@@ -279,11 +249,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                               fontFamily: 'Poppins',
                                             ),
                                             decoration: InputDecoration(
-                                              hintText: 'Username or Email',
+                                              hintText: 'Enter your email address',
                                               hintStyle: TextStyle(
                                                 color: Colors.black.withOpacity(0.7),
                                                 fontSize: 15,
                                                 fontFamily: 'Poppins',
+                                              ),
+                                              prefixIcon: Icon(
+                                                Icons.email_outlined,
+                                                color: Colors.black.withOpacity(0.7),
+                                                size: 20,
                                               ),
                                               filled: true,
                                               fillColor: Colors.transparent,
@@ -302,112 +277,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                                   width: 2,
                                                 ),
                                               ),
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        
-                                        // Password Field - Message screen style
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: Colors.white.withOpacity(0.2),
-                                              width: 1,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.05),
-                                                blurRadius: 8,
-                                                spreadRadius: 1,
-                                                offset: const Offset(0, 3),
-                                              ),
-                                            ],
-                                          ),
-                                          child: TextFormField(
-                                            controller: _passwordController,
-                                            obscureText: !_isPasswordVisible,
-                                            validator: (value) {
-                                              if (value == null || value.isEmpty) {
-                                                return 'Please enter your password';
-                                              }
-                                              return null;
-                                            },
-                                            style: const TextStyle(
-                                              color: Colors.black,
-                                              fontSize: 15,
-                                              fontFamily: 'Poppins',
-                                            ),
-                                            decoration: InputDecoration(
-                                              hintText: 'Password',
-                                              hintStyle: TextStyle(
-                                                color: Colors.black.withOpacity(0.7),
-                                                fontSize: 15,
-                                                fontFamily: 'Poppins',
-                                              ),
-                                              filled: true,
-                                              fillColor: Colors.transparent,
-                                              border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12),
-                                                borderSide: BorderSide.none,
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12),
-                                                borderSide: BorderSide.none,
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(12),
-                                                borderSide: BorderSide(
-                                                  color: Colors.white.withOpacity(0.4),
-                                                  width: 2,
-                                                ),
-                                              ),
-                                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                              suffixIcon: IconButton(
-                                                icon: Icon(
-                                                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                                                  color: Colors.black.withOpacity(0.7),
-                                                ),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _isPasswordVisible = !_isPasswordVisible;
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        
-                                        // Forgot Password Link
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: TextButton(
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => const ForgotPasswordScreen(),
-                                                ),
-                                              );
-                                            },
-                                            child: Text(
-                                              'Forgot Password?',
-                                              style: TextStyle(
-                                                color: Colors.black.withOpacity(0.7),
-                                                fontSize: 13,
-                                                fontFamily: 'Poppins',
-                                                fontWeight: FontWeight.w500,
-                                              ),
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                             ),
                                           ),
                                         ),
                                         
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 24),
                                         
-                                        // Log In Button - Message screen style
+                                        // Send Reset Link Button
                                         Container(
                                           width: double.infinity,
                                           height: 48,
@@ -428,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ],
                                           ),
                                           child: ElevatedButton(
-                                            onPressed: _isLoading ? null : _login,
+                                            onPressed: _isLoading ? null : _sendResetEmail,
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: Colors.transparent,
                                               shadowColor: Colors.transparent,
@@ -449,13 +326,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                                     mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
                                                       Icon(
-                                                        Icons.volunteer_activism, // Dove-like icon
+                                                        Icons.email_outlined,
                                                         color: Colors.black,
                                                         size: 20,
                                                       ),
                                                       SizedBox(width: 8),
                                                       Text(
-                                                        'Log In',
+                                                        'Send Reset Link',
                                                         style: TextStyle(
                                                           color: Colors.black,
                                                           fontSize: 16,
@@ -469,7 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                         
                                         if (_error != null) ...[
-                                          const SizedBox(height: 12),
+                                          const SizedBox(height: 16),
                                           Container(
                                             padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
@@ -479,53 +356,153 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 color: Colors.red.withOpacity(0.3),
                                               ),
                                             ),
-                                            child: Text(
-                                              _error!,
-                                              style: const TextStyle(
-                                                color: Colors.red,
-                                                fontWeight: FontWeight.w500,
-                                                fontFamily: 'Poppins',
-                                                fontSize: 13,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                        ],
-                                        
-                                        const SizedBox(height: 4),
-                                        
-                                        // Sign Up Link - Message screen style
-                                        Center(
-                                          child: TextButton(
-                                            onPressed: () {
-                                              Navigator.pushNamed(context, '/signup');
-                                            },
-                                            child: Flexible(
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Flexible(
-                                                    child: Text(
-                                                      "Don't have an account? ",
-                                                      style: const TextStyle(
-                                                        color: Colors.black,
-                                                        fontSize: 14,
-                                                        fontFamily: 'Poppins',
+                                            child: Column(
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.error_outline,
+                                                      color: Colors.red,
+                                                      size: 20,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        _error!,
+                                                        style: const TextStyle(
+                                                          color: Colors.red,
+                                                          fontWeight: FontWeight.w500,
+                                                          fontFamily: 'Poppins',
+                                                          fontSize: 13,
+                                                        ),
                                                       ),
-                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                ),
+                                                if (_error!.contains('Email service')) ...[
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    'This is a temporary server issue. Please try again in a few minutes.',
+                                                    style: TextStyle(
+                                                      color: Colors.orange.shade700,
+                                                      fontWeight: FontWeight.w400,
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 12,
                                                     ),
                                                   ),
-                                                  Text(
-                                                    'Sign Up',
-                                                    style: TextStyle(
-                                                      color: Colors.black.withOpacity(0.8),
-                                                      fontSize: 14,
-                                                      fontFamily: 'Poppins',
-                                                      fontWeight: FontWeight.w600,
+                                                  const SizedBox(height: 8),
+                                                  ElevatedButton.icon(
+                                                    onPressed: _isLoading ? null : _sendResetEmail,
+                                                    icon: const Icon(Icons.refresh, size: 16),
+                                                    label: const Text('Retry'),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: Colors.orange.shade100,
+                                                      foregroundColor: Colors.orange.shade800,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                                     ),
                                                   ),
                                                 ],
+                                                if (_error!.contains('Method Not Allowed') || _error!.contains('not available')) ...[
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    'The email reset service is currently unavailable. Please use the OTP method below.',
+                                                    style: TextStyle(
+                                                      color: Colors.blue.shade700,
+                                                      fontWeight: FontWeight.w400,
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                        
+                                        if (_successMessage != null) ...[
+                                          const SizedBox(height: 16),
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Colors.green.withOpacity(0.3),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.check_circle_outline,
+                                                  color: Colors.green,
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    _successMessage!,
+                                                    style: const TextStyle(
+                                                      color: Colors.green,
+                                                      fontWeight: FontWeight.w500,
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                        
+                                        const SizedBox(height: 24),
+                                        
+                                        // Back to Login Link
+                                        Center(
+                                          child: TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.arrow_back,
+                                                  color: Colors.black,
+                                                  size: 16,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Back to Login',
+                                                  style: TextStyle(
+                                                    color: Colors.black.withOpacity(0.8),
+                                                    fontSize: 14,
+                                                    fontFamily: 'Poppins',
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        
+                                        const SizedBox(height: 16),
+                                        
+                                        // Alternative OTP Method
+                                        Center(
+                                          child: TextButton(
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => const ForgotPasswordOTPScreen(),
+                                                ),
+                                              );
+                                            },
+                                            child: Text(
+                                              'Try OTP Method Instead',
+                                              style: TextStyle(
+                                                color: Colors.blue.withOpacity(0.8),
+                                                fontSize: 14,
+                                                fontFamily: 'Poppins',
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ),
@@ -548,5 +525,11 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
   }
 }

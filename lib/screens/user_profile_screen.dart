@@ -10,6 +10,7 @@ import '../screens/chat_screen.dart';
 import '../screens/post_full_view_screen.dart';
 import '../utils/avatar_utils.dart';
 import '../widgets/follow_button.dart';
+import '../widgets/dp_widget.dart';
 import 'package:flutter/foundation.dart'; // Added for kDebugMode
 
 class UserProfileScreen extends StatefulWidget {
@@ -289,35 +290,19 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           // Profile Picture and Stats Row
           Row(
             children: [
-              // Profile Picture
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF4A2C2A), width: 2),
-                ),
-                child: ClipOval(
-                  child: widget.avatar.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.avatar)
-                      ? Image.network(
-                          AvatarUtils.getAbsoluteAvatarUrl(widget.avatar),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return AvatarUtils.buildDefaultAvatar(
-                              name: widget.fullName,
-                              size: 120,
-                              borderColor: const Color(0xFF4A2C2A),
-                              borderWidth: 2,
-                            );
-                          },
-                        )
-                      : AvatarUtils.buildDefaultAvatar(
-                          name: widget.fullName,
-                          size: 120,
-                          borderColor: const Color(0xFF4A2C2A),
-                          borderWidth: 2,
-                        ),
-                ),
+              // Profile Picture using DPWidget
+              DPWidget(
+                currentImageUrl: widget.avatar,
+                userId: widget.userId,
+                token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+                userName: widget.fullName,
+                onImageChanged: (String newImageUrl) {
+                  // Update the avatar if needed
+                  print('UserProfileScreen: Avatar changed to: $newImageUrl');
+                },
+                size: 120,
+                borderColor: const Color(0xFF4A2C2A),
+                showEditButton: false, // Don't show edit button for other users' profiles
               ),
               
               const SizedBox(width: 20),
@@ -477,21 +462,19 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Profile Image
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
-            child: widget.avatar.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.avatar)
-                ? ClipOval(
-                    child: Image.network(
-                      AvatarUtils.getAbsoluteAvatarUrl(widget.avatar),
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(),
-                    ),
-                  )
-                : _buildDefaultAvatar(),
+          // Profile Image using DPWidget
+          DPWidget(
+            currentImageUrl: widget.avatar,
+            userId: widget.userId,
+            token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+            userName: widget.fullName,
+            onImageChanged: (String newImageUrl) {
+              // Update the avatar if needed
+              print('UserProfileScreen: Avatar changed to: $newImageUrl');
+            },
+            size: 100,
+            borderColor: const Color(0xFF6366F1),
+            showEditButton: false, // Don't show edit button for other users' profiles
           ),
           
           const SizedBox(height: 16),
@@ -626,7 +609,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     return FollowButton(
       targetUserId: _targetUserId,
       targetUserName: widget.username,
-      isPrivate: false, // You can make this dynamic based on user settings
+      isPrivate: widget.isPrivate, // Use the actual privacy status from widget
       isFollowing: _isFollowing,
       onFollowChanged: () {
         // Refresh the following status when follow state changes
@@ -696,6 +679,61 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       return const Center(
         child: CircularProgressIndicator(
           color: Color(0xFF6366F1),
+        ),
+      );
+    }
+
+    // Check if account is private and user is not following
+    if (widget.isPrivate && !_isFollowing) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.lock_outline,
+              size: 64,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'This account is private',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF666666),
+                fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Follow ${widget.username} to see their posts',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF999999),
+                fontFamily: 'Poppins',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: const Text(
+                'Send a follow request to see their posts and stories',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                  fontFamily: 'Poppins',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -817,6 +855,61 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       return const Center(
         child: CircularProgressIndicator(
           color: Color(0xFF6366F1),
+        ),
+      );
+    }
+
+    // Check if account is private and user is not following
+    if (widget.isPrivate && !_isFollowing) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.lock_outline,
+              size: 64,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'This account is private',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF666666),
+                fontFamily: 'Poppins',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Follow ${widget.username} to see their reels',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF999999),
+                fontFamily: 'Poppins',
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: const Text(
+                'Send a follow request to see their reels and stories',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange,
+                  fontFamily: 'Poppins',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       );
     }

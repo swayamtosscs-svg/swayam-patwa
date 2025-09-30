@@ -5,6 +5,8 @@ class Message {
   final String recipient;
   final String content;
   final String messageType;
+  final String? mediaUrl;
+  final Map<String, dynamic>? mediaInfo;
   final bool isRead;
   final bool isDeleted;
   final List<dynamic> reactions;
@@ -18,6 +20,8 @@ class Message {
     required this.recipient,
     required this.content,
     required this.messageType,
+    this.mediaUrl,
+    this.mediaInfo,
     required this.isRead,
     required this.isDeleted,
     required this.reactions,
@@ -33,6 +37,8 @@ class Message {
       recipient: json['recipient'] ?? '',
       content: json['content'] ?? '',
       messageType: json['messageType'] ?? 'text',
+      mediaUrl: json['mediaUrl'],
+      mediaInfo: json['mediaInfo'],
       isRead: json['isRead'] ?? false,
       isDeleted: json['isDeleted'] ?? false,
       reactions: List<dynamic>.from(json['reactions'] ?? []),
@@ -49,6 +55,8 @@ class Message {
       'recipient': recipient,
       'content': content,
       'messageType': messageType,
+      'mediaUrl': mediaUrl,
+      'mediaInfo': mediaInfo,
       'isRead': isRead,
       'isDeleted': isDeleted,
       'reactions': reactions,

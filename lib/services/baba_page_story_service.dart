@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../models/baba_page_story_model.dart';
 import '../models/story_model.dart';
 import 'custom_http_client.dart';
+import 'baba_page_service.dart';
 
 class BabaPageStoryService {
   static const String _baseUrl = 'https://103.14.120.163:8081/api';
@@ -297,70 +298,108 @@ class BabaPageStoryService {
       
       List<Story> allStories = [];
       
-      // Get all Baba pages first
-      // For now, we'll use the specific Baba page ID from your example
-      // Updated to use the actual Baba page ID from the logs
-      const String babaPageId = '68d3bdc685cf1a0feab6f6c6';
-      
-      print('BabaPageStoryService: Using Baba page ID: $babaPageId');
-      
-      // Get stories from this Baba page
-      print('BabaPageStoryService: Calling getBabaPageStories...');
-      final babaPageStories = await getBabaPageStories(
-        babaPageId: babaPageId,
-        token: token,
-        page: page,
-        limit: limit,
-      );
-      
-      print('BabaPageStoryService: Retrieved ${babaPageStories.length} stories from Baba page $babaPageId');
-      
-      if (babaPageStories.isEmpty) {
-        print('BabaPageStoryService: No stories found for Baba page $babaPageId');
-        print('This could mean:');
-        print('1. No stories uploaded to this Baba page');
-        print('2. Stories have expired');
-        print('3. API endpoint issue');
-        print('4. Wrong Baba page ID');
-        return [];
-      }
-      
-      // Convert Baba page stories to regular Story objects
-      print('BabaPageStoryService: Converting ${babaPageStories.length} stories...');
-      for (int i = 0; i < babaPageStories.length; i++) {
-        final babaStory = babaPageStories[i];
-        print('BabaPageStoryService: Converting story $i:');
-        print('  - Baba Story ID: ${babaStory.id}');
-        print('  - Baba Page ID: ${babaStory.babaPageId}');
-        print('  - Media URL: ${babaStory.media.url}');
-        print('  - Media Type: ${babaStory.media.type}');
-        print('  - Is Active: ${babaStory.isActive}');
-        print('  - Created At: ${babaStory.createdAt}');
-        print('  - Expires At: ${babaStory.expiresAt}');
+      // Try to get all Baba pages first to find the one with stories
+      print('BabaPageStoryService: Getting all Baba pages to find stories...');
+      try {
+        // Import BabaPageService to get all pages
+        final babaPagesResponse = await BabaPageService.getBabaPages(token: token ?? '', page: 1, limit: 50);
         
-        final story = Story(
-          id: babaStory.id,
-          authorId: babaStory.babaPageId,
-          authorName: 'Baba Ji', // Default name for Baba page stories
-          authorUsername: 'babaji', // Default username
-          authorAvatar: null, // Will be handled by the UI
-          media: babaStory.media.url,
-          mediaId: babaStory.id,
-          type: babaStory.media.type,
-          mentions: [],
-          hashtags: [],
-          isActive: babaStory.isActive,
-          views: [],
-          viewsCount: babaStory.viewsCount,
-          expiresAt: babaStory.expiresAt,
-          createdAt: babaStory.createdAt,
-          updatedAt: babaStory.updatedAt,
-        );
-        allStories.add(story);
-        print('BabaPageStoryService: Added story ${story.id} with author ${story.authorName}');
+        if (babaPagesResponse.success && babaPagesResponse.pages.isNotEmpty) {
+          print('BabaPageStoryService: Found ${babaPagesResponse.pages.length} Baba pages');
+          
+          // Try each Baba page to find stories
+          for (final babaPage in babaPagesResponse.pages) {
+            print('BabaPageStoryService: Checking Baba page: ${babaPage.name} (${babaPage.id})');
+            
+            final babaPageStories = await getBabaPageStories(
+              babaPageId: babaPage.id,
+              token: token,
+              page: 1,
+              limit: 10,
+            );
+            
+            if (babaPageStories.isNotEmpty) {
+              print('BabaPageStoryService: Found ${babaPageStories.length} stories in ${babaPage.name}');
+              
+              // Convert stories for this page
+              for (final babaStory in babaPageStories) {
+                final story = Story(
+                  id: babaStory.id,
+                  authorId: babaStory.babaPageId,
+                  authorName: babaPage.name, // Use actual Baba page name
+                  authorUsername: babaPage.name.toLowerCase().replaceAll(' ', ''), // Create username from name
+                  authorAvatar: babaPage.avatar,
+                  media: babaStory.media.url,
+                  mediaId: babaStory.id,
+                  type: babaStory.media.type,
+                  mentions: [],
+                  hashtags: [],
+                  isActive: babaStory.isActive,
+                  views: [],
+                  viewsCount: babaStory.viewsCount,
+                  expiresAt: babaStory.expiresAt,
+                  createdAt: babaStory.createdAt,
+                  updatedAt: babaStory.updatedAt,
+                );
+                allStories.add(story);
+                print('BabaPageStoryService: Added story ${story.id} from ${story.authorName}');
+              }
+            } else {
+              print('BabaPageStoryService: No stories found in ${babaPage.name}');
+            }
+          }
+        } else {
+          print('BabaPageStoryService: No Baba pages found or API error');
+        }
+      } catch (e) {
+        print('BabaPageStoryService: Error getting Baba pages: $e');
       }
       
-      print('BabaPageStoryService: Converted ${allStories.length} Baba page stories to regular Story objects');
+      // Fallback: Try the hardcoded Baba page ID if no stories found
+      if (allStories.isEmpty) {
+        print('BabaPageStoryService: No stories found in any Baba page, trying hardcoded ID...');
+        const String babaPageId = '68d3bdc685cf1a0feab6f6c6';
+        
+        final babaPageStories = await getBabaPageStories(
+          babaPageId: babaPageId,
+          token: token,
+          page: page,
+          limit: limit,
+        );
+        
+        print('BabaPageStoryService: Retrieved ${babaPageStories.length} stories from hardcoded Baba page $babaPageId');
+        
+        if (babaPageStories.isNotEmpty) {
+          // Convert stories for hardcoded page
+          for (final babaStory in babaPageStories) {
+            final story = Story(
+              id: babaStory.id,
+              authorId: babaStory.babaPageId,
+              authorName: 'Dhani Baba', // Use Dhani Baba name
+              authorUsername: 'dhanibaba', // Use Dhani Baba username
+              authorAvatar: null,
+              media: babaStory.media.url,
+              mediaId: babaStory.id,
+              type: babaStory.media.type,
+              mentions: [],
+              hashtags: [],
+              isActive: babaStory.isActive,
+              views: [],
+              viewsCount: babaStory.viewsCount,
+              expiresAt: babaStory.expiresAt,
+              createdAt: babaStory.createdAt,
+              updatedAt: babaStory.updatedAt,
+            );
+            allStories.add(story);
+            print('BabaPageStoryService: Added story ${story.id} from ${story.authorName}');
+          }
+        } else {
+          print('BabaPageStoryService: No stories found in hardcoded Baba page either');
+          print('Dhani Baba needs to upload stories to see them here');
+        }
+      }
+      
+      print('BabaPageStoryService: Total stories found: ${allStories.length}');
       print('=== END BABA PAGE STORY SERVICE DEBUG ===');
       return allStories;
       

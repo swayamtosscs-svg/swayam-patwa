@@ -24,6 +24,9 @@ class NotificationService {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         
+        // Debug print to see the API response structure
+        print('NotificationService.getNotifications - API Response: $jsonResponse');
+        
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
           // Handle different response structures
           List<dynamic> notificationsData = [];
@@ -40,6 +43,8 @@ class NotificationService {
               notificationsData = data['data'];
             }
           }
+          
+          print('NotificationService.getNotifications - Parsed notifications data: $notificationsData');
           
           return notificationsData.map((data) => NotificationModel.fromJson(data)).toList();
         }
@@ -230,6 +235,7 @@ class NotificationService {
     required String followerName,
     required String targetUserId,
     required String token,
+    String? followerProfileImage,
   }) async {
     try {
       final response = await http.post(
@@ -245,9 +251,11 @@ class NotificationService {
           'targetUserId': targetUserId,
           'followerId': followerId,
           'followerName': followerName,
+          'followerProfileImage': followerProfileImage,
           'data': {
             'followerId': followerId,
             'followerName': followerName,
+            'followerProfileImage': followerProfileImage,
             'action': 'follow',
           },
         }),

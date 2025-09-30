@@ -705,11 +705,17 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
         if (mounted) {
           setState(() {
             _isLiked = !_isLiked;
-            // Update like count based on like/unlike action
-            if (_isLiked) {
-              _likeCount++;
+            // Update like count from API response if available
+            final responseData = response?['data'];
+            if (responseData != null && responseData is Map<String, dynamic> && responseData['likesCount'] != null) {
+              _likeCount = responseData['likesCount'];
             } else {
-              _likeCount--;
+              // Fallback to increment/decrement if API doesn't provide count
+              if (_isLiked) {
+                _likeCount++;
+              } else {
+                _likeCount--;
+              }
             }
           });
         }
