@@ -1080,6 +1080,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 size: 24,
                 color: Colors.black,
               ),
+              // Debug Button for Babaji Stories (temporary)
+              IconButton(
+                onPressed: () {
+                  _forceLoadBabajiStories();
+                },
+                icon: const Icon(Icons.bug_report, color: Colors.red, size: 24),
+                tooltip: 'Debug: Force Load Babaji Stories',
+              ),
               // Message Icon with Badge
               Stack(
                 children: [

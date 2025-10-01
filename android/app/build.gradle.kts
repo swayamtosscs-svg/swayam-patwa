@@ -63,48 +63,19 @@ android {
             buildConfigField("boolean", "ENABLE_STORY_FEATURES", "true")
             buildConfigField("boolean", "ENABLE_CALL_FEATURES", "true")
         }
-        debug {
-            // Compressed debug build with all features enabled
-            isMinifyEnabled = true
-            isShrinkResources = true
-            isDebuggable = true
-            isZipAlignEnabled = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            
-            // Additional optimizations for debug APK
-            buildConfigField("boolean", "DEBUG", "true")
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
-            
-            // Maximum size optimizations
-            ndk {
-                debugSymbolLevel = "NONE"
-            }
-            
-            // Additional size optimizations for debug APK
-            isJniDebuggable = false
-            
-            // Universal APK for maximum compatibility
-            splits {
-                abi {
-                    isEnable = true
-                    reset()
-                    include("arm64-v8a", "armeabi-v7a") // Include both ARM architectures
-                    isUniversalApk = true // Create universal APK
-                }
-            }
-            
-            // Feature flags - all enabled
-            buildConfigField("boolean", "ENABLE_DEBUG_FEATURES", "true")
-            buildConfigField("boolean", "ENABLE_ANALYTICS", "false")
-            buildConfigField("boolean", "ENABLE_CRASH_REPORTING", "false")
-            
-            // All features enabled
-            buildConfigField("boolean", "ENABLE_VIDEO_FEATURES", "true")
-            buildConfigField("boolean", "ENABLE_CAMERA_FEATURES", "true")
-            buildConfigField("boolean", "ENABLE_STORY_FEATURES", "true")
-            buildConfigField("boolean", "ENABLE_CALL_FEATURES", "true")
-        }
+    debug {
+        // Simple debug build for stream visibility
+        isDebuggable = true
+        applicationIdSuffix = ".debug"
+        versionNameSuffix = "-debug"
+        
+        // Basic feature flags
+        buildConfigField("boolean", "DEBUG", "true")
+        buildConfigField("boolean", "ENABLE_VIDEO_FEATURES", "true")
+        buildConfigField("boolean", "ENABLE_CAMERA_FEATURES", "true")
+        buildConfigField("boolean", "ENABLE_STORY_FEATURES", "true")
+        buildConfigField("boolean", "ENABLE_CALL_FEATURES", "true")
+    }
     }
     
     // Memory optimization

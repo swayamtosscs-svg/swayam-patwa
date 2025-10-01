@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:camera/camera.dart';
-// import 'package:permission_handler/permission_handler.dart';
 import '../providers/auth_provider.dart';
-import '../models/live_stream_model.dart';
-import '../services/live_stream_service.dart';
+import '../services/live_streaming_service.dart';
+import 'live_darshan_webview_screen.dart';
+import 'live_rooms_screen.dart';
+import 'live_streaming_setup_screen.dart';
 import '../utils/app_theme.dart';
-import '../widgets/app_loader.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   const LiveStreamScreen({super.key});
@@ -16,304 +15,69 @@ class LiveStreamScreen extends StatefulWidget {
 }
 
 class _LiveStreamScreenState extends State<LiveStreamScreen> {
-  List<CameraDescription>? cameras;
-  CameraController? _cameraController;
-  bool _isInitialized = false;
-  bool _isStreaming = false;
-  bool _isLoading = false;
-  String _currentRoom = 'darshan';
-  String _userRole = 'viewer';
-  LiveStreamStatus? _streamStatus;
-  List<LiveStreamMessage> _messages = [];
-  final TextEditingController _messageController = TextEditingController();
-  LiveStreamAnalytics? _analytics;
-  List<LiveStreamRoom> _availableRooms = [];
+  bool _isLoading = true;
+  Map<String, dynamic>? _serverStatus;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
-    _checkServerHealth();
-    _loadAvailableRooms();
-    _loadMessages();
+    _checkServerStatus();
   }
 
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    _messageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initializeCamera() async {
-    try {
-      print('LiveStreamScreen: Initializing camera...');
-      
-      // Request camera permission
-      // final status = await Permission.camera.request();
-      // if (status != PermissionStatus.granted) {
-      //   print('LiveStreamScreen: Camera permission denied');
-      //   _showErrorSnackBar('Camera permission is required for live streaming');
-      //   return;
-      // }
-
-      print('LiveStreamScreen: Camera permission granted');
-
-      // Get available cameras
-      try {
-        cameras = await availableCameras();
-        print('LiveStreamScreen: Found ${cameras?.length ?? 0} cameras');
-      } catch (e) {
-        print('LiveStreamScreen: Error getting cameras: $e');
-        _showErrorSnackBar('Error accessing cameras: $e');
-        return;
-      }
-
-      if (cameras == null || cameras!.isEmpty) {
-        print('LiveStreamScreen: No cameras found');
-        _showErrorSnackBar('No cameras found on this device');
-        return;
-      }
-
-      // Initialize camera controller
-      _cameraController = CameraController(
-        cameras![0],
-        ResolutionPreset.high,
-        enableAudio: true,
-      );
-
-      print('LiveStreamScreen: Initializing camera controller...');
-      await _cameraController!.initialize();
-      
-      print('LiveStreamScreen: Camera initialized successfully');
-      
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-    } catch (e) {
-      print('LiveStreamScreen: Error initializing camera: $e');
-      _showErrorSnackBar('Error initializing camera: $e');
-    }
-  }
-
-  Future<void> _checkServerHealth() async {
+  Future<void> _checkServerStatus() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
-      final health = await LiveStreamService.checkHealth();
-      if (health.success) {
-        _showSuccessSnackBar('Live streaming server is running');
-        await _getStreamStatus();
-      } else {
-        _showErrorSnackBar('Live streaming server is not available');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Error checking server health: $e');
-    } finally {
+      // Initialize SSL bypass for live streaming server
+      await LiveStreamingService.initialize();
+      
+      final status = await LiveStreamingService.getServerStatus();
       setState(() {
+        _serverStatus = status;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to connect to live streaming server: $e';
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _getStreamStatus() async {
-    try {
-      final status = await LiveStreamService.getLiveStatus(room: _currentRoom);
-      setState(() {
-        _streamStatus = status;
-        _isStreaming = status.isLive;
-      });
-    } catch (e) {
-      print('Error getting stream status: $e');
-    }
-  }
-
-  Future<void> _loadAvailableRooms() async {
-    try {
-      final response = await LiveStreamService.getAllLiveStreams();
-      if (response.success) {
-        setState(() {
-          _availableRooms = response.rooms;
-        });
-      }
-    } catch (e) {
-      print('Error loading available rooms: $e');
-    }
-  }
-
-  Future<void> _loadMessages() async {
-    try {
-      final response = await LiveStreamService.getMessages(room: _currentRoom);
-      if (response.success) {
-        setState(() {
-          _messages = response.messages;
-        });
-      }
-    } catch (e) {
-      print('Error loading messages: $e');
-    }
-  }
-
-  Future<void> _loadAnalytics() async {
-    try {
-      final analytics = await LiveStreamService.getLiveStreamAnalytics(room: _currentRoom);
-      setState(() {
-        _analytics = analytics;
-      });
-    } catch (e) {
-      print('Error loading analytics: $e');
-    }
-  }
-
-  Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
-
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final userId = authProvider.userProfile?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
-
-      final response = await LiveStreamService.sendMessage(
-        room: _currentRoom,
-        userId: userId,
-        message: _messageController.text.trim(),
-      );
-
-      if (response.success) {
-        _messageController.clear();
-        await _loadMessages(); // Refresh messages
-      } else {
-        _showErrorSnackBar('Failed to send message: ${response.message}');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Error sending message: $e');
-    }
-  }
-
-  Future<void> _switchRoom(String roomName) async {
-    setState(() {
-      _currentRoom = roomName;
-      _isStreaming = false;
-      _userRole = 'viewer';
-    });
-    await _getStreamStatus();
-    await _loadMessages();
-    await _loadAnalytics();
-  }
-
-  Future<void> _startStream() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final userId = authProvider.userProfile?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Start live stream with integrated role assignment
-      final roomResponse = await LiveStreamService.startLiveStream(
-        room: _currentRoom,
-        userId: userId,
-      );
-      
-      if (roomResponse.success) {
-        setState(() {
-          _isStreaming = true;
-          _userRole = 'broadcaster';
-        });
-        _showSuccessSnackBar('Live stream started successfully!');
-        await _getStreamStatus();
-      } else {
-        _showErrorSnackBar('Failed to start live stream');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Error starting stream: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _stopStream() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final roomResponse = await LiveStreamService.stopLiveStream(room: _currentRoom);
-      
-      if (roomResponse.success) {
-        setState(() {
-          _isStreaming = false;
-          _userRole = 'viewer';
-        });
-        _showSuccessSnackBar('Live stream stopped successfully!');
-        await _getStreamStatus();
-      } else {
-        _showErrorSnackBar('Failed to stop live stream');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Error stopping stream: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _joinAsViewer() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final userId = authProvider.userProfile?.id ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Join live stream with integrated viewer role assignment
-      final roomResponse = await LiveStreamService.joinLiveStream(
-        room: _currentRoom,
-        userId: userId,
-      );
-
-      if (roomResponse.success) {
-        setState(() {
-          _userRole = 'viewer';
-        });
-        _showSuccessSnackBar('Joined as viewer!');
-        await _getStreamStatus();
-      } else {
-        _showErrorSnackBar('Failed to join as viewer');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Error joining as viewer: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
+  void _openLiveDarshanWebView() {
+    // Direct redirect to live streaming server
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const LiveDarshanWebViewScreen(),
       ),
     );
   }
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
+  void _navigateToLiveRooms() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveRoomsScreen(
+          authToken: authProvider.authToken,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToStreamingSetup() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveStreamingSetupScreen(
+          authToken: authProvider.authToken,
+        ),
       ),
     );
   }
@@ -321,454 +85,399 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
+      backgroundColor: const Color(0xFFF8FAFF),
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Live Darshan',
           style: TextStyle(
+            color: Color(0xFF1A1A1A),
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w600,
           ),
         ),
-        backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: GestureDetector(
-          onTap: () {
-            Navigator.of(context).pop();
-          },
-          child: Container(
-            margin: const EdgeInsets.all(8.0),
-            padding: const EdgeInsets.all(8.0),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.arrow_back,
-              color: Colors.white,
-              size: 24,
-            ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF1A1A1A)),
+            onPressed: _checkServerStatus,
           ),
-        ),
-      ),
-      body: _isLoading
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(
-                    strokeWidth: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Initializing Live Darshan...',
-                    style: TextStyle(
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Camera Preview
-                  if (_isInitialized && _cameraController != null)
-                    Container(
-                      height: MediaQuery.of(context).size.height * 0.4,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      margin: const EdgeInsets.all(16),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CameraPreview(_cameraController!),
-                      ),
-                    )
-                  else
-                    Container(
-                      height: MediaQuery.of(context).size.height * 0.4,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      margin: const EdgeInsets.all(16),
-                      child: const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.camera_alt,
-                              size: 64,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Camera not available',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                  // Controls
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        // Stream Status
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _isStreaming ? Colors.green : Colors.red,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                _isStreaming ? Icons.live_tv : Icons.tv_off,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _isStreaming ? 'LIVE' : 'OFFLINE',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-        // Room Selection
-        if (_availableRooms.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Available Rooms',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 40,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _availableRooms.length,
-                    itemBuilder: (context, index) {
-                      final room = _availableRooms[index];
-                      final isSelected = room.room == _currentRoom;
-                      return GestureDetector(
-                        onTap: () => _switchRoom(room.room),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppTheme.primaryColor : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? AppTheme.primaryColor : Colors.grey,
-                            ),
-                          ),
-                          child: Text(
-                            room.room,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
         ],
+      ),
+      body: _buildBody(),
+    );
+  }
 
-        // Room Info
-        if (_streamStatus != null) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Color(0xFF6366F1)),
+            SizedBox(height: 16),
+            Text(
+              'Checking server status...',
+              style: TextStyle(
+                fontSize: 16,
+                color: Color(0xFF666666),
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildInfoCard(
-                'Room',
-                _streamStatus!.room,
-                Icons.room,
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 64,
               ),
-              _buildInfoCard(
-                'Broadcasters',
-                '${_streamStatus!.broadcasterCount}',
-                Icons.videocam,
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.red,
+                  fontFamily: 'Poppins',
+                ),
+                textAlign: TextAlign.center,
               ),
-              _buildInfoCard(
-                'Viewers',
-                '${_streamStatus!.viewerCount}',
-                Icons.visibility,
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _checkServerStatus,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Retry'),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-        ],
+        ),
+      );
+    }
 
-        // Analytics
-        if (_analytics != null && _analytics!.success) ...[
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          const Text(
+            'Live Darshan',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A1A),
+              fontFamily: 'Poppins',
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Connect with spiritual leaders through live streaming',
+            style: TextStyle(
+              fontSize: 16,
+              color: Color(0xFF666666),
+              fontFamily: 'Poppins',
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Server Status Card
+          if (_serverStatus != null)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Server Status',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Status: ${_serverStatus!['status']}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  Text(
+                    'Port: ${_serverStatus!['port']} | Protocol: ${_serverStatus!['protocol']}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  Text(
+                    'Uptime: ${_serverStatus!['uptime'].toStringAsFixed(1)}s',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 32),
+
+          // Main Options
+          _buildOptionCard(
+            icon: Icons.live_tv,
+            title: 'Open Live Darshan',
+            subtitle: 'Direct access to live streaming server',
+            color: const Color(0xFFEF4444),
+            onTap: _openLiveDarshanWebView,
+            isPrimary: true,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildOptionCard(
+            icon: Icons.people,
+            title: 'Browse Rooms',
+            subtitle: 'View available live darshan rooms',
+            color: const Color(0xFF6366F1),
+            onTap: _navigateToLiveRooms,
+          ),
+
+          const SizedBox(height: 16),
+
+          _buildOptionCard(
+            icon: Icons.videocam,
+            title: 'Start Streaming',
+            subtitle: 'Begin streaming your spiritual teachings',
+            color: const Color(0xFF10B981),
+            onTap: _navigateToStreamingSetup,
+          ),
+
+          const SizedBox(height: 32),
+
+          // Features Info
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text(
+                      'Live Darshan Features',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '• Direct access to live streaming server\n'
+                  '• Real-time spiritual teachings and guidance\n'
+                  '• Interactive chat with spiritual leaders\n'
+                  '• Multiple rooms for different sessions\n'
+                  '• High-quality video streaming\n'
+                  '• Cross-platform compatibility',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                    fontFamily: 'Poppins',
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Server Info
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
+              color: Colors.grey.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Stream Analytics',
+                  'Server Information',
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
                     fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A1A),
+                    fontFamily: 'Poppins',
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildAnalyticsCard('Total Viewers', '${_analytics!.totalViewers}'),
-                    _buildAnalyticsCard('Peak Viewers', '${_analytics!.peakViewers}'),
-                    _buildAnalyticsCard('Avg Viewers', '${_analytics!.averageViewers.toStringAsFixed(1)}'),
-                  ],
+                const Text(
+                  'URL: https://103.14.120.163:8443/',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const Text(
+                  'Protocol: HTTPS/WSS',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                    fontFamily: 'Poppins',
+                  ),
+                ),
+                const Text(
+                  'Status: Live streaming server',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                    fontFamily: 'Poppins',
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
         ],
+      ),
+    );
+  }
 
-                        // Action Buttons
-                        Row(
-                          children: [
-                            if (!_isStreaming) ...[
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _startStream,
-                                  icon: const Icon(Icons.play_arrow),
-                                  label: const Text('Start Stream'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _joinAsViewer,
-                                  icon: const Icon(Icons.visibility),
-                                  label: const Text('Join as Viewer'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.primaryColor,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ] else ...[
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _stopStream,
-                                  icon: const Icon(Icons.stop),
-                                  label: const Text('Stop Stream'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-
-                        // Messages Section
-                        if (_messages.isNotEmpty) ...[
-                          const SizedBox(height: 20),
-                          Container(
-                            height: 150,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[50],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Live Chat',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: ListView.builder(
-                                    itemCount: _messages.length,
-                                    itemBuilder: (context, index) {
-                                      final message = _messages[index];
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 2),
-                                        child: Text(
-                                          '${message.username ?? message.userId}: ${message.message}',
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-
-                        // Message Input
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _messageController,
-                                decoration: InputDecoration(
-                                  hintText: 'Type a message...',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                ),
-                                onSubmitted: (_) => _sendMessage(),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: _sendMessage,
-                              icon: const Icon(Icons.send),
-                              style: IconButton.styleFrom(
-                                backgroundColor: AppTheme.primaryColor,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+  Widget _buildOptionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+    bool isPrimary = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+          border: isPrimary ? Border.all(color: color.withOpacity(0.3), width: 2) : null,
+        ),
+        child: Row(
+          children: [
+            // Icon container
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 28,
+              ),
+            ),
+            
+            const SizedBox(width: 20),
+            
+            // Text content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1A1A1A),
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                      fontFamily: 'Poppins',
                     ),
                   ),
                 ],
               ),
             ),
-    );
-  }
-
-  Widget _buildInfoCard(String title, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: AppTheme.primaryColor,
-            size: 24,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-              fontFamily: 'Poppins',
+            
+            // Arrow icon
+            Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.grey[400],
+              size: 16,
             ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontFamily: 'Poppins',
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildAnalyticsCard(String title, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-            fontFamily: 'Poppins',
-          ),
-        ),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey[600],
-            fontFamily: 'Poppins',
-          ),
-        ),
-      ],
     );
   }
 }
-
