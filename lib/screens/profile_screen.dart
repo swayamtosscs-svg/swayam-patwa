@@ -15,6 +15,10 @@ import '../screens/chat_screen.dart'; // Added import for ChatScreen
 import '../widgets/dp_widget.dart'; // Added import for DPWidget
 import '../screens/post_full_view_screen.dart';
 import '../widgets/profile_reel_widget.dart';
+import '../widgets/verification_badge.dart';
+import '../screens/verification_request_screen.dart';
+import '../services/verification_service.dart';
+import '../models/verification_model.dart';
 
 
 class ProfileScreen extends StatefulWidget {
@@ -38,6 +42,32 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         _selectedTabIndex = _tabController.index;
       });
     });
+    _checkVerificationStatus();
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.userProfile;
+      final token = authProvider.authToken;
+
+      if (user != null && token != null) {
+        final response = await VerificationService.getVerificationStatus(
+          userId: user.id,
+          token: token,
+        );
+
+        if (response.success && response.data != null) {
+          // Update user verification status if needed
+          if (response.data!.isVerified != user.isVerified) {
+            // You might want to update the user profile here
+            print('Verification status updated: ${response.data!.isVerified}');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking verification status: $e');
+    }
   }
 
   @override
@@ -1613,6 +1643,27 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         value: 'edit_profile',
         child: Text('Edit Profile'),
       ),
+      // Verification Request Menu Item (always show for all users)
+      if (user != null)
+        PopupMenuItem(
+          value: 'verification_request',
+          child: Row(
+            children: [
+              const Icon(
+                Icons.verified_user,
+                color: Color(0xFF10B981),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                user.isVerified ? 'Verification Status' : 'Request Verification',
+                style: const TextStyle(
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ],
+          ),
+        ),
       const PopupMenuItem(
         value: 'followers',
         child: Text('Followers'),
@@ -1690,12 +1741,103 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             builder: (context) => FollowingScreen(userId: Provider.of<AuthProvider>(context, listen: false).userProfile!.id),
           ),
         );
+      } else if (value == 'verification_request') {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final user = authProvider.userProfile;
+        
+        if (user != null) {
+          if (user.isVerified) {
+            // Show verification status dialog
+            _showVerificationStatusDialog(context, user);
+          } else {
+            // Navigate to verification request screen
+            Navigator.pushNamed(context, '/verification-request');
+          }
+        }
       } else if (value == 'toggle_privacy') {
         _handlePrivacyToggle(context);
       } else if (value == 'logout') {
         _showLogoutDialog(context);
       }
     });
+  }
+
+  void _showVerificationStatusDialog(BuildContext context, UserModel user) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(
+                Icons.verified_user,
+                color: Color(0xFF10B981),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text('Verification Status'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Congratulations! Your account is verified.',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFF10B981).withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Color(0xFF10B981),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Blue Tick Verified',
+                      style: TextStyle(
+                        color: Color(0xFF10B981),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Your verification badge is visible to all users across the platform.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _navigateToUserProfile(Post post) {
@@ -1767,22 +1909,23 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   Widget _buildActionButtons(UserModel user) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 18),
-      child: Row(
+      child: Column(
         children: [
-          // Edit Profile Button
-          Expanded(
-            child: Container(
+          // Verification Request Button (if not verified)
+          if (!user.isVerified) ...[
+            Container(
+              width: double.infinity,
               height: 48,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                  colors: [Color(0xFF10B981), Color(0xFF059669)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.3),
+                    color: const Color(0xFF10B981).withOpacity(0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
@@ -1792,18 +1935,20 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(24),
-                  onTap: () => _navigateToEditProfile(user),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/verification-request');
+                  },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(
-                        Icons.edit,
+                        Icons.verified_user,
                         color: Colors.white,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        'Edit Profile',
+                        'Request Verification',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -1816,55 +1961,109 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          // Logout Button
-          Expanded(
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xFFE53E3E),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFE53E3E).withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => _showLogoutDialog(context),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.logout,
-                        color: Color(0xFFE53E3E),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Logout',
-                        style: TextStyle(
-                          color: Color(0xFFE53E3E),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          fontFamily: 'Poppins',
-                        ),
+            const SizedBox(height: 12),
+          ],
+          // Main Action Buttons Row
+          Row(
+            children: [
+              // Edit Profile Button
+              Expanded(
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () => _navigateToEditProfile(user),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.edit,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Edit Profile',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 12),
+              // Logout Button
+              Expanded(
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFFE53E3E),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFE53E3E).withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () => _showLogoutDialog(context),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.logout,
+                            color: Color(0xFFE53E3E),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Logout',
+                            style: TextStyle(
+                              color: Color(0xFFE53E3E),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

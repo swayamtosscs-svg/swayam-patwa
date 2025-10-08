@@ -4,6 +4,7 @@ import 'lib/widgets/follow_button.dart';
 import 'lib/services/follow_request_service.dart';
 import 'lib/services/privacy_service.dart';
 import 'lib/models/follow_request_model.dart';
+import 'lib/models/privacy_model.dart';
 
 /// Test file to verify the complete follow request system
 /// This tests the flow: Private account -> Send follow request -> Accept/Reject -> Show in following

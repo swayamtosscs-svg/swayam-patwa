@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:media_kit/media_kit.dart';
 import 'providers/auth_provider.dart';
+import 'providers/admin_provider.dart';
 import 'services/theme_service.dart';
 import 'utils/responsive_utils.dart';
 import 'screens/splash_screen.dart';
@@ -20,6 +21,14 @@ import 'screens/notifications_screen.dart';
 import 'screens/otp_verification_screen.dart';
 import 'screens/video_test_screen.dart';
 import 'screens/forgot_password_screen.dart';
+import 'screens/host_page.dart';
+import 'screens/viewer_page.dart';
+import 'screens/admin_login_screen.dart';
+import 'screens/super_admin_create_screen.dart';
+import 'screens/admin_create_screen.dart';
+import 'screens/admin_dashboard_screen.dart';
+import 'screens/verification_request_screen.dart';
+import 'screens/admin_verification_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -46,6 +55,7 @@ class DivineConnectApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => AuthProvider()),
+        ChangeNotifierProvider(create: (context) => AdminProvider()),
         ChangeNotifierProvider(create: (context) => ThemeService()),
       ],
       child: Consumer<ThemeService>(
@@ -88,6 +98,14 @@ class DivineConnectApp extends StatelessWidget {
               '/notifications': (context) => const NotificationsScreen(),
               '/video-test': (context) => const VideoTestScreen(),
               '/forgot-password': (context) => const ForgotPasswordScreen(),
+              '/host-live': (context) => const HostPage(),
+              '/viewer-live': (context) => const ViewerPage(),
+              '/admin/login': (context) => const AdminLoginScreen(),
+              '/admin/create-super-admin': (context) => const SuperAdminCreateScreen(),
+              '/admin/create-admin': (context) => const AdminCreateScreen(),
+              '/admin/dashboard': (context) => const AdminDashboardScreen(),
+              '/admin/verification': (context) => const AdminVerificationScreen(),
+              '/verification-request': (context) => const VerificationRequestScreen(),
             },
           );
         },

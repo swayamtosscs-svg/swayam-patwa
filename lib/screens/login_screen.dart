@@ -4,10 +4,12 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:ui';
 import '../providers/auth_provider.dart';
+import '../providers/admin_provider.dart';
 import '../utils/app_theme.dart';
 import '../utils/responsive_utils.dart';
 import '../screens/home_screen.dart';
 import '../screens/forgot_password_screen.dart';
+import '../screens/admin_dashboard_screen.dart';
 import '../services/theme_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -68,26 +70,51 @@ class _LoginScreenState extends State<LoginScreen> {
           final user = data['data']?['user'];
           
           if (token != null && user != null) {
-            // Login successful - store token and redirect to spiritual path
-            final authProvider = Provider.of<AuthProvider>(context, listen: false);
-            await authProvider.handleSuccessfulLogin(token, user);
+            // Check if user is admin/super admin
+            final userRole = user['role'];
+            final isAdmin = userRole == 'admin' || userRole == 'super_admin';
             
-            // Show success message
-            final userName = user['fullName'] ?? user['username'] ?? 'User';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Welcome back, $userName!'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-            
-            // Navigate to spiritual section
-            print('Navigating to spiritual section...');
-            try {
-              Navigator.pushReplacementNamed(context, '/home');
-            } catch (e) {
-              print('Named route navigation failed: $e, trying direct navigation');
+            if (isAdmin) {
+              // Admin login - use admin provider
+              final adminProvider = Provider.of<AdminProvider>(context, listen: false);
+              await adminProvider.handleSuccessfulLogin({
+                'token': token,
+                'user': user,
+                'admin': user, // Assuming admin data is in user object
+                'expiresIn': '7d',
+              });
+              
+              // Show success message
+              final userName = user['fullName'] ?? user['username'] ?? 'Admin';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Welcome back, $userName!'),
+                  backgroundColor: Colors.blue,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+              
+              // Navigate to admin dashboard
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+              );
+            } else {
+              // Regular user login - use auth provider
+              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              await authProvider.handleSuccessfulLogin(token, user);
+              
+              // Show success message
+              final userName = user['fullName'] ?? user['username'] ?? 'User';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Welcome back, $userName!'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+              
+              // Navigate to home screen
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => const HomeScreen()),

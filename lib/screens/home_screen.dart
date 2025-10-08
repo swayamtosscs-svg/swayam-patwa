@@ -2404,13 +2404,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               
-              // Live Darshan
+              // Live Streaming
               _buildNavItem(
-                icon: Icons.live_tv,
-                label: 'Live Darshan',
+                icon: Icons.videocam,
+                label: 'Live Stream',
                 isSelected: false,
                 onTap: () {
-                  // Navigate to live darshan
+                  // Navigate to live streaming options
                   Navigator.push(
                     context,
                     MaterialPageRoute(
