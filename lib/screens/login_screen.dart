@@ -528,32 +528,27 @@ class _LoginScreenState extends State<LoginScreen> {
                                             onPressed: () {
                                               Navigator.pushNamed(context, '/signup');
                                             },
-                                            child: Flexible(
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Flexible(
-                                                    child: Text(
-                                                      "Don't have an account? ",
-                                                      style: const TextStyle(
-                                                        color: Colors.black,
-                                                        fontSize: 14,
-                                                        fontFamily: 'Poppins',
-                                                      ),
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  "Don't have an account? ",
+                                                  style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontSize: 14,
+                                                    fontFamily: 'Poppins',
                                                   ),
-                                                  Text(
-                                                    'Sign Up',
-                                                    style: TextStyle(
-                                                      color: Colors.black.withOpacity(0.8),
-                                                      fontSize: 14,
-                                                      fontFamily: 'Poppins',
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
+                                                ),
+                                                Text(
+                                                  'Sign Up',
+                                                  style: TextStyle(
+                                                    color: Colors.black.withOpacity(0.8),
+                                                    fontSize: 14,
+                                                    fontFamily: 'Poppins',
+                                                    fontWeight: FontWeight.w600,
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ),

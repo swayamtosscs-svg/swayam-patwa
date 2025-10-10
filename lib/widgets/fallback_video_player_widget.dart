@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart' as mk;
+import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 class FallbackVideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
@@ -22,7 +26,12 @@ class FallbackVideoPlayerWidget extends StatefulWidget {
 }
 
 class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
+  // video_player (mobile/web/macOS)
   VideoPlayerController? _controller;
+  // media_kit (Windows/Linux fallback)
+  mk.Player? _mkPlayer;
+  mkv.VideoController? _mkVideoController;
+  bool _useMediaKit = false;
   bool _isInitialized = false;
   bool _hasError = false;
   String _errorMessage = '';
@@ -48,7 +57,9 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
   @override
   void dispose() {
     _isDisposed = true;
+    // Dispose appropriate backend
     _controller?.dispose();
+    _mkPlayer?.dispose();
     super.dispose();
   }
 
@@ -56,28 +67,92 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
     try {
       print('FallbackVideoPlayerWidget: Initializing player for URL: ${widget.videoUrl}');
       
-      // Validate URL
+      // Validate URL or local file path
       if (widget.videoUrl.isEmpty) {
         throw Exception('Video URL is empty');
       }
-      
-      if (!widget.videoUrl.startsWith('http://') && !widget.videoUrl.startsWith('https://')) {
-        throw Exception('Invalid video URL format: ${widget.videoUrl}');
+
+      bool isRemoteUrl = widget.videoUrl.startsWith('http://') || widget.videoUrl.startsWith('https://');
+      bool isFileUrl = widget.videoUrl.startsWith('file://');
+      bool isWindowsPath = RegExp(r'^[a-zA-Z]:\\').hasMatch(widget.videoUrl);
+      bool isUnixPath = widget.videoUrl.startsWith('/');
+      bool isLocalPath = isFileUrl || isWindowsPath || isUnixPath;
+      // Choose backend: video_player for web/mobile/macOS; media_kit for Windows/Linux
+      final platform = defaultTargetPlatform;
+      final useVideoPlayer = kIsWeb ||
+          platform == TargetPlatform.android ||
+          platform == TargetPlatform.iOS ||
+          platform == TargetPlatform.macOS;
+
+      _useMediaKit = !useVideoPlayer;
+
+      if (_useMediaKit) {
+        // media_kit path (Windows/Linux)
+        _mkPlayer = mk.Player();
+        _mkVideoController = mkv.VideoController(_mkPlayer!);
+
+        // Listeners
+        _mkPlayer!.stream.playing.listen((playing) {
+          if (mounted && !_isDisposed) {
+            setState(() {
+              _isPlaying = playing;
+            });
+          }
+        });
+
+        _mkPlayer!.stream.error.listen((error) {
+          if (mounted && !_isDisposed) {
+            setState(() {
+              _hasError = true;
+              _errorMessage = error.toString();
+            });
+          }
+        });
+        // media_kit supports both URLs & file paths directly
+        await _mkPlayer!.open(mk.Media(widget.videoUrl));
+        if (widget.muted) {
+          _mkPlayer!.setVolume(0.0);
+        }
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _isInitialized = true;
+          });
+          if (widget.autoPlay) {
+            await _mkPlayer!.play();
+          }
+        }
+      } else {
+        // video_player path (Android/iOS/Web/macOS)
+        if (isRemoteUrl) {
+          _controller = VideoPlayerController.network(
+            widget.videoUrl,
+            videoPlayerOptions: VideoPlayerOptions(
+              mixWithOthers: true,
+              allowBackgroundPlayback: false,
+            ),
+          );
+        } else if (isLocalPath) {
+          // Normalize file:// URI to path for controller.file
+          final String path = isFileUrl
+              ? widget.videoUrl.replaceFirst('file://', '')
+              : widget.videoUrl;
+          _controller = VideoPlayerController.file(
+            File(path),
+            videoPlayerOptions: VideoPlayerOptions(
+              mixWithOthers: true,
+              allowBackgroundPlayback: false,
+            ),
+          );
+        } else {
+          throw Exception('Invalid video source: ${widget.videoUrl}');
+        }
+
+        // Set video player configuration
+        _controller!.setVolume(widget.muted ? 0.0 : 1.0);
+        _controller!.setLooping(widget.looping);
+
+        await _controller!.initialize();
       }
-      
-      _controller = VideoPlayerController.network(
-        widget.videoUrl,
-        videoPlayerOptions: VideoPlayerOptions(
-          mixWithOthers: true,
-          allowBackgroundPlayback: false,
-        ),
-      );
-      
-      // Set video player configuration
-      _controller!.setVolume(widget.muted ? 0.0 : 1.0);
-      _controller!.setLooping(widget.looping);
-      
-      await _controller!.initialize();
       
       if (mounted && !_isDisposed) {
         setState(() {
@@ -85,18 +160,24 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
         });
         
         // Add listener for video state changes
-        _controller!.addListener(() {
-          if (mounted && !_isDisposed) {
-            setState(() {
-              _isPlaying = _controller!.value.isPlaying;
-            });
-          }
-        });
+        if (!_useMediaKit) {
+          _controller!.addListener(() {
+            if (mounted && !_isDisposed) {
+              setState(() {
+                _isPlaying = _controller!.value.isPlaying;
+              });
+            }
+          });
+        }
         
         // Auto-play the video
         if (widget.autoPlay) {
           print('FallbackVideoPlayerWidget: Starting autoplay...');
-          await _controller!.play();
+          if (_useMediaKit) {
+            await _mkPlayer!.play();
+          } else {
+            await _controller!.play();
+          }
         }
       }
     } catch (e) {
@@ -127,17 +208,25 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
   void _togglePlayPause() {
     print('FallbackVideoPlayerWidget: Toggling play/pause. Current state: $_isPlaying, Initialized: $_isInitialized');
     
-    if (_controller != null && _isInitialized) {
-      if (_isPlaying) {
-        _controller!.pause();
-        print('FallbackVideoPlayerWidget: Pausing video');
-      } else {
-        _controller!.play();
-        print('FallbackVideoPlayerWidget: Playing video');
+    if (_isInitialized) {
+      if (_useMediaKit && _mkPlayer != null) {
+        if (_isPlaying) {
+          _mkPlayer!.pause();
+        } else {
+          _mkPlayer!.play();
+        }
+      } else if (_controller != null) {
+        if (_isPlaying) {
+          _controller!.pause();
+        } else {
+          _controller!.play();
+        }
       }
-      setState(() {
-        _isPlaying = !_isPlaying;
-      });
+      if (mounted) {
+        setState(() {
+          _isPlaying = !_isPlaying;
+        });
+      }
     } else {
       print('FallbackVideoPlayerWidget: Controller not ready or not initialized');
     }
@@ -242,10 +331,16 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
             // Video player
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: AspectRatio(
-                aspectRatio: _controller!.value.aspectRatio,
-                child: VideoPlayer(_controller!),
-              ),
+              child: _useMediaKit
+                  ? mkv.Video(
+                      controller: _mkVideoController!,
+                      controls: mkv.NoVideoControls,
+                      fill: Colors.black,
+                    )
+                  : AspectRatio(
+                      aspectRatio: _controller!.value.aspectRatio,
+                      child: VideoPlayer(_controller!),
+                    ),
             ),
             
             // Custom controls overlay
@@ -282,8 +377,8 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
                 ),
               ),
             
-            // Large play button overlay when not playing
-            if (!_isPlaying && _isInitialized)
+            // Large play button overlay when not playing (only if showControls is true)
+            if (!_isPlaying && _isInitialized && _showControls)
               Center(
                 child: GestureDetector(
                   onTap: _togglePlayPause,

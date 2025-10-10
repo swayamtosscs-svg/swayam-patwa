@@ -68,6 +68,10 @@ class UserModel {
     this.preferences,
   });
 
+  factory UserModel.fromJson(Map<String, dynamic> data) {
+    return UserModel.fromMap(data);
+  }
+
   factory UserModel.fromMap(Map<String, dynamic> data) {
     return UserModel(
       id: data['id'] ?? data['_id'] ?? '',

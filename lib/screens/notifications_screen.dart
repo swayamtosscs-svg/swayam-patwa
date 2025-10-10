@@ -257,55 +257,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back, color: Colors.black),
         ),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const FollowRequestsScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.person_add, color: Colors.black),
-            tooltip: 'Follow Requests',
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TestFollowRequestDemo(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.science, color: Colors.black),
-            tooltip: 'Demo Follow Requests',
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TestRupeshFollowScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.person_search, color: Colors.black),
-            tooltip: 'Test Follow Button',
-          ),
-          if (_unreadNotifications.isNotEmpty)
-            TextButton(
-              onPressed: _markAllAsRead,
-              child: const Text(
-                'Mark all read',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
+        actions: [],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.black,

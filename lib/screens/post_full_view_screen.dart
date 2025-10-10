@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
 import '../widgets/video_player_widget.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/user_like_service.dart';
+import '../widgets/user_comment_dialog.dart';
 
 class PostFullViewScreen extends StatefulWidget {
   final Post post;
@@ -21,6 +25,7 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
   bool _isSaved = false;
   bool _isFavourite = false;
   bool _isPlaying = false;
+  int _likesCount = 0;
 
   @override
   void initState() {
@@ -28,6 +33,7 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
     _isLiked = widget.post.isLiked;
     _isSaved = widget.post.isSaved;
     _isFavourite = widget.post.isFavourite;
+    _likesCount = widget.post.likesCount;
   }
 
   @override
@@ -151,10 +157,39 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
         children: [
           // Like Button
           GestureDetector(
-            onTap: () {
-              setState(() {
-                _isLiked = !_isLiked;
-              });
+            onTap: () async {
+              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final userId = authProvider.userProfile?.id;
+              final token = authProvider.authToken;
+
+              if (userId == null || token == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please login to like posts'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              final response = await UserLikeService.toggleUserPostLike(
+                postId: widget.post.id,
+                token: token,
+                userId: userId,
+                isCurrentlyLiked: _isLiked,
+              );
+
+              if (mounted) {
+                setState(() {
+                  _isLiked = !_isLiked;
+                  final data = response['data'] as Map<String, dynamic>?;
+                  if (data != null && data['likesCount'] != null) {
+                    _likesCount = data['likesCount'] as int;
+                  } else {
+                    _likesCount = (_likesCount + (_isLiked ? 1 : -1)).clamp(0, 1 << 31);
+                  }
+                });
+              }
             },
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -215,7 +250,13 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
           // Comment Button
           GestureDetector(
             onTap: () {
-              // Handle comment
+              showDialog(
+                context: context,
+                builder: (context) => UserCommentDialog(
+                  postId: widget.post.id,
+                  onCommentAdded: () {},
+                ),
+              );
             },
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -265,7 +306,7 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${widget.post.likesCount} likes',
+                    '$_likesCount likes',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 14,

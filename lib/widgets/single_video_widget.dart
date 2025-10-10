@@ -8,6 +8,7 @@ import '../utils/video_manager.dart';
 import '../providers/auth_provider.dart';
 import '../services/baba_like_service.dart';
 import 'fallback_video_player_widget.dart';
+import 'visibility_detector_widget.dart';
 
 class SingleVideoWidget extends StatefulWidget {
   final BabaPageReel reel;
@@ -182,15 +183,25 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
 
   void _setupVideoManager() {
     _videoManager.setOnVideoStateChanged((videoId) {
-      if (videoId == widget.reel.id && !_isDisposed) {
-        // This video should play
-        if (_isInitialized && !_isPlaying) {
-          player.play();
-        }
-      } else if (videoId != widget.reel.id && !_isDisposed) {
-        // Another video is playing, pause this one
-        if (_isInitialized && _isPlaying) {
-          player.pause();
+      if (!_isDisposed) {
+        if (videoId == widget.reel.id) {
+          // This video should play
+          if (_isInitialized && !_isPlaying) {
+            print('SingleVideoWidget: Playing video ${widget.reel.id}');
+            player.play();
+          }
+        } else if (videoId != widget.reel.id) {
+          // Another video is playing, pause this one
+          if (_isInitialized && _isPlaying) {
+            print('SingleVideoWidget: Pausing video ${widget.reel.id} (another video playing)');
+            player.pause();
+          }
+        } else if (videoId == null) {
+          // No video should play, pause this one
+          if (_isInitialized && _isPlaying) {
+            print('SingleVideoWidget: Pausing video ${widget.reel.id} (no video should play)');
+            player.pause();
+          }
         }
       }
     });
@@ -512,151 +523,157 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
       );
     }
 
-    return GestureDetector(
-      onTap: widget.onTap ?? _toggleControls,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: AppTheme.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: AspectRatio(
-          aspectRatio: 9 / 16,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Video player
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Video(
-                  controller: videoController,
-                  controls: NoVideoControls, // Use custom controls
-                  fill: Colors.black,
-                ),
+    return VisibilityDetectorWidget(
+      videoKey: widget.reel.id,
+      onVisibilityChanged: (isVisible) {
+        _videoManager.updateVideoVisibility(widget.reel.id, isVisible);
+      },
+      child: GestureDetector(
+        onTap: widget.onTap ?? _toggleControls,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: AppTheme.cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              
-              // Play/Pause indicator
-              if (!_isPlaying)
-                Center(
-                  child: GestureDetector(
-                    onTap: _togglePlayPause,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 48,
-                      ),
-                    ),
-                  ),
-                ),
-
-              // Caption at top
-              if (_showControls)
-                Positioned(
-                  top: 16,
-                  left: 16,
-                  right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      widget.reel.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-
-              // Bottom controls
-              if (_showControls)
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  right: 16,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Like button
-                        IconButton(
-                          onPressed: _isLoadingLike ? null : _handleLike,
-                          icon: _isLoadingLike
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                )
-                              : Icon(
-                                  _isLiked ? Icons.favorite : Icons.favorite_border,
-                                  color: _isLiked ? Colors.red : Colors.white,
-                                  size: 24,
-                                ),
-                        ),
-                        
-                        // Like count
-                        Text(
-                          _formatCount(_likeCount),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        
-                        // Play/Pause button
-                        IconButton(
-                          onPressed: _togglePlayPause,
-                          icon: Icon(
-                            _isPlaying ? Icons.pause : Icons.play_arrow,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
-                        
-                        // Share button
-                        IconButton(
-                          onPressed: () {
-                            // Handle share
-                          },
-                          icon: const Icon(
-                            Icons.share,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
             ],
+          ),
+          child: AspectRatio(
+            aspectRatio: 9 / 16,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Video player
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Video(
+                    controller: videoController,
+                    controls: NoVideoControls, // Use custom controls
+                    fill: Colors.black,
+                  ),
+                ),
+                
+                // Play/Pause indicator
+                if (!_isPlaying)
+                  Center(
+                    child: GestureDetector(
+                      onTap: _togglePlayPause,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Caption at top
+                if (_showControls)
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        widget.reel.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+
+                // Bottom controls
+                if (_showControls)
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Like button
+                          IconButton(
+                            onPressed: _isLoadingLike ? null : _handleLike,
+                            icon: _isLoadingLike
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  )
+                                : Icon(
+                                    _isLiked ? Icons.favorite : Icons.favorite_border,
+                                    color: _isLiked ? Colors.red : Colors.white,
+                                    size: 24,
+                                  ),
+                          ),
+                          
+                          // Like count
+                          Text(
+                            _formatCount(_likeCount),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          
+                          // Play/Pause button
+                          IconButton(
+                            onPressed: _togglePlayPause,
+                            icon: Icon(
+                              _isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                          
+                          // Share button
+                          IconButton(
+                            onPressed: () {
+                              // Handle share
+                            },
+                            icon: const Icon(
+                              Icons.share,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

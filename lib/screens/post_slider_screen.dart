@@ -92,7 +92,7 @@ class _PostSliderScreenState extends State<PostSliderScreen> {
                   final post = widget.posts[index];
                   return PostFullViewScreen(
                     post: post,
-                    showNavigationControls: false, // Hide individual controls
+                    showNavigationControls: true, // Show controls so user can like/comment
                   );
                 },
               ),

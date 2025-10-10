@@ -1,0 +1,1068 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/post_model.dart';
+import '../models/baba_page_reel_model.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
+import '../services/baba_page_service.dart';
+import '../services/baba_page_reel_service.dart';
+import '../services/local_storage_service.dart';
+import '../services/dp_service.dart';
+import '../widgets/user_comment_dialog.dart';
+import '../widgets/video_player_widget.dart';
+import '../screens/user_profile_screen.dart';
+import '../utils/video_manager.dart';
+
+class ReelsScreen extends StatefulWidget {
+  const ReelsScreen({super.key});
+
+  @override
+  State<ReelsScreen> createState() => _ReelsScreenState();
+}
+
+class _ReelsScreenState extends State<ReelsScreen> {
+  final PageController _pageController = PageController();
+  final VideoManager _videoManager = VideoManager();
+  
+  List<Post> _reels = [];
+  bool _isLoading = true;
+  int _currentIndex = 0;
+  Map<String, bool> _followStates = {}; // Track follow state for each user
+  Map<String, bool> _likeStates = {}; // Track like state for each post
+  Map<String, int> _likeCounts = {}; // Track like counts for each post
+
+  @override
+  void initState() {
+    super.initState();
+    _setupVideoManager();
+    _loadReels();
+  }
+
+  @override
+  void dispose() {
+    _videoManager.reset();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _setupVideoManager() {
+    // Set up the video manager to handle PageView changes
+    _videoManager.setScrollController(_pageController);
+  }
+
+  Future<void> _loadReels() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      
+      if (token == null) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final List<Post> allReels = [];
+
+      // 1. Fetch reels from regular feed (user reels)
+      try {
+        final feedResponse = await ApiService.getRGramFeed(token: token);
+        if (feedResponse['success'] == true && feedResponse['data'] != null) {
+          final postsData = feedResponse['data']['posts'] as List<dynamic>? ?? [];
+          final posts = postsData.map((json) => Post.fromJson(json)).toList();
+          final userReels = posts.where((post) => 
+            (post.isReel || post.type == PostType.reel || post.type == PostType.video) && 
+            post.videoUrl?.isNotEmpty == true
+          ).toList();
+          allReels.addAll(userReels);
+          print('ReelsScreen: Found ${userReels.length} user reels from feed');
+        }
+      } catch (e) {
+        print('ReelsScreen: Error fetching user reels: $e');
+      }
+
+      // 2. Fetch Baba Ji page reels
+      try {
+        final babaPagesResponse = await BabaPageService.getBabaPages(token: token);
+        if (babaPagesResponse.success && babaPagesResponse.pages.isNotEmpty) {
+          final babaPages = babaPagesResponse.pages;
+          
+          for (final babaPage in babaPages) {
+            final babaPageId = babaPage.id;
+            if (babaPageId.isNotEmpty) {
+              try {
+                final reelsResponse = await BabaPageReelService.getBabaPageReels(
+                  babaPageId: babaPageId,
+                  token: token,
+                  page: 1,
+                  limit: 20,
+                );
+
+                if (reelsResponse['success'] == true) {
+                  final reelsData = reelsResponse['data']['videos'] as List<dynamic>;
+                  for (final reelData in reelsData) {
+                    final reel = BabaPageReel.fromJson(reelData);
+                    // Convert Baba Ji reel to regular Post for reels screen
+                    final post = Post(
+                      id: 'baba_reel_${reel.id}',
+                      userId: reel.babaPageId,
+                      username: babaPage.name,
+                      userAvatar: babaPage.avatar,
+                      caption: '${reel.title}\n\n${reel.description}',
+                      imageUrl: reel.thumbnail.url,
+                      videoUrl: reel.video.url,
+                      type: PostType.reel,
+                      likes: reel.likesCount,
+                      comments: reel.commentsCount,
+                      shares: reel.sharesCount,
+                      isLiked: false,
+                      createdAt: reel.createdAt,
+                      hashtags: [],
+                      thumbnailUrl: reel.thumbnail.url,
+                      isBabaJiPost: true,
+                      isReel: true,
+                      babaPageId: reel.babaPageId,
+                    );
+                    allReels.add(post);
+                  }
+                }
+              } catch (e) {
+                print('ReelsScreen: Error getting reels from Baba Ji page $babaPageId: $e');
+              }
+            }
+          }
+          print('ReelsScreen: Found Baba Ji reels');
+        }
+      } catch (e) {
+        print('ReelsScreen: Error fetching Baba Ji reels: $e');
+      }
+
+      // 3. Fetch local storage reels
+      try {
+        final localReels = await LocalStorageService.getUserReels();
+        allReels.addAll(localReels);
+        print('ReelsScreen: Found ${localReels.length} local reels');
+      } catch (e) {
+        print('ReelsScreen: Error fetching local reels: $e');
+      }
+
+      // Remove duplicates based on video URL
+      final uniqueReels = <String, Post>{};
+      for (final reel in allReels) {
+        if (reel.videoUrl != null && reel.videoUrl!.isNotEmpty) {
+          uniqueReels[reel.videoUrl!] = reel;
+        }
+      }
+
+      // Sort by creation date (latest first)
+      final sortedReels = uniqueReels.values.toList();
+      sortedReels.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      print('ReelsScreen: Total unique reels found: ${sortedReels.length}');
+      
+      // Initialize like and follow states
+      for (final reel in sortedReels) {
+        _likeStates[reel.id] = reel.isLiked;
+        _likeCounts[reel.id] = reel.likes;
+        _followStates[reel.userId] = false; // Will be updated by checking follow status
+      }
+      
+      setState(() {
+        _reels = sortedReels;
+        _isLoading = false;
+      });
+      
+      // Check follow status for all users
+      _checkFollowStatuses();
+    } catch (e) {
+      print('Error loading reels: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+              )
+            : _reels.isEmpty
+                ? RefreshIndicator(
+                    onRefresh: _loadReels,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height - 200,
+                        child: _buildEmptyState(),
+                      ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadReels,
+                    child: PageView.builder(
+                      controller: _pageController,
+                      scrollDirection: Axis.vertical,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentIndex = index;
+                        });
+                        // Update video manager with new page index
+                        _videoManager.updatePageIndex(index);
+                      },
+                      itemCount: _reels.length,
+                      itemBuilder: (context, index) {
+                        final reel = _reels[index];
+                        return _buildReelCard(reel, index);
+                      },
+                    ),
+                  ),
+      ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.video_library_outlined,
+            size: 80,
+            color: Colors.grey[600],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No Reels Yet',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[300],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Be the first to create a reel!\nPull down to refresh and check for new content.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 30),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/reel-upload');
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Create Reel'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReelCard(Post reel, int index) {
+    // Register video position with video manager
+    _videoManager.registerVideoPosition(reel.id, index);
+    
+    return Stack(
+      children: [
+        // Video Player
+        Positioned.fill(
+          child: VideoPlayerWidget(
+            videoUrl: reel.videoUrl!,
+            videoId: reel.id, // Pass video ID for tracking
+            autoPlay: index == _currentIndex,
+            showControls: false,
+          ),
+        ),
+        
+        // Gradient overlay for better text visibility
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.3),
+                  Colors.transparent,
+                  Colors.black.withOpacity(0.7),
+                ],
+                stops: const [0.0, 0.3, 1.0],
+              ),
+            ),
+          ),
+        ),
+        
+        // Content overlay
+        Positioned.fill(
+          child: Column(
+            children: [
+              // Top bar
+              _buildTopBar(reel),
+              
+              // Bottom content
+              Expanded(
+                child: Row(
+                  children: [
+                    // Left side - User info and description
+                    Expanded(
+                      child: _buildLeftContent(reel),
+                    ),
+                    
+                    // Right side - Action buttons
+                    _buildRightActions(reel),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopBar(Post reel) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const Text(
+            'Reels',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '(${_reels.length})',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/reel-upload');
+            },
+            icon: const Icon(
+              Icons.camera_alt,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeftContent(Post reel) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // User info
+          Row(
+            children: [
+              InkWell(
+                onTap: () {
+                  print('Avatar tapped for user: ${reel.userId}');
+                  _navigateToUserProfile(reel.userId, reel.username);
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withOpacity(0.1),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: _buildUserAvatar(
+                    userId: reel.userId,
+                    username: reel.username,
+                    currentAvatar: reel.userAvatar,
+                    token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: InkWell(
+                            onTap: () {
+                              print('Username tapped for user: ${reel.userId}');
+                              _navigateToUserProfile(reel.userId, reel.username);
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                              child: Text(
+                                reel.username,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (reel.isBabaJiPost) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              'BABA JI',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    InkWell(
+                      onTap: () {
+                        print('Handle tapped for user: ${reel.userId}');
+                        _navigateToUserProfile(reel.userId, reel.username);
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                        child: Text(
+                          '@${reel.username.toLowerCase().replaceAll(' ', '')}',
+                          style: TextStyle(
+                            color: Colors.grey[300],
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _toggleFollow(reel),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (_followStates[reel.userId] ?? false) ? Colors.grey[600] : Colors.red,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    (_followStates[reel.userId] ?? false) ? 'Following' : 'Follow',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Caption
+          if (reel.caption?.isNotEmpty == true)
+            Text(
+              reel.caption!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          
+          const SizedBox(height: 8),
+          
+          // Music info
+          Row(
+            children: [
+              Icon(
+                Icons.music_note,
+                color: Colors.grey[300],
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                reel.isBabaJiPost ? 'Baba Ji Audio' : 'Original Audio',
+                style: TextStyle(
+                  color: Colors.grey[300],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRightActions(Post reel) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Like button
+          _buildActionButton(
+            icon: (_likeStates[reel.id] ?? false) ? Icons.favorite : Icons.favorite_border,
+            count: _likeCounts[reel.id] ?? reel.likes,
+            onTap: () => _toggleLike(reel),
+            isLiked: _likeStates[reel.id] ?? false,
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Comment button
+          _buildActionButton(
+            icon: Icons.chat_bubble_outline,
+            count: reel.comments,
+            onTap: () => _openComments(reel),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Share button
+          _buildActionButton(
+            icon: Icons.share,
+            count: reel.shares,
+            onTap: () => _shareReel(reel),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // More options
+          IconButton(
+            onPressed: () => _showMoreOptions(reel),
+            icon: const Icon(
+              Icons.more_vert,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required int count,
+    required VoidCallback onTap,
+    bool isLiked = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: isLiked ? Colors.red : Colors.white,
+            size: 28,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatCount(count),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    }
+    return count.toString();
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2)),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                icon: Icons.home,
+                label: 'Home',
+                isSelected: false,
+                onTap: () {
+                  print('Home tab tapped');
+                  Navigator.pushReplacementNamed(context, '/home');
+                },
+              ),
+              _buildNavItem(
+                icon: Icons.live_tv,
+                label: 'Live Darshan',
+                isSelected: false,
+                onTap: () {
+                  print('Live Darshan tab tapped');
+                  Navigator.pushNamed(context, '/live-stream');
+                },
+              ),
+              _buildNavItem(
+                icon: Icons.add,
+                label: 'Add',
+                isSelected: false,
+                onTap: () {
+                  print('Add tab tapped');
+                  Navigator.pushNamed(context, '/add-options');
+                },
+              ),
+              _buildNavItem(
+                icon: Icons.video_library,
+                label: 'Reels',
+                isSelected: true,
+                onTap: () {
+                  print('Reels tab tapped');
+                  Navigator.pushReplacementNamed(context, '/home');
+                },
+              ),
+              _buildNavItem(
+                icon: Icons.person,
+                label: 'Account',
+                isSelected: false,
+                onTap: () {
+                  print('Account tab tapped');
+                  Navigator.pushNamed(context, '/profile');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.red : Colors.grey[600],
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.red : Colors.grey[600],
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkFollowStatuses() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      final currentUserId = authProvider.userProfile?.id;
+      
+      if (token == null || currentUserId == null) return;
+      
+      // Check follow status for each unique user
+      final uniqueUserIds = _reels.map((reel) => reel.userId).toSet();
+      for (final userId in uniqueUserIds) {
+        if (userId != currentUserId) {
+          try {
+            final followStatus = await ApiService.checkRGramFollowStatus(
+              targetUserId: userId,
+              token: token,
+            );
+            
+            if (followStatus['success'] == true && mounted) {
+              setState(() {
+                _followStates[userId] = followStatus['data']?['isFollowing'] ?? false;
+              });
+            }
+          } catch (e) {
+            print('Error checking follow status for user $userId: $e');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking follow statuses: $e');
+    }
+  }
+
+  Future<void> _toggleFollow(Post reel) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      final currentUserId = authProvider.userProfile?.id;
+      
+      if (token == null || currentUserId == null) return;
+      
+      final isCurrentlyFollowing = _followStates[reel.userId] ?? false;
+      
+      // Optimistically update UI
+      setState(() {
+        _followStates[reel.userId] = !isCurrentlyFollowing;
+      });
+      
+      Map<String, dynamic> result;
+      if (isCurrentlyFollowing) {
+        result = await ApiService.unfollowRGramUser(
+          targetUserId: reel.userId,
+          token: token,
+        );
+      } else {
+        result = await ApiService.followRGramUser(
+          targetUserId: reel.userId,
+          token: token,
+        );
+      }
+      
+      if (result['success'] != true && mounted) {
+        // Revert on failure
+        setState(() {
+          _followStates[reel.userId] = isCurrentlyFollowing;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Failed to update follow status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error toggling follow: $e');
+      // Revert on error
+      setState(() {
+        _followStates[reel.userId] = !(_followStates[reel.userId] ?? false);
+      });
+    }
+  }
+
+  Future<void> _toggleLike(Post reel) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      final currentUserId = authProvider.userProfile?.id;
+      
+      if (token == null || currentUserId == null) return;
+      
+      final isCurrentlyLiked = _likeStates[reel.id] ?? false;
+      final currentLikeCount = _likeCounts[reel.id] ?? reel.likes;
+      
+      // Optimistically update UI
+      setState(() {
+        _likeStates[reel.id] = !isCurrentlyLiked;
+        _likeCounts[reel.id] = isCurrentlyLiked ? currentLikeCount - 1 : currentLikeCount + 1;
+      });
+      
+      Map<String, dynamic> result;
+      if (isCurrentlyLiked) {
+        result = await ApiService.unlikePost(
+          postId: reel.id,
+          token: token,
+          userId: currentUserId,
+        );
+      } else {
+        result = await ApiService.likePost(
+          postId: reel.id,
+          token: token,
+          userId: currentUserId,
+        );
+      }
+      
+      if (result['success'] != true && mounted) {
+        // Revert on failure
+        setState(() {
+          _likeStates[reel.id] = isCurrentlyLiked;
+          _likeCounts[reel.id] = currentLikeCount;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Failed to update like status'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error toggling like: $e');
+      // Revert on error
+      setState(() {
+        _likeStates[reel.id] = !(_likeStates[reel.id] ?? false);
+        _likeCounts[reel.id] = (_likeCounts[reel.id] ?? reel.likes);
+      });
+    }
+  }
+
+  void _openComments(Post reel) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => UserCommentDialog(
+        postId: reel.id,
+        onCommentAdded: () {
+          // Update comment count if needed
+          setState(() {
+            // You can increment comment count here if you track it
+          });
+        },
+      ),
+    );
+  }
+
+  void _shareReel(Post reel) {
+    // TODO: Implement share functionality
+  }
+
+  void _showMoreOptions(Post reel) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.report, color: Colors.white),
+              title: const Text('Report', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Implement report functionality
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.white),
+              title: const Text('Block User', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                // TODO: Implement block functionality
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateToUserProfile(String userId, String username) {
+    print('Navigating to profile for user: $userId, username: $username');
+    
+    try {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => UserProfileScreen(
+            userId: userId,
+            username: username,
+            fullName: username,
+            avatar: '',
+            bio: '',
+            followersCount: 0,
+            followingCount: 0,
+            postsCount: 0,
+            isPrivate: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error navigating to profile: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildUserAvatar({
+    required String userId,
+    required String username,
+    required String currentAvatar,
+    required String token,
+  }) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: DPService.retrieveDP(userId: userId, token: token),
+      builder: (context, snapshot) {
+        // If we have a successful response with DP URL, show the real DP
+        if (snapshot.hasData && 
+            snapshot.data!['success'] == true && 
+            snapshot.data!['data'] != null &&
+            snapshot.data!['data']['dpUrl'] != null) {
+          
+          final dpUrl = snapshot.data!['data']['dpUrl'] as String;
+          
+          return Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 2,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.network(
+                dpUrl,
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.red[400]!, Colors.pink[400]!],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to gradient avatar if image fails to load
+                  return Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.red[400]!, Colors.pink[400]!],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+        
+        // Fallback to gradient avatar if no DP is found or API fails
+        return Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.red[400]!, Colors.pink[400]!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Center(
+            child: Text(
+              username.isNotEmpty ? username[0].toUpperCase() : 'U',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

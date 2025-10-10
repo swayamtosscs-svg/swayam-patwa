@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:media_kit/media_kit.dart';
 import 'providers/auth_provider.dart';
 import 'providers/admin_provider.dart';
+import 'providers/live_stream_provider.dart';
 import 'services/theme_service.dart';
-import 'utils/responsive_utils.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -29,6 +29,9 @@ import 'screens/admin_create_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/verification_request_screen.dart';
 import 'screens/admin_verification_screen.dart';
+import 'screens/reels_screen.dart';
+import 'screens/create_live_stream_screen.dart';
+import 'screens/live_stream_viewer_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -56,6 +59,7 @@ class DivineConnectApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => AuthProvider()),
         ChangeNotifierProvider(create: (context) => AdminProvider()),
+        ChangeNotifierProvider(create: (context) => LiveStreamProvider()),
         ChangeNotifierProvider(create: (context) => ThemeService()),
       ],
       child: Consumer<ThemeService>(
@@ -64,6 +68,8 @@ class DivineConnectApp extends StatelessWidget {
             title: 'RGRAM - Spiritual Connection Platform',
             theme: themeService.currentTheme,
             debugShowCheckedModeBanner: false,
+            debugShowMaterialGrid: false,
+            showSemanticsDebugger: false,
             home: const AuthWrapper(), // Use AuthWrapper as home instead of routes
             routes: {
               '/login': (context) => const LoginScreen(),
@@ -106,6 +112,15 @@ class DivineConnectApp extends StatelessWidget {
               '/admin/dashboard': (context) => const AdminDashboardScreen(),
               '/admin/verification': (context) => const AdminVerificationScreen(),
               '/verification-request': (context) => const VerificationRequestScreen(),
+              '/reels': (context) => const ReelsScreen(),
+              '/create-live-stream': (context) => const CreateLiveStreamScreen(),
+              '/live-stream-viewer': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+                return LiveStreamViewerScreen(
+                  room: args?['room'],
+                  authToken: args?['authToken'],
+                );
+              },
             },
           );
         },

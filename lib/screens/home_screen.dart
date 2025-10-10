@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import '../providers/auth_provider.dart';
@@ -28,6 +29,7 @@ import '../screens/story_viewer_screen.dart';
 import '../screens/post_full_view_screen.dart';
 import '../screens/post_slider_screen.dart';
 import '../screens/live_stream_screen.dart';
+import '../screens/reels_screen.dart';
 import '../services/story_service.dart';
 // Removed local story service import to prevent showing old local stories
 import '../services/feed_service.dart';
@@ -412,76 +414,31 @@ class _HomeScreenState extends State<HomeScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.authToken != null) {
         try {
-          // Get current user's stories first (limit to 5 for speed)
+          // Load all stories in parallel for maximum speed
+          final futures = <Future<List<Story>>>[];
+          
+          // Get current user's stories first (limit to 3 for speed)
           if (authProvider.userProfile != null) {
-            final userStories = await StoryService.getUserStories(
+            futures.add(StoryService.getUserStories(
               authProvider.userProfile!.id,
               token: authProvider.authToken,
               page: 1,
-              limit: 5, // Reduced limit for faster loading
-            );
-            if (userStories.isNotEmpty) {
-              allStories.addAll(userStories);
-            }
+              limit: 3, // Further reduced limit for faster loading
+            ));
           }
           
-          // Get stories from followed users (limit to 3 users for speed)
-          try {
-            final followedUsers = await _getFollowedUsers(authProvider.authToken!);
-            
-            if (followedUsers.isNotEmpty) {
-              // Limit to first 3 followed users for faster loading
-              final limitedUsers = followedUsers.take(3).toList();
-              
-              // Load stories from each followed user in parallel
-              final storyFutures = limitedUsers.map((followedUserId) async {
-                try {
-                  final followedUserStories = await StoryService.getUserStories(
-                    followedUserId,
-                    token: authProvider.authToken,
-                    page: 1,
-                    limit: 3, // Reduced limit for faster loading
-                  );
-                  return followedUserStories;
-                } catch (e) {
-                  print('Error loading stories from followed user $followedUserId: $e');
-                  return <Story>[];
-                }
-              });
-              
-              // Wait for all story loading to complete in parallel
-              final storyResults = await Future.wait(storyFutures);
-              
-              // Add all stories
-              for (final stories in storyResults) {
-                allStories.addAll(stories);
-              }
-            }
-          } catch (e) {
-            print('Error getting followed users: $e');
-          }
+          // Get stories from followed users (limit to 2 users for speed)
+          futures.add(_getFollowedUsersStories(authProvider.authToken!));
           
-          // Load Babaji stories for home page - only if user is following Baba Ji (optimized)
-          try {
-            final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
-            print('Optimized loading - User is following Baba Ji: $isFollowingBabaJi');
-            if (isFollowingBabaJi) {
-              print('Loading Babaji stories for home page (optimized)...');
-              final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
-                token: authProvider.authToken,
-                page: 1,
-                limit: 5, // Reduced limit for faster loading
-              );
-              print('Optimized loading - Loaded ${babajiStories.length} Babaji stories');
-              if (babajiStories.isNotEmpty) {
-                allStories.addAll(babajiStories);
-                print('Added ${babajiStories.length} Babaji stories to home page (optimized)');
-              }
-            } else {
-              print('Optimized loading - User is not following Baba Ji, skipping Babaji stories');
-            }
-          } catch (e) {
-            print('Error loading Babaji stories (optimized): $e');
+          // Load Babaji stories only if user is following Baba Ji
+          futures.add(_getBabajiStoriesIfFollowing(authProvider.authToken!, authProvider.userProfile?.id));
+          
+          // Wait for all story loading operations to complete in parallel
+          final results = await Future.wait(futures);
+          
+          // Combine all stories
+          for (final storyList in results) {
+            allStories.addAll(storyList);
           }
         } catch (e) {
           print('Error loading stories from story API: $e');
@@ -494,6 +451,9 @@ class _HomeScreenState extends State<HomeScreen> {
         
         // Group stories by user
         _groupedStories = StoryService.groupStoriesByUser(allStories);
+        
+        // Preload user DPs for better performance
+        _preloadUserDPs(allStories);
       } else {
         _groupedStories = {};
       }
@@ -512,6 +472,90 @@ class _HomeScreenState extends State<HomeScreen> {
           _groupedStories = {};
         });
       }
+    }
+  }
+
+  // Preload user DPs for better performance
+  Future<void> _preloadUserDPs(List<Story> stories) async {
+    try {
+      final uniqueUsers = <String, String>{};
+      
+      // Collect unique users and their avatar URLs
+      for (final story in stories) {
+        if (story.authorAvatar != null && 
+            story.authorAvatar!.isNotEmpty && 
+            story.authorAvatar != 'null') {
+          uniqueUsers[story.authorId] = story.authorAvatar!;
+        }
+      }
+      
+      // Preload images in background
+      for (final entry in uniqueUsers.entries) {
+        try {
+          // Use precacheImage to cache the image
+          final imageProvider = CachedNetworkImageProvider(entry.value);
+          await precacheImage(imageProvider, context);
+          print('Preloaded DP for user ${entry.key}');
+        } catch (e) {
+          print('Failed to preload DP for user ${entry.key}: $e');
+        }
+      }
+    } catch (e) {
+      print('Error preloading user DPs: $e');
+    }
+  }
+
+  // Helper method to get followed users' stories efficiently
+  Future<List<Story>> _getFollowedUsersStories(String token) async {
+    try {
+      final followedUsers = await _getFollowedUsers(token);
+      if (followedUsers.isEmpty) {
+        return [];
+      }
+      
+      // Limit to first 2 followed users for faster loading
+      final limitedFollowedUsers = followedUsers.take(2).toList();
+      final futures = <Future<List<Story>>>[];
+      
+      for (final userId in limitedFollowedUsers) {
+        futures.add(StoryService.getUserStories(
+          userId, // userId is already a String
+          token: token,
+          page: 1,
+          limit: 2, // Reduced limit for faster loading
+        ));
+      }
+      
+      final results = await Future.wait(futures);
+      final allStories = <Story>[];
+      
+      for (final storyList in results) {
+        allStories.addAll(storyList);
+      }
+      
+      return allStories;
+    } catch (e) {
+      print('Error loading followed users stories: $e');
+      return [];
+    }
+  }
+
+  // Helper method to get Babaji stories only if user is following
+  Future<List<Story>> _getBabajiStoriesIfFollowing(String token, String? userId) async {
+    try {
+      final isFollowingBabaJi = await _isUserFollowingBabaJi(token, userId);
+      if (!isFollowingBabaJi) {
+        return [];
+      }
+      
+      return await BabaPageStoryService.getAllBabajiStoriesAsStories(
+        token: token,
+        page: 1,
+        limit: 3, // Reduced limit for faster loading
+      );
+    } catch (e) {
+      print('Error loading Babaji stories: $e');
+      return [];
     }
   }
 
@@ -782,22 +826,16 @@ class _HomeScreenState extends State<HomeScreen> {
       // Load stories and posts in parallel for maximum speed
       final futures = <Future>[];
       
-      // Only reload stories if they're empty or very old (older than 5 minutes)
-      final now = DateTime.now();
-      final storiesAge = _stories.isEmpty ? Duration.zero : now.difference(_stories.first.createdAt);
-      if (_stories.isEmpty || storiesAge.inMinutes > 5) {
-        futures.add(_loadStoriesOptimized());
-      }
+      // Always reload stories for fresh content
+      futures.add(_loadStoriesOptimized());
       
-      // Only refresh posts if we have very few posts (less than 3)
-      if (_posts.length < 3) {
+      // Only refresh posts if we have very few posts (less than 5)
+      if (_posts.length < 5) {
         futures.add(_loadInitialPostsOptimized());
       }
       
       // Wait for all operations to complete in parallel
-      if (futures.isNotEmpty) {
-        await Future.wait(futures);
-      }
+      await Future.wait(futures);
       
     } catch (e) {
       print('HomeScreen: Error during refresh: $e');
@@ -1080,14 +1118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 size: 24,
                 color: Colors.black,
               ),
-              // Debug Button for Babaji Stories (temporary)
-              IconButton(
-                onPressed: () {
-                  _forceLoadBabajiStories();
-                },
-                icon: const Icon(Icons.bug_report, color: Colors.red, size: 24),
-                tooltip: 'Debug: Force Load Babaji Stories',
-              ),
+              // Debug button removed
               // Message Icon with Badge
               Stack(
                 children: [
@@ -1745,69 +1776,97 @@ class _HomeScreenState extends State<HomeScreen> {
               // Always show stories list with add story button
               Container(
                 height: 80,
-                child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: EdgeInsets.symmetric(
-                  horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 16,
+                child: Builder(
+                  builder: (context) {
+                    // Prepare list excluding current user's stories
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    final currentUserId = authProvider.userProfile?.id;
+
+                    // Find current user's stories (if any)
+                    List<Story> currentUserStories = [];
+                    if (currentUserId != null) {
+                      for (final entry in _groupedStories.entries) {
+                        if (entry.value.isNotEmpty && entry.value.first.authorId == currentUserId) {
+                          currentUserStories = entry.value;
+                          break;
+                        }
+                      }
+                    }
+
+                    // Filter: show other users if they have any story; exclude current user
+                    final List<String> displayUserIds = _groupedStories.keys.where((userId) {
+                      final stories = _groupedStories[userId]!;
+                      if (stories.isEmpty) return false;
+                      if (stories.first.authorId == currentUserId) return false;
+                      // at least one valid media story
+                      return stories.any((s) => (s.media.isNotEmpty && s.media != 'null'));
+                    }).toList()
+                    // Sort by most recent story time desc
+                    ..sort((a, b) {
+                      final aLatest = _groupedStories[a]!
+                          .map((s) => s.createdAt)
+                          .fold<DateTime>(DateTime.fromMillisecondsSinceEpoch(0), (prev, dt) => dt.isAfter(prev) ? dt : prev);
+                      final bLatest = _groupedStories[b]!
+                          .map((s) => s.createdAt)
+                          .fold<DateTime>(DateTime.fromMillisecondsSinceEpoch(0), (prev, dt) => dt.isAfter(prev) ? dt : prev);
+                      return bLatest.compareTo(aLatest);
+                    });
+
+                    return ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width < 600 ? 12 : 16,
+                      ),
+                      itemCount: displayUserIds.length + 1, // add story tile + others
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          // Add/Your Story tile
+                          return _buildAddStoryButton(currentUserStories: currentUserStories);
+                        }
+
+                        // Get user story section (excluding current user)
+                        final userId = displayUserIds[index - 1];
+                        final userStories = _groupedStories[userId]!;
+                        final firstStory = userStories.first; // Use first story for user info
+
+                        print('HomeScreen: Building story section for user ${firstStory.authorName}');
+                        print('HomeScreen: User has ${userStories.length} stories');
+
+                        // Determine display name - prioritize username for followed accounts
+                        String displayName = firstStory.authorUsername.isNotEmpty
+                            ? firstStory.authorUsername
+                            : (firstStory.authorName.isNotEmpty ? firstStory.authorName : 'Unknown User');
+
+                        // Ensure we have a valid media URL from the first story
+                        String mediaUrl = firstStory.media;
+                        if (mediaUrl.isEmpty || mediaUrl == 'null') {
+                          print('HomeScreen: Invalid media URL, using default');
+                          mediaUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=Story';
+                        }
+
+                        return StoryWidget(
+                          storyId: userId, // Use userId as storyId for the section
+                          userId: firstStory.authorId,
+                          userName: displayName,
+                          userImage: firstStory.authorAvatar != null && firstStory.authorAvatar!.isNotEmpty 
+                              ? firstStory.authorAvatar 
+                              : null,
+                          storyImage: mediaUrl,
+                          isViewed: false,
+                          currentUserId: authProvider.userProfile?.id,
+                          storyType: firstStory.type,
+                          onTap: () {
+                            // Open story viewer with all stories from this user
+                            print('Opening story section for user: ${firstStory.authorName}');
+                            print('User has ${userStories.length} stories to view');
+                            _openStoryViewerForUser(userId, userStories);
+                          },
+                        );
+                      },
+                    );
+                  },
                 ),
-                itemCount: _groupedStories.length + 1, // User story sections + add story button
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    // Add Story Button
-                    return _buildAddStoryButton();
-                  }
-                  
-                  // Get user story section
-                  final userId = _groupedStories.keys.elementAt(index - 1);
-                  final userStories = _groupedStories[userId]!;
-                  final firstStory = userStories.first; // Use first story for user info
-                  
-                  print('HomeScreen: Building story section for user ${firstStory.authorName}');
-                  print('HomeScreen: User has ${userStories.length} stories');
-                  
-                  // Check if this is the current user's story
-                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                  final isCurrentUser = authProvider.userProfile != null && 
-                                      firstStory.authorId == authProvider.userProfile!.id;
-                  
-                  // Determine display name - prioritize username for followed accounts
-                  String displayName;
-                  if (isCurrentUser) {
-                    displayName = 'Your Story';
-                  } else {
-                    // Show username for followed accounts to make it clear whose story it is
-                    displayName = firstStory.authorUsername.isNotEmpty ? 
-                                 firstStory.authorUsername : 
-                                 firstStory.authorName.isNotEmpty ? 
-                                 firstStory.authorName : 'Unknown User';
-                  }
-                  
-                  // Ensure we have a valid media URL from the first story
-                  String mediaUrl = firstStory.media;
-                  if (mediaUrl.isEmpty || mediaUrl == 'null') {
-                    print('HomeScreen: Invalid media URL, using default');
-                    mediaUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=Story';
-                  }
-                  
-                  return StoryWidget(
-                    storyId: userId, // Use userId as storyId for the section
-                    userId: firstStory.authorId,
-                    userName: displayName, // Use the determined display name
-                    userImage: firstStory.authorAvatar,
-                    storyImage: mediaUrl,
-                    isViewed: false, // Will be updated based on view status
-                    currentUserId: authProvider.userProfile?.id, // Pass current user ID
-                    storyType: firstStory.type, // Pass story type for video indicator
-                    onTap: () {
-                      // Open story viewer with all stories from this user
-                      print('Opening story section for user: ${firstStory.authorName}');
-                      print('User has ${userStories.length} stories to view');
-                      _openStoryViewerForUser(userId, userStories);
-                    },
-                  );
-                },
               ),
-            ),
           ],
         ),
       ),
@@ -1869,7 +1928,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
-  Widget _buildAddStoryButton() {
+  Widget _buildAddStoryButton({List<Story> currentUserStories = const []}) {
     // Get screen dimensions for responsive design
     final screenWidth = MediaQuery.of(context).size.width;
     
@@ -1891,53 +1950,154 @@ class _HomeScreenState extends State<HomeScreen> {
       spacing = 7;
     }
     
+    // Current user's avatar (used for both states)
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    String userAvatarUrl = '';
+    
+    if (authProvider.userProfile?.profileImageUrl != null && 
+        authProvider.userProfile!.profileImageUrl!.isNotEmpty &&
+        authProvider.userProfile!.profileImageUrl != 'null') {
+      userAvatarUrl = authProvider.userProfile!.profileImageUrl!;
+      print('HomeScreen: Using user DP URL: $userAvatarUrl');
+    } else {
+      // Try to refresh DP if missing
+      print('HomeScreen: DP URL missing, attempting to refresh');
+      authProvider.refreshUserDP();
+      userAvatarUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=DP';
+    }
+    
     return Container(
       width: containerWidth,
       margin: EdgeInsets.only(right: screenWidth < 600 ? 8 : 12),
       child: Column(
         mainAxisSize: MainAxisSize.min, // Prevent overflow
         children: [
-          // Add Story Circle
+          // Add/Your Story Circle
           GestureDetector(
             onTap: () {
-              _navigateToStoryUpload();
+              if (currentUserStories.isNotEmpty) {
+                // Open viewer for own stories
+                final first = currentUserStories.first;
+                _openStoryViewerForUser(first.authorId, currentUserStories);
+              } else {
+                _navigateToStoryUpload();
+              }
             },
-            child: Container(
-              width: storySize,
-              height: storySize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [
-                    AppTheme.primaryColor,
-                    AppTheme.secondaryColor,
-                    AppTheme.accentColor,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Ring + Avatar
+                Container(
+                  width: storySize,
+                  height: storySize,
+                  padding: currentUserStories.isNotEmpty ? const EdgeInsets.all(2) : EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    // Show gradient ring only when story exists
+                    gradient: currentUserStories.isNotEmpty
+                        ? const LinearGradient(
+                            colors: AppTheme.primaryGradient,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                  ),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                    ),
+                    child: ClipOval(
+                      child: CachedNetworkImage(
+                        imageUrl: userAvatarUrl,
+                        width: storySize,
+                        height: storySize,
+                        fit: BoxFit.cover,
+                        memCacheWidth: (storySize * MediaQuery.of(context).devicePixelRatio).round(),
+                        memCacheHeight: (storySize * MediaQuery.of(context).devicePixelRatio).round(),
+                        httpHeaders: {
+                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        },
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                              ),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) {
+                          print('AddStoryButton: Error loading DP: $error for URL: $url');
+                          return Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.primaryColor.withOpacity(0.1),
+                                  AppTheme.primaryColor.withOpacity(0.2),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.person,
+                              color: AppTheme.primaryColor,
+                              size: storySize * 0.4,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              child: Container(
-                margin: EdgeInsets.all(screenWidth < 600 ? 2 : 3),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.transparent,
+                // Always show add badge; tapping it opens upload flow
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: GestureDetector(
+                    onTap: _navigateToStoryUpload,
+                    child: Container(
+                      width: screenWidth < 600 ? 20 : 22,
+                      height: screenWidth < 600 ? 20 : 22,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: AppTheme.primaryGradient,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.add,
+                          size: screenWidth < 600 ? 14 : 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                child: Icon(
-                  Icons.add,
-                  color: AppTheme.primaryColor,
-                  size: screenWidth < 600 ? 24 : 30,
-                ),
-              ),
+              ],
             ),
           ),
           
           SizedBox(height: spacing),
           
-          // Add Story Text - Use Flexible to prevent overflow
+          // Label - Use Flexible to prevent overflow
           Flexible(
             child: Text(
-              'Add Story',
+              'Your Story',
               style: TextStyle(
                 fontSize: fontSize,
                 color: AppTheme.textPrimary,
@@ -2404,13 +2564,27 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               
+              // Reels
+              _buildNavItem(
+                icon: Icons.video_library,
+                label: 'Reels',
+                isSelected: false,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ReelsScreen(),
+                    ),
+                  );
+                },
+              ),
+              
               // Live Streaming
               _buildNavItem(
                 icon: Icons.videocam,
                 label: 'Live Stream',
                 isSelected: false,
                 onTap: () {
-                  // Navigate to live streaming options
                   Navigator.push(
                     context,
                     MaterialPageRoute(

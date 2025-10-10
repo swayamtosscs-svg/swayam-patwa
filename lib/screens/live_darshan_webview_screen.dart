@@ -1532,7 +1532,8 @@ Page resource error:
                         ),
                       );
                     },
-                    icon: const Icon(Icons.bug_report),
+                    // removed debug bug icon
+                    icon: const Icon(Icons.close, color: Colors.transparent),
                     label: const Text('Debug Info'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange,

@@ -19,6 +19,7 @@ import 'screens/home_screen.dart';
 import 'screens/baba_pages_screen.dart';
 import 'screens/live_stream_screen.dart';
 import 'screens/profile_edit_screen.dart';
+import 'screens/story_upload_screen.dart';
 import 'widgets/dp_widget.dart';
 
 class ProfileUI extends StatefulWidget {
@@ -194,23 +195,81 @@ class _ProfileUIState extends State<ProfileUI> {
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                                 child: Column(
                                   children: [
-                                    // Avatar with DP upload functionality
-                                    DPWidget(
-                                      currentImageUrl: user.profileImageUrl,
-                                      userId: user.id,
-                                      token: auth.authToken ?? '',
-                                      userName: user.fullName, // Pass user name for default avatar
-                                      onImageChanged: (String newImageUrl) async {
-                                        print('ProfileUI: DP changed to: $newImageUrl');
-                                        // Update the user profile with new image URL
-                                        final updatedUser = user.copyWith(
-                                          profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
-                                        );
-                                        auth.updateLocalUserProfile(updatedUser);
-                                      },
-                                      size: 88, // 44 * 2 for radius to diameter
-                                      borderColor: Colors.white,
-                                      showEditButton: true,
+                                    // Avatar with story add overlay; DP editing moved to Edit Profile
+                                    Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Container(
+                                          width: 96,
+                                          height: 96,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: LinearGradient(
+                                              colors: [Color(0xFF00C853), Color(0xFF00E676)],
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Container(
+                                              width: 92,
+                                              height: 92,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: DPWidget(
+                                                  currentImageUrl: user.profileImageUrl,
+                                                  userId: user.id,
+                                                  token: auth.authToken ?? '',
+                                                  userName: user.fullName,
+                                                  onImageChanged: (String newImageUrl) async {
+                                                    final updatedUser = user.copyWith(
+                                                      profileImageUrl: newImageUrl.isEmpty ? null : newImageUrl,
+                                                    );
+                                                    auth.updateLocalUserProfile(updatedUser);
+                                                  },
+                                                  size: 88,
+                                                  borderColor: Colors.white,
+                                                  showEditButton: false,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          bottom: 0,
+                                          right: 0,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              final token = auth.authToken;
+                                              if (token == null || token.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Please login to add a story')),
+                                                );
+                                                return;
+                                              }
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => StoryUploadScreen(token: token),
+                                                ),
+                                              );
+                                            },
+                                            child: Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: const Color(0xFF00C853), width: 3),
+                                              ),
+                                              child: const Center(
+                                                child: Icon(Icons.add, color: Color(0xFF00C853), size: 18),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 12),
 

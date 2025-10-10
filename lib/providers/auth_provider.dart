@@ -8,7 +8,9 @@ import '../services/google_auth_service.dart';
 import '../models/post_model.dart'; // Fixed import path
 import '../models/message_model.dart';
 import '../services/notification_service.dart';
+import '../services/dp_service.dart';
 import 'dart:io';
+import 'dart:convert';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -67,8 +69,27 @@ class AuthProvider extends ChangeNotifier {
         print('AuthProvider: Found stored token, attempting to restore session');
         _authToken = storedToken;
         
-        // Try to load user profile with stored token
-        await _loadUserProfile();
+        // First, try to load cached user profile for immediate display
+        await _loadCachedUserProfile();
+        
+        // Then try to load fresh user profile from API in background
+        _loadUserProfile().then((_) {
+          // Update cached profile with fresh data
+          _saveCachedUserProfile();
+          notifyListeners();
+        }).catchError((e) {
+          print('AuthProvider: Failed to load fresh profile, using cached: $e');
+          // Even if profile loading fails, try to load DP if missing
+          if (_userProfile != null && 
+              (_userProfile!.profileImageUrl == null || 
+               _userProfile!.profileImageUrl!.isEmpty || 
+               _userProfile!.profileImageUrl == 'null')) {
+            _loadUserDP().then((_) {
+              _saveCachedUserProfile();
+              notifyListeners();
+            });
+          }
+        });
         
         if (_userProfile != null) {
           _isAuthenticated = true;
@@ -101,9 +122,59 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _clearAuthToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
+    await prefs.remove('cached_user_profile'); // Clear cached profile too
     _authToken = null;
     _userProfile = null;
     _isAuthenticated = false; // Ensure authentication state is cleared
+  }
+
+  /// Save user profile to local cache for persistence
+  Future<void> _saveCachedUserProfile() async {
+    if (_userProfile == null) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final profileJson = {
+        'id': _userProfile!.id,
+        'name': _userProfile!.name,
+        'email': _userProfile!.email,
+        'username': _userProfile!.username,
+        'profileImageUrl': _userProfile!.profileImageUrl,
+        'bio': _userProfile!.bio,
+        'website': _userProfile!.website,
+        'location': _userProfile!.location,
+        'selectedReligion': _userProfile!.selectedReligion?.toString().split('.').last,
+        'isPrivate': _userProfile!.isPrivate,
+        'followersCount': _userProfile!.followersCount,
+        'followingCount': _userProfile!.followingCount,
+        'postsCount': _userProfile!.postsCount,
+        'isVerified': _userProfile!.isVerified,
+        'createdAt': _userProfile!.createdAt.toIso8601String(),
+        'lastActive': _userProfile!.lastActive.toIso8601String(),
+      };
+      
+      await prefs.setString('cached_user_profile', jsonEncode(profileJson));
+      print('AuthProvider: User profile cached successfully');
+    } catch (e) {
+      print('AuthProvider: Error caching user profile: $e');
+    }
+  }
+
+  /// Load user profile from local cache
+  Future<void> _loadCachedUserProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedProfileJson = prefs.getString('cached_user_profile');
+      
+      if (cachedProfileJson != null && cachedProfileJson.isNotEmpty) {
+        final profileData = jsonDecode(cachedProfileJson) as Map<String, dynamic>;
+        _userProfile = UserModel.fromJson(profileData);
+        print('AuthProvider: Cached user profile loaded: ${_userProfile?.name}');
+        print('AuthProvider: Cached DP URL: ${_userProfile?.profileImageUrl}');
+      }
+    } catch (e) {
+      print('AuthProvider: Error loading cached user profile: $e');
+    }
   }
 
   /// Handle successful login
@@ -132,6 +203,9 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = true;
     print('AuthProvider: Authentication status set to true');
     
+    // Save profile to cache for persistence
+    await _saveCachedUserProfile();
+    
     notifyListeners();
     print('AuthProvider: Notified listeners of state change');
   }
@@ -146,12 +220,18 @@ class AuthProvider extends ChangeNotifier {
         // Convert response to UserModel using the new API structure
         _userProfile = _createUserFromRGramResponse(response['data']['user']);
         print('Profile loaded successfully from R-Gram API');
+        
+        // Try to load DP separately if profile doesn't have it
+        await _loadUserDP();
       } else {
         // Fallback to old API if new one fails
         final fallbackResponse = await ApiService.getProfile('current', _authToken);
         if (fallbackResponse['success'] == true) {
           _userProfile = _createUserFromResponse(fallbackResponse['data']);
           print('Profile loaded successfully from fallback API');
+          
+          // Try to load DP separately if profile doesn't have it
+          await _loadUserDP();
         }
       }
     } catch (e) {
@@ -162,10 +242,47 @@ class AuthProvider extends ChangeNotifier {
         if (fallbackResponse['success'] == true) {
           _userProfile = _createUserFromResponse(fallbackResponse['data']);
           print('Profile loaded successfully from fallback API after error');
+          
+          // Try to load DP separately if profile doesn't have it
+          await _loadUserDP();
         }
       } catch (fallbackError) {
         print('Fallback API also failed: $fallbackError');
       }
+    }
+  }
+
+  /// Load user DP separately using DPService
+  Future<void> _loadUserDP() async {
+    if (_userProfile == null || _authToken == null) return;
+    
+    // Only load DP if profile doesn't already have a valid DP URL
+    if (_userProfile!.profileImageUrl == null || 
+        _userProfile!.profileImageUrl!.isEmpty || 
+        _userProfile!.profileImageUrl == 'null') {
+      
+      try {
+        print('AuthProvider: Loading DP for user ${_userProfile!.id}');
+        final dpResponse = await DPService.retrieveDP(
+          userId: _userProfile!.id,
+          token: _authToken!,
+        );
+        
+        if (dpResponse['success'] == true && dpResponse['data'] != null) {
+          final dpUrl = dpResponse['data']['dpUrl'] as String;
+          print('AuthProvider: DP loaded successfully: $dpUrl');
+          
+          // Update user profile with DP URL
+          _userProfile = _userProfile!.copyWith(profileImageUrl: dpUrl);
+          print('AuthProvider: User profile updated with DP URL');
+        } else {
+          print('AuthProvider: No DP found for user: ${dpResponse['message']}');
+        }
+      } catch (e) {
+        print('AuthProvider: Error loading DP: $e');
+      }
+    } else {
+      print('AuthProvider: User already has DP URL: ${_userProfile!.profileImageUrl}');
     }
   }
 
@@ -554,6 +671,16 @@ class AuthProvider extends ChangeNotifier {
   Future<void> refreshUserProfile() async {
     if (_authToken != null) {
       await _loadUserProfile();
+      await _saveCachedUserProfile();
+      notifyListeners();
+    }
+  }
+
+  /// Refresh user DP specifically
+  Future<void> refreshUserDP() async {
+    if (_authToken != null && _userProfile != null) {
+      await _loadUserDP();
+      await _saveCachedUserProfile();
       notifyListeners();
     }
   }
@@ -574,6 +701,8 @@ class AuthProvider extends ChangeNotifier {
   /// Update local user profile (for immediate UI updates)
   void updateLocalUserProfile(UserModel updatedUser) {
     _userProfile = updatedUser;
+    // Save updated profile to cache
+    _saveCachedUserProfile();
     notifyListeners();
   }
 

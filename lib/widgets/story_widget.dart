@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/custom_http_client.dart';
 // Removed Cloudinary dependency
@@ -71,14 +72,19 @@ class StoryWidget extends StatelessWidget {
                   height: storySize,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: isViewed
-                        ? null
-                        : const LinearGradient(
-                            colors: AppTheme.primaryGradient,
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    color: isViewed ? Colors.grey.withOpacity(0.3) : null,
+                    // Only show story circle gradient when there's actually a story
+                    gradient: (storyImage != null && storyImage!.isNotEmpty && storyImage != 'null')
+                        ? (isViewed
+                            ? null
+                            : const LinearGradient(
+                                colors: AppTheme.primaryGradient,
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ))
+                        : null,
+                    color: (storyImage != null && storyImage!.isNotEmpty && storyImage != 'null')
+                        ? (isViewed ? Colors.grey.withOpacity(0.3) : null)
+                        : null,
                   ),
                   child: Container(
                     margin: EdgeInsets.all(screenWidth < 600 ? 2 : 3),
@@ -86,17 +92,13 @@ class StoryWidget extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: Colors.white,
                     ),
-                    child: storyImage != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(storySize / 2),
-                            child: _buildStoryMedia(storyImage!, storyType),
-                          )
-                        : _buildDefaultStoryContent(),
+                    child: _buildStoryContent(context),
                   ),
                 ),
                 
-                // Video indicator overlay
-                if (storyType?.toLowerCase() == 'video')
+                // Video indicator overlay - only show when there's a story
+                if (storyType?.toLowerCase() == 'video' && 
+                    storyImage != null && storyImage!.isNotEmpty && storyImage != 'null')
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -146,6 +148,98 @@ class StoryWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildStoryContent(BuildContext context) {
+    // Get screen dimensions for responsive design
+    final screenWidth = MediaQuery.of(context).size.width;
+    double storySize = 70;
+    if (screenWidth < 600) {
+      storySize = 60;
+    } else if (screenWidth < 1200) {
+      storySize = 65;
+    }
+    
+    // Always show user's DP as the main content
+    Widget mainContent;
+    
+    if (userImage != null && userImage!.isNotEmpty && userImage != 'null') {
+      // Show user's DP as the main content
+      mainContent = ClipRRect(
+        borderRadius: BorderRadius.circular(storySize / 2),
+        child: _buildUserDP(userImage!),
+      );
+    } else {
+      // Fallback to default content if no DP
+      mainContent = _buildDefaultStoryContent();
+    }
+    
+    // If we have a story, show it as an overlay with DP in background
+    if (storyImage != null && storyImage!.isNotEmpty && storyImage != 'null') {
+      return Stack(
+        children: [
+          // User's DP as background (smaller)
+          Positioned(
+            top: storySize * 0.15,
+            left: storySize * 0.15,
+            child: Container(
+              width: storySize * 0.7,
+              height: storySize * 0.7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(storySize * 0.35),
+                child: userImage != null && userImage!.isNotEmpty && userImage != 'null'
+                    ? _buildUserDP(userImage!)
+                    : _buildDefaultStoryContent(),
+              ),
+            ),
+          ),
+          // Story image as main content
+          ClipRRect(
+            borderRadius: BorderRadius.circular(storySize / 2),
+            child: _buildStoryMedia(storyImage!, storyType),
+          ),
+        ],
+      );
+    }
+    
+    // If no story, just show DP without any overlay
+    return mainContent;
+  }
+
+  Widget _buildUserDP(String dpUrl) {
+    return CachedNetworkImage(
+      imageUrl: dpUrl,
+      fit: BoxFit.cover,
+      httpHeaders: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      placeholder: (context, url) => Container(
+        color: Colors.grey[200],
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+            ),
+          ),
+        ),
+      ),
+      errorWidget: (context, url, error) {
+        print('StoryWidget: Error loading user DP: $error for URL: $dpUrl');
+        return _buildDefaultStoryContent();
+      },
+      memCacheWidth: 200,
+      memCacheHeight: 200,
+    );
+  }
+
   Widget _buildStoryMedia(String mediaUrl, String? mediaType) {
     print('StoryWidget: Building media for URL: $mediaUrl, type: $mediaType');
     
@@ -182,34 +276,32 @@ class StoryWidget extends StatelessWidget {
   Widget _buildStoryImage(String imageUrl) {
     print('StoryWidget: Building image for URL: $imageUrl');
     
-    // Use Image.network for all URLs
-    return Image.network(
-      imageUrl,
+    // Use CachedNetworkImage for better performance
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
       fit: BoxFit.cover,
-      headers: {
+      httpHeaders: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Container(
-          color: Colors.grey[200],
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-              ),
+      placeholder: (context, url) => Container(
+        color: Colors.grey[200],
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
             ),
           ),
-        );
+        ),
+      ),
+      errorWidget: (context, url, error) {
+        print('StoryWidget: CachedNetworkImage error: $error for URL: $imageUrl');
+        return _buildDefaultStoryContent();
       },
-      errorBuilder: (context, error, stackTrace) {
-        print('StoryWidget: Image.network error: $error for URL: $imageUrl');
-        // Try alternative loading method
-        return _buildAlternativeImage(imageUrl);
-      },
+      memCacheWidth: 200, // Optimize memory usage
+      memCacheHeight: 200,
     );
   }
   
@@ -263,16 +355,16 @@ class StoryWidget extends StatelessWidget {
         shape: BoxShape.circle,
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF6366F1).withOpacity(0.1),
-            const Color(0xFF8B5CF6).withOpacity(0.1),
+            AppTheme.primaryColor.withOpacity(0.1),
+            AppTheme.primaryColor.withOpacity(0.2),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: const Icon(
-        Icons.self_improvement,
-        color: Color(0xFF6366F1),
+      child: Icon(
+        Icons.person,
+        color: AppTheme.primaryColor,
         size: 30,
       ),
     );

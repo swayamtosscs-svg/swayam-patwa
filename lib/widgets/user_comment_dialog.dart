@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import '../models/user_comment_model.dart';
 import '../services/user_comment_service.dart';
+import '../services/dp_service.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
 import '../utils/responsive_utils.dart';
@@ -233,6 +234,11 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
       backgroundColor: Colors.transparent,
       child: Container(
         height: MediaQuery.of(context).size.height * 0.8,
+        width: MediaQuery.of(context).size.width * 0.95,
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
         decoration: BoxDecoration(
           image: const DecorationImage(
             image: AssetImage('assets/images/Signup page bg.jpeg'),
@@ -726,31 +732,12 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
         children: [
           Row(
             children: [
-              // Enhanced user avatar with better styling
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isOwnComment 
-                        ? [AppTheme.primaryColor, AppTheme.primaryColor.withOpacity(0.8)]
-                        : [Colors.blue[400]!, Colors.purple[400]!],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Center(
-                  child: Text(
-                    displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                ),
+              // Real user avatar with DP
+              _buildUserAvatar(
+                userId: comment.userId,
+                displayName: displayName,
+                isOwnComment: isOwnComment,
+                token: authProvider.authToken ?? '',
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -759,13 +746,16 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          displayName,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                            fontFamily: 'Poppins',
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                              fontFamily: 'Poppins',
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (isOwnComment) ...[
@@ -802,6 +792,7 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
                 ),
               ),
               if (isOwnComment) ...[
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => _deleteComment(comment),
                   child: Container(
@@ -833,6 +824,8 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
               fontFamily: 'Poppins',
               height: 1.5,
             ),
+            overflow: TextOverflow.visible,
+            softWrap: true,
           ),
         ],
       ),
@@ -878,5 +871,131 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
     
     // Check if this comment belongs to the current user
     return comment.userId == currentUserId;
+  }
+
+  Widget _buildUserAvatar({
+    required String userId,
+    required String displayName,
+    required bool isOwnComment,
+    required String token,
+  }) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: DPService.retrieveDP(userId: userId, token: token),
+      builder: (context, snapshot) {
+        // If we have a successful response with DP URL, show the real DP
+        if (snapshot.hasData && 
+            snapshot.data!['success'] == true && 
+            snapshot.data!['data'] != null &&
+            snapshot.data!['data']['dpUrl'] != null) {
+          
+          final dpUrl = snapshot.data!['data']['dpUrl'] as String;
+          
+          return Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isOwnComment 
+                    ? AppTheme.primaryColor.withOpacity(0.5)
+                    : Colors.grey.withOpacity(0.3),
+                width: 2,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.network(
+                dpUrl,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isOwnComment 
+                            ? [AppTheme.primaryColor, AppTheme.primaryColor.withOpacity(0.8)]
+                            : [Colors.blue[400]!, Colors.purple[400]!],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to gradient avatar if image fails to load
+                  return Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isOwnComment 
+                            ? [AppTheme.primaryColor, AppTheme.primaryColor.withOpacity(0.8)]
+                            : [Colors.blue[400]!, Colors.purple[400]!],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Center(
+                      child: Text(
+                        displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+        
+        // Fallback to gradient avatar if no DP is found or API fails
+        return Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isOwnComment 
+                  ? [AppTheme.primaryColor, AppTheme.primaryColor.withOpacity(0.8)]
+                  : [Colors.blue[400]!, Colors.purple[400]!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Center(
+            child: Text(
+              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Poppins',
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

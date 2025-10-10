@@ -9,6 +9,7 @@ class Story {
   final String media;
   final String mediaId; // Add media ID for retrieval
   final String type;
+  final String? caption; // Add caption/description field
   final List<String> mentions;
   final List<String> hashtags;
   final bool isActive;
@@ -27,6 +28,7 @@ class Story {
     required this.media,
     required this.mediaId,
     required this.type,
+    this.caption, // Add caption parameter
     required this.mentions,
     required this.hashtags,
     required this.isActive,
@@ -53,6 +55,7 @@ class Story {
       media: json['media'] ?? '',
       mediaId: json['mediaId'] ?? json['_id'] ?? '', // Use media ID if available, fallback to story ID
       type: json['type'] ?? '',
+      caption: json['caption'] ?? json['description'], // Add caption field
       mentions: List<String>.from(json['mentions'] ?? []),
       hashtags: List<String>.from(json['hashtags'] ?? []),
       isActive: json['isActive'] ?? false,
@@ -75,6 +78,7 @@ class Story {
       },
       'media': media,
       'type': type,
+      'caption': caption, // Add caption field
       'mentions': mentions,
       'hashtags': hashtags,
       'isActive': isActive,
@@ -95,6 +99,7 @@ class Story {
     String? media,
     String? mediaId,
     String? type,
+    String? caption, // Add caption parameter
     List<String>? mentions,
     List<String>? hashtags,
     bool? isActive,
@@ -113,6 +118,7 @@ class Story {
       media: media ?? this.media,
       mediaId: mediaId ?? this.mediaId,
       type: type ?? this.type,
+      caption: caption ?? this.caption, // Add caption field
       mentions: mentions ?? this.mentions,
       hashtags: hashtags ?? this.hashtags,
       isActive: isActive ?? this.isActive,

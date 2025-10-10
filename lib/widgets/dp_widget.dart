@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,6 +7,10 @@ import 'package:image_picker/image_picker.dart';
 import '../services/dp_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/avatar_utils.dart';
+import '../screens/fullscreen_dp_viewer_screen.dart';
+import '../models/story_model.dart';
+import '../services/story_service.dart';
+import '../screens/story_viewer_screen.dart';
 
 class DPWidget extends StatefulWidget {
   final String? currentImageUrl;
@@ -33,16 +38,20 @@ class DPWidget extends StatefulWidget {
   State<DPWidget> createState() => _DPWidgetState();
 }
 
-class _DPWidgetState extends State<DPWidget> {
+class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin {
   String? _localImageUrl;
   String? _fileName;
   bool _isLoading = false;
+  bool _hasActiveStory = false;
+  List<Story> _stories = [];
+  AnimationController? _ringController;
 
   @override
   void initState() {
     super.initState();
     _localImageUrl = widget.currentImageUrl;
     _loadDP();
+    _initStoryState();
   }
 
   @override
@@ -53,6 +62,49 @@ class _DPWidgetState extends State<DPWidget> {
       _localImageUrl = widget.currentImageUrl;
       // Reload DP to get the latest image
       _loadDP();
+    }
+    if (oldWidget.userId != widget.userId || oldWidget.token != widget.token) {
+      _initStoryState();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ringController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initStoryState() async {
+    if (widget.token.isEmpty) return;
+    try {
+      final fetched = await StoryService.getUserStories(widget.userId, token: widget.token, page: 1, limit: 20);
+      bool active = false;
+      final now = DateTime.now();
+      for (final s in fetched) {
+        if (s.isActive && s.expiresAt.isAfter(now)) {
+          active = true;
+          break;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _stories = fetched;
+        _hasActiveStory = active;
+      });
+      _updateRingAnimation();
+    } catch (e) {
+      print('DPWidget: Error loading stories: $e');
+    }
+  }
+
+  void _updateRingAnimation() {
+    if (_hasActiveStory) {
+      _ringController ??= AnimationController(vsync: this, duration: const Duration(seconds: 4));
+      if (!_ringController!.isAnimating) {
+        _ringController!.repeat();
+      }
+    } else {
+      _ringController?.stop();
     }
   }
 
@@ -450,8 +502,91 @@ class _DPWidgetState extends State<DPWidget> {
     return Stack(
       children: [
         // Main DP container
+        if (_hasActiveStory && _ringController != null)
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _ringController!,
+              builder: (context, child) {
+                return Center(
+                  child: Transform.rotate(
+                    angle: _ringController!.value * 2 * math.pi,
+                    child: Container(
+                      width: widget.size + 12,
+                      height: widget.size + 12,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: SweepGradient(
+                          colors: [
+                            Color(0xFFFF5E7E),
+                            Color(0xFFFFC371),
+                            Color(0xFF8B5CF6),
+                            Color(0xFFFF5E7E),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
         GestureDetector(
-          onTap: _isLoading ? null : _pickAndUploadImage,
+          onTap: _isLoading
+              ? null
+              : () {
+                  if (widget.showEditButton) {
+                    _pickAndUploadImage();
+                  } else {
+                    if (_hasActiveStory && _stories.isNotEmpty) {
+                      final initialIndex = 0;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StoryViewerScreen(
+                            story: _stories[initialIndex],
+                            allStories: _stories,
+                            initialIndex: initialIndex,
+                          ),
+                        ),
+                      );
+                    } else {
+                      final hasValidImage = _localImageUrl != null &&
+                          _localImageUrl!.isNotEmpty &&
+                          AvatarUtils.isValidAvatarUrl(_localImageUrl);
+                      if (hasValidImage) {
+                        final absoluteUrl =
+                            AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => FullscreenDPViewerScreen(
+                              imageUrl: absoluteUrl,
+                              title: widget.userName ?? 'Profile photo',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+          onLongPress: _isLoading
+              ? null
+              : () {
+                  final hasValidImage = _localImageUrl != null &&
+                      _localImageUrl!.isNotEmpty &&
+                      AvatarUtils.isValidAvatarUrl(_localImageUrl);
+                  if (hasValidImage) {
+                    final absoluteUrl =
+                        AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FullscreenDPViewerScreen(
+                          imageUrl: absoluteUrl,
+                          title: widget.userName ?? 'Profile photo',
+                        ),
+                      ),
+                    );
+                  }
+                },
           child: Container(
             width: widget.size,
             height: widget.size,
@@ -490,35 +625,38 @@ class _DPWidgetState extends State<DPWidget> {
                     ),
                   )
                 : _localImageUrl != null && _localImageUrl!.isNotEmpty && AvatarUtils.isValidAvatarUrl(_localImageUrl)
-                    ? Image.network(
-                        AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          print('DPWidget: Error loading image: $error');
-                          print('DPWidget: Failed URL: ${AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!)}');
-                          return _buildDefaultAvatar();
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  widget.borderColor.withOpacity(0.1),
-                                  widget.borderColor.withOpacity(0.3),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                    ? Hero(
+                        tag: 'dp_${AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!)}',
+                        child: Image.network(
+                          AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('DPWidget: Error loading image: $error');
+                            print('DPWidget: Failed URL: ${AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!)}');
+                            return _buildDefaultAvatar();
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    widget.borderColor.withOpacity(0.1),
+                                    widget.borderColor.withOpacity(0.3),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
                               ),
-                            ),
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                color: AppTheme.primaryColor,
-                                strokeWidth: 2,
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppTheme.primaryColor,
+                                  strokeWidth: 2,
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       )
                     : _buildDefaultAvatar(),
             ),

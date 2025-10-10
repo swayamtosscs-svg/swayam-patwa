@@ -61,6 +61,7 @@ class StoryService {
             media: _constructFullUrl(storyData['secureUrl'] ?? storyData['media'] ?? ''),
             mediaId: storyData['storyId'] ?? storyData['id'] ?? '',
             type: storyData['mediaType'] ?? storyData['type'] ?? 'image',
+            caption: storyData['caption'] ?? caption, // Include caption from upload
             mentions: List<String>.from(storyData['mentions'] ?? []),
             hashtags: List<String>.from(storyData['hashtags'] ?? []),
             isActive: storyData['isActive'] ?? true,
@@ -199,6 +200,7 @@ class StoryService {
                 media: _constructFullUrl(storyJson['media'] ?? ''),
                 mediaId: storyJson['id'] ?? '',
                 type: storyJson['type'] ?? 'image',
+                caption: storyJson['caption'] ?? storyJson['description'], // Include caption field
                 mentions: List<String>.from(storyJson['mentions'] ?? []),
                 hashtags: List<String>.from(storyJson['hashtags'] ?? []),
                 isActive: storyJson['isActive'] ?? true,

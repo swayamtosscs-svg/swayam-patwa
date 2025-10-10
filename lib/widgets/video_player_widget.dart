@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'fallback_video_player_widget.dart';
+import 'visibility_detector_widget.dart';
+import '../utils/video_manager.dart';
 
 class VideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
@@ -9,6 +11,7 @@ class VideoPlayerWidget extends StatefulWidget {
   final bool looping;
   final bool muted;
   final bool showControls;
+  final String? videoId; // Add video ID for tracking
 
   const VideoPlayerWidget({
     Key? key,
@@ -17,6 +20,7 @@ class VideoPlayerWidget extends StatefulWidget {
     this.looping = true,
     this.muted = false, // Changed default to false for audio
     this.showControls = true, // Added controls option
+    this.videoId, // Add video ID parameter
   }) : super(key: key);
 
   @override
@@ -33,11 +37,14 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   bool _isDisposed = false;
   bool _showControls = true;
   bool _useFallback = false;
+  final VideoManager _videoManager = VideoManager();
+  String get _videoId => widget.videoId ?? widget.videoUrl; // Use videoId or fallback to URL
 
   @override
   void initState() {
     super.initState();
     _showControls = widget.showControls;
+    _setupVideoManager();
     // Always initialize the player, regardless of autoPlay setting
     _initializePlayer();
   }
@@ -59,17 +66,48 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     super.dispose();
   }
 
+  void _setupVideoManager() {
+    _videoManager.setOnVideoStateChanged((videoId) {
+      if (!_isDisposed) {
+        if (videoId == _videoId) {
+          // This video should play
+          if (_isInitialized && !_isPlaying) {
+            print('VideoPlayerWidget: Playing video $_videoId');
+            player.play();
+          }
+        } else if (videoId != _videoId) {
+          // Another video is playing, pause this one
+          if (_isInitialized && _isPlaying) {
+            print('VideoPlayerWidget: Pausing video $_videoId (another video playing)');
+            player.pause();
+          }
+        } else if (videoId == null) {
+          // No video should play, pause this one
+          if (_isInitialized && _isPlaying) {
+            print('VideoPlayerWidget: Pausing video $_videoId (no video should play)');
+            player.pause();
+          }
+        }
+      }
+    });
+  }
+
   Future<void> _initializePlayer() async {
     try {
       print('VideoPlayerWidget: Initializing player for URL: ${widget.videoUrl}');
       
-      // Validate URL
+      // Validate URL or local file path
       if (widget.videoUrl.isEmpty) {
         throw Exception('Video URL is empty');
       }
-      
-      if (!widget.videoUrl.startsWith('http://') && !widget.videoUrl.startsWith('https://')) {
-        throw Exception('Invalid video URL format: ${widget.videoUrl}');
+
+      final bool isRemoteUrl = widget.videoUrl.startsWith('http://') || widget.videoUrl.startsWith('https://');
+      final bool isFileUrl = widget.videoUrl.startsWith('file://');
+      final bool isWindowsPath = RegExp(r'^[a-zA-Z]:\\').hasMatch(widget.videoUrl);
+      final bool isUnixPath = widget.videoUrl.startsWith('/');
+      final bool isLocalPath = isFileUrl || isWindowsPath || isUnixPath;
+      if (!(isRemoteUrl || isLocalPath)) {
+        throw Exception('Invalid video source: ${widget.videoUrl}');
       }
       
       player = Player();
@@ -120,7 +158,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
         
         if (widget.autoPlay) {
           print('VideoPlayerWidget: Starting autoplay...');
-          await player.play();
+          _videoManager.playVideo(_videoId);
         }
       }
     } catch (e) {
@@ -146,7 +184,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
         });
         
         if (widget.autoPlay) {
-          player.play();
+          _videoManager.playVideo(_videoId);
         }
       }
     } catch (e) {
@@ -174,11 +212,12 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     if (_isPlaying) {
       if (_isInitialized) {
         player.pause();
+        _videoManager.pauseCurrentVideo();
         print('VideoPlayerWidget: Pausing video');
       }
     } else {
       if (_isInitialized) {
-        player.play();
+        _videoManager.playVideo(_videoId);
         print('VideoPlayerWidget: Playing video');
       }
     }
@@ -281,80 +320,86 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       );
     }
 
-    return GestureDetector(
-      onTap: _togglePlayPause,
-      onDoubleTap: _toggleControls,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Stack(
-          children: [
-            // Video player
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Video(
-                controller: videoController,
-                controls: _showControls ? AdaptiveVideoControls : NoVideoControls,
-                fill: Colors.black,
+    return VisibilityDetectorWidget(
+      videoKey: _videoId,
+      onVisibilityChanged: (isVisible) {
+        _videoManager.updateVideoVisibility(_videoId, isVisible);
+      },
+      child: GestureDetector(
+        onTap: _togglePlayPause,
+        onDoubleTap: _toggleControls,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Stack(
+            children: [
+              // Video player
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Video(
+                  controller: videoController,
+                  controls: _showControls ? AdaptiveVideoControls : NoVideoControls,
+                  fill: Colors.black,
+                ),
               ),
-            ),
-            
-            // Custom controls overlay
-            if (_showControls)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.7),
-                        Colors.transparent,
+              
+              // Custom controls overlay
+              if (_showControls)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.7),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          onPressed: _togglePlayPause,
+                          icon: Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        onPressed: _togglePlayPause,
-                        icon: Icon(
-                          _isPlaying ? Icons.pause : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 32,
-                        ),
+                ),
+              
+              // Large play button overlay when not playing (only if showControls is true)
+              if (!_isPlaying && _isInitialized && _showControls)
+                Center(
+                  child: GestureDetector(
+                    onTap: _togglePlayPause,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        shape: BoxShape.circle,
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            
-            // Large play button overlay when not playing
-            if (!_isPlaying && _isInitialized)
-              Center(
-                child: GestureDetector(
-                  onTap: _togglePlayPause,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 48,
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 48,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
