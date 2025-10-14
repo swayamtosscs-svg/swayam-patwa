@@ -244,11 +244,6 @@ class _LiveStreamViewerScreenState extends State<LiveStreamViewerScreen> {
                 label: 'Likes',
               ),
               const SizedBox(width: 24),
-              _buildStatItem(
-                icon: Icons.share,
-                value: widget.room.shares.toString(),
-                label: 'Shares',
-              ),
             ],
           ),
           

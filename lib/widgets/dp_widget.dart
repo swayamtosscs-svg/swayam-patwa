@@ -2,8 +2,9 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-// import 'package:image_cropper/image_cropper.dart'; // Commented out for smaller APK
+import 'package:image_cropper/image_cropper.dart';
 import '../services/dp_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/avatar_utils.dart';
@@ -78,9 +79,23 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     if (widget.token.isEmpty) return;
     try {
       final fetched = await StoryService.getUserStories(widget.userId, token: widget.token, page: 1, limit: 20);
+      
+      // Debug: Verify that all fetched stories belong to the correct user
+      print('DPWidget: Fetched ${fetched.length} stories for user ${widget.userId}');
+      for (final story in fetched) {
+        print('DPWidget: Story ${story.id} - Author: ${story.authorId} (${story.authorName})');
+        if (story.authorId != widget.userId) {
+          print('DPWidget: WARNING - Story ${story.id} belongs to different user ${story.authorId}, expected ${widget.userId}');
+        }
+      }
+      
+      // Filter stories to ensure only stories from the correct user are shown
+      final filteredStories = fetched.where((story) => story.authorId == widget.userId).toList();
+      print('DPWidget: After filtering, ${filteredStories.length} stories remain for user ${widget.userId}');
+      
       bool active = false;
       final now = DateTime.now();
-      for (final s in fetched) {
+      for (final s in filteredStories) {
         if (s.isActive && s.expiresAt.isAfter(now)) {
           active = true;
           break;
@@ -88,7 +103,7 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       }
       if (!mounted) return;
       setState(() {
-        _stories = fetched;
+        _stories = filteredStories; // Use filtered stories instead of raw fetched stories
         _hasActiveStory = active;
       });
       _updateRingAnimation();
@@ -224,14 +239,18 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     print('DPWidget: Token available: ${widget.token.isNotEmpty}');
     print('DPWidget: User ID: ${widget.userId}');
 
+    // Show image source selection dialog
+    final ImageSource? source = await _showImageSourceDialog();
+    if (source == null) return;
+
     try {
-      print('DPWidget: Starting image picker');
+      print('DPWidget: Starting image picker with source: $source');
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 85,
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 90,
       );
 
       if (image != null) {
@@ -270,13 +289,96 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     }
   }
 
+  Future<ImageSource?> _showImageSourceDialog() async {
+    return await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Image Source'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: AppTheme.primaryColor),
+                title: const Text('Camera'),
+                subtitle: const Text('Take a new photo'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: AppTheme.primaryColor),
+                title: const Text('Gallery'),
+                subtitle: const Text('Choose from gallery'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _cropAndUploadImage(File imageFile) async {
     try {
-      // Image cropping disabled for smaller APK - upload directly
-      await _uploadImage(imageFile);
+      print('DPWidget: Starting image cropping');
+      
+      // Show cropping dialog
+      final CroppedFile? croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1), // Square crop for profile picture
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Profile Picture',
+            toolbarColor: AppTheme.primaryColor,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            backgroundColor: Colors.black,
+            activeControlsWidgetColor: AppTheme.primaryColor,
+            cropFrameColor: AppTheme.primaryColor,
+            cropGridColor: AppTheme.primaryColor.withOpacity(0.5),
+            cropFrameStrokeWidth: 2,
+            cropGridStrokeWidth: 1,
+            hideBottomControls: false,
+            showCropGrid: true,
+            statusBarColor: AppTheme.primaryColor,
+          ),
+          IOSUiSettings(
+            title: 'Crop Profile Picture',
+            doneButtonTitle: 'Done',
+            cancelButtonTitle: 'Cancel',
+            minimumAspectRatio: 1.0,
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPickerButtonHidden: true,
+            rotateButtonsHidden: false,
+            rotateClockwiseButtonHidden: false,
+            hidesNavigationBar: false,
+          ),
+        ],
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 90,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
+
+      if (croppedFile != null) {
+        print('DPWidget: Image cropped successfully: ${croppedFile.path}');
+        final croppedImageFile = File(croppedFile.path);
+        await _uploadImage(croppedImageFile);
+      } else {
+        print('DPWidget: Image cropping cancelled');
+        _showSnackBar('Image cropping cancelled', Colors.orange);
+      }
     } catch (e) {
       print('DPWidget: Error cropping image: $e');
       // If cropping fails, upload original image
+      _showSnackBar('Cropping failed, uploading original image', Colors.orange);
       await _uploadImage(imageFile);
     }
   }
@@ -539,6 +641,13 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
                     _pickAndUploadImage();
                   } else {
                     if (_hasActiveStory && _stories.isNotEmpty) {
+                      // Debug: Verify stories before opening story viewer
+                      print('DPWidget: Opening story viewer for user ${widget.userId}');
+                      print('DPWidget: Stories to show: ${_stories.length}');
+                      for (final story in _stories) {
+                        print('DPWidget: Story ${story.id} - Author: ${story.authorId} (${story.authorName})');
+                      }
+                      
                       final initialIndex = 0;
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -686,7 +795,7 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
                   ],
                 ),
                 child: const Icon(
-                  Icons.camera_alt,
+                  Icons.add_a_photo,
                   color: Colors.white,
                   size: 16,
                 ),

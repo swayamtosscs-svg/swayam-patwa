@@ -21,6 +21,7 @@ import '../widgets/app_loader.dart';
 import '../widgets/image_slider_widget.dart';
 import '../widgets/dp_widget.dart';
 import '../widgets/skeleton_loader.dart';
+import '../widgets/smooth_loading_widget.dart';
 import '../widgets/notification_bell_widget.dart';
 import '../utils/app_theme.dart';
 import '../utils/font_theme.dart';
@@ -33,6 +34,7 @@ import '../screens/reels_screen.dart';
 import '../services/story_service.dart';
 // Removed local story service import to prevent showing old local stories
 import '../services/feed_service.dart';
+import '../services/realtime_feed_service.dart';
 import '../services/chat_service.dart';
 import '../models/chat_thread_model.dart';
 import '../screens/profile_screen.dart'; // Added import for ProfileScreen
@@ -57,17 +59,21 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Story> _stories = [];
   Map<String, List<Story>> _groupedStories = {}; // Grouped stories by user
+  List<String> _followedUserIds = []; // Store followed user IDs for story filtering
   List<Post> _posts = []; // Cache posts to avoid regeneration
   bool _isLoadingStories = false;
   bool _isLoadingPosts = false;
   bool _isRefreshing = false; // Single loading state for refresh operations
+  bool _hasNewPosts = false; // Track if there are new posts available
+  int _newPostsCount = 0; // Count of new posts
+  bool _hasMorePosts = true; // Track if there are more posts to load
   final ScrollController _scrollController = ScrollController();
   int _currentPostIndex = 0;
-  static const int _postsPerPage = 6; // Reduced for faster initial loading
-  static const int _maxPostsInMemory = 20; // Reduced memory usage
+  static const int _postsPerPage = 4; // Further reduced for faster loading
+  static const int _maxPostsInMemory = 15; // Further reduced memory usage
   
   // Search overlay state
   bool _isSearchOverlayVisible = false;
@@ -76,13 +82,21 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSearchLoading = false;
   bool _hasSearched = false;
   String _lastSearchQuery = '';
+  
+  // Lifecycle state debouncing
+  AppLifecycleState? _lastLifecycleState;
+  DateTime? _lastLifecycleChangeTime;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // Add lifecycle observer
     _clearLocalStories(); // Clear any old local stories first
     _loadInitialData(); // Load stories and posts in parallel
     _scrollController.addListener(_onScroll);
+    
+    // Start real-time feed service
+    _startRealtimeFeedService();
     
     // Force load Babaji stories on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,12 +104,20 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
   
-  // Ensure Babaji stories are visible
+  // Ensure Babaji stories are visible ONLY if user is following Babaji
   Future<void> _ensureBabajiStoriesVisible() async {
-    print('=== ENSURING BABAJI STORIES VISIBLE ===');
+    print('=== ENSURING BABAJI STORIES VISIBLE (FOLLOW CHECK) ===');
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.authToken != null) {
+      if (authProvider.authToken != null && authProvider.userProfile != null) {
+        // First check if user is following Babaji
+        final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile!.id);
+        
+        if (!isFollowingBabaJi) {
+          print('User is not following Babaji, skipping Babaji stories');
+          return;
+        }
+        
         // Check if we already have Babaji stories
         final hasBabajiStories = _stories.any((story) => 
           story.authorName.toLowerCase().contains('baba') || 
@@ -103,7 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         
         if (!hasBabajiStories) {
-          print('No Babaji stories found, loading them...');
+          print('No Babaji stories found, loading them (user is following Babaji)...');
           final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
             token: authProvider.authToken,
             page: 1,
@@ -127,16 +149,24 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       print('Error ensuring Babaji stories visible: $e');
     }
-    print('=== END ENSURING BABAJI STORIES VISIBLE ===');
+    print('=== END ENSURING BABAJI STORIES VISIBLE (FOLLOW CHECK) ===');
   }
   
-  // Manual method to force load Babaji stories
+  // Manual method to force load Babaji stories ONLY if user is following Babaji
   Future<void> _forceLoadBabajiStories() async {
-    print('=== MANUAL FORCE LOAD BABAJI STORIES ===');
+    print('=== MANUAL FORCE LOAD BABAJI STORIES (FOLLOW CHECK) ===');
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.authToken != null) {
-        print('Manually loading Babaji stories...');
+      if (authProvider.authToken != null && authProvider.userProfile != null) {
+        // First check if user is following Babaji
+        final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile!.id);
+        
+        if (!isFollowingBabaJi) {
+          print('Manual load: User is not following Babaji, skipping Babaji stories');
+          return;
+        }
+        
+        print('Manually loading Babaji stories (user is following Babaji)...');
         final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
           token: authProvider.authToken,
           page: 1,
@@ -154,12 +184,12 @@ class _HomeScreenState extends State<HomeScreen> {
           print('Dhani Baba needs to upload stories first');
         }
       } else {
-        print('Manual load: No auth token available');
+        print('Manual load: No auth token or user profile available');
       }
     } catch (e) {
       print('Manual load error: $e');
     }
-    print('=== END MANUAL FORCE LOAD ===');
+    print('=== END MANUAL FORCE LOAD (FOLLOW CHECK) ===');
   }
 
   // Load initial data in parallel for faster startup
@@ -177,15 +207,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // Remove lifecycle observer
     _scrollController.dispose();
     _searchController.dispose();
+    // Stop real-time feed service
+    RealtimeFeedService.stopRealtimeService();
     super.dispose();
   }
 
   void _onScroll() {
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      // Only load more posts if we're not already loading and have posts to load
-      if (!_isLoadingPosts && _posts.isNotEmpty) {
+      // Only load more posts if we're not already loading, have posts to load, and there are more posts available
+      if (!_isLoadingPosts && _posts.isNotEmpty && _hasMorePosts) {
         _loadMorePosts();
       }
     }
@@ -206,8 +239,11 @@ class _HomeScreenState extends State<HomeScreen> {
         print('HomeScreen: Current user ID: ${authProvider.userProfile!.id}');
         print('HomeScreen: Calling FeedService.getFeedPosts...');
         
-        // Use FeedService to get mixed feed (user posts + Baba Ji posts)
-        final posts = await FeedService.getMixedFeed(
+        // Clear following cache to ensure fresh data
+        FeedService.clearFollowingCache();
+        
+        // Use FeedService to get posts ONLY from followed users (no random posts)
+        List<Post> posts = await FeedService.getFeedPostsFromFollowedUsersOnly(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: 1,
@@ -215,6 +251,30 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
         print('HomeScreen: FeedService returned ${posts.length} posts');
+        
+        // Debug feed loading if no posts found
+        if (posts.isEmpty) {
+          print('HomeScreen: No posts found, running debug...');
+          await FeedService.debugFollowingAndPosts(authProvider.authToken!, authProvider.userProfile!.id);
+          await FeedService.debugFeedLoading(authProvider.authToken!, authProvider.userProfile!.id);
+          
+          // Clear cache and try again
+          print('HomeScreen: Clearing cache and trying again...');
+          FeedService.clearCache();
+          
+          // Try one more time with fresh data
+          final retryPosts = await FeedService.getFeedPostsFromFollowedUsersOnly(
+            token: authProvider.authToken!,
+            currentUserId: authProvider.userProfile!.id,
+            page: 1,
+            limit: _postsPerPage,
+          );
+          
+          if (retryPosts.isNotEmpty) {
+            print('HomeScreen: Retry successful! Got ${retryPosts.length} posts');
+            posts = retryPosts;
+          }
+        }
         
         if (mounted) {
           setState(() {
@@ -225,6 +285,11 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             _posts = uniquePosts.values.take(_maxPostsInMemory).toList();
             _isLoadingPosts = false; // Always clear loading state
+            
+            // Check if we have more posts to load
+            if (posts.length < _postsPerPage) {
+              _hasMorePosts = false;
+            }
           });
         print('HomeScreen: Loaded ${posts.length} posts from followed users');
         if (posts.isNotEmpty) {
@@ -266,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Ultra-optimized posts loading for refresh
+  // Ultra-optimized posts loading for refresh with better error handling
   Future<void> _loadInitialPostsOptimized() async {
     if (_isLoadingPosts) return;
     
@@ -278,12 +343,12 @@ class _HomeScreenState extends State<HomeScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
       if (authProvider.userProfile != null) {
-        // Use smaller limit for faster loading during refresh
-        final posts = await FeedService.getMixedFeed(
+        // Use smaller limit for faster loading during refresh - ONLY from followed users
+        final posts = await FeedService.getFeedPostsFromFollowedUsersOnly(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: 1,
-          limit: 3, // Reduced from _postsPerPage for faster refresh
+          limit: 2, // Further reduced for ultra-fast refresh
         );
         
         if (mounted) {
@@ -293,6 +358,16 @@ class _HomeScreenState extends State<HomeScreen> {
             final newPosts = posts.where((post) => !existingIds.contains(post.id)).toList();
             _posts = [..._posts, ...newPosts].take(_maxPostsInMemory).toList();
             _isLoadingPosts = false; // Always clear loading state
+            
+            // Reset pagination state for refresh
+            _hasMorePosts = true;
+            if (posts.length < 2) {
+              _hasMorePosts = false;
+            }
+            
+            // Clear new posts indicator after successful load
+            _hasNewPosts = false;
+            _newPostsCount = 0;
           });
         }
       } else {
@@ -303,17 +378,26 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     } catch (e) {
-      print('HomeScreen: Error loading posts (optimized): $e');
+      print('HomeScreen: Error loading posts (ultra-optimized): $e');
       if (mounted) {
         setState(() {
           _isLoadingPosts = false; // Always clear loading state
         });
+        
+        // Show user-friendly error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Feed loading failed. Please try again.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
 
   Future<void> _loadMorePosts() async {
-    if (_isLoadingPosts || _posts.length >= _maxPostsInMemory) return;
+    if (_isLoadingPosts || _posts.length >= _maxPostsInMemory || !_hasMorePosts) return;
     
     setState(() {
       _isLoadingPosts = true;
@@ -323,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.userProfile != null) {
         final nextPage = (_posts.length ~/ _postsPerPage) + 1;
-        final newPosts = await FeedService.getMixedFeed(
+        final newPosts = await FeedService.getFeedPostsFromFollowedUsersOnly(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: nextPage,
@@ -340,11 +424,17 @@ class _HomeScreenState extends State<HomeScreen> {
               _posts = totalPosts.take(_maxPostsInMemory).toList();
             }
             _isLoadingPosts = false; // Always clear loading state
+            
+            // Check if we have more posts to load
+            if (newPosts.length < _postsPerPage) {
+              _hasMorePosts = false;
+            }
           });
           if (newPosts.isNotEmpty) {
             print('HomeScreen: Loaded ${newPosts.length} more posts from followed users');
           } else {
             print('HomeScreen: No more posts available');
+            _hasMorePosts = false;
           }
         }
       } else {
@@ -427,7 +517,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ));
           }
           
-          // Get stories from followed users (limit to 2 users for speed)
+          // Get stories from followed users only (limit to 2 users for speed)
+          // First ensure followed users list is populated
+          await _getFollowedUsers(authProvider.authToken!);
           futures.add(_getFollowedUsersStories(authProvider.authToken!));
           
           // Load Babaji stories only if user is following Baba Ji
@@ -634,50 +726,54 @@ class _HomeScreenState extends State<HomeScreen> {
             final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
             print('User is following Baba Ji: $isFollowingBabaJi');
             
-            // Always load Baba Ji stories for home page display
-            print('=== LOADING BABA JI STORIES ===');
-            print('Token available: ${authProvider.authToken != null}');
-            if (authProvider.authToken != null) {
-              print('Token preview: ${authProvider.authToken!.substring(0, authProvider.authToken!.length > 20 ? 20 : authProvider.authToken!.length)}...');
-            }
-            
-            final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
-              token: authProvider.authToken,
-              page: 1,
-              limit: 10,
-            );
-            print('=== BABA JI STORIES RESULT ===');
-            print('Loaded ${babajiStories.length} Baba Ji stories');
-            
-            if (babajiStories.isNotEmpty) {
-              allStories.addAll(babajiStories);
-              print('Added ${babajiStories.length} Baba Ji stories to allStories');
-              print('Total stories now: ${allStories.length}');
+            // Only load Baba Ji stories if user is following Baba Ji
+            if (isFollowingBabaJi) {
+              print('=== LOADING BABA JI STORIES (USER IS FOLLOWING) ===');
+              print('Token available: ${authProvider.authToken != null}');
+              if (authProvider.authToken != null) {
+                print('Token preview: ${authProvider.authToken!.substring(0, authProvider.authToken!.length > 20 ? 20 : authProvider.authToken!.length)}...');
+              }
               
-              // Debug: Print details of each Baba Ji story
-              print('=== BABA JI STORY DETAILS ===');
-              for (int i = 0; i < babajiStories.length; i++) {
-                final story = babajiStories[i];
-                print('Story $i:');
-                print('  - ID: ${story.id}');
-                print('  - Author ID: ${story.authorId}');
-                print('  - Author Name: ${story.authorName}');
-                print('  - Author Username: ${story.authorUsername}');
-                print('  - Media: ${story.media}');
-                print('  - Type: ${story.type}');
-                print('  - Created: ${story.createdAt}');
-                print('  - Is Active: ${story.isActive}');
-                print('  - Expires At: ${story.expiresAt}');
+              final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
+                token: authProvider.authToken,
+                page: 1,
+                limit: 10,
+              );
+              print('=== BABA JI STORIES RESULT ===');
+              print('Loaded ${babajiStories.length} Baba Ji stories');
+              
+              if (babajiStories.isNotEmpty) {
+                allStories.addAll(babajiStories);
+                print('Added ${babajiStories.length} Baba Ji stories to allStories');
+                print('Total stories now: ${allStories.length}');
+                
+                // Debug: Print details of each Baba Ji story
+                print('=== BABA JI STORY DETAILS ===');
+                for (int i = 0; i < babajiStories.length; i++) {
+                  final story = babajiStories[i];
+                  print('Story $i:');
+                  print('  - ID: ${story.id}');
+                  print('  - Author ID: ${story.authorId}');
+                  print('  - Author Name: ${story.authorName}');
+                  print('  - Author Username: ${story.authorUsername}');
+                  print('  - Media: ${story.media}');
+                  print('  - Type: ${story.type}');
+                  print('  - Created: ${story.createdAt}');
+                  print('  - Is Active: ${story.isActive}');
+                  print('  - Expires At: ${story.expiresAt}');
+                }
+              } else {
+                print('=== NO REAL BABA JI STORIES FOUND ===');
+                print('This means:');
+                print('1. Dhani Baba has not uploaded any stories yet');
+                print('2. API connection issue');
+                print('3. Wrong Baba page ID');
+                print('4. Stories expired or inactive');
+                print('5. Need to check if stories are uploaded to correct Baba page');
+                print('No fake stories will be shown - only real uploaded stories');
               }
             } else {
-              print('=== NO REAL BABA JI STORIES FOUND ===');
-              print('This means:');
-              print('1. Dhani Baba has not uploaded any stories yet');
-              print('2. API connection issue');
-              print('3. Wrong Baba page ID');
-              print('4. Stories expired or inactive');
-              print('5. Need to check if stories are uploaded to correct Baba page');
-              print('No fake stories will be shown - only real uploaded stories');
+              print('User is not following Baba Ji, skipping Baba Ji stories');
             }
           } catch (e) {
             print('Error loading Babaji stories: $e');
@@ -820,6 +916,7 @@ class _HomeScreenState extends State<HomeScreen> {
     print('HomeScreen: Refreshing feed...');
     setState(() {
       _isRefreshing = true; // Set single loading state for refresh
+      _hasMorePosts = true; // Reset pagination state
     });
     
     try {
@@ -848,6 +945,155 @@ class _HomeScreenState extends State<HomeScreen> {
     print('HomeScreen: Feed refresh completed');
   }
 
+  // Real-time feed service methods
+  void _startRealtimeFeedService() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.userProfile != null && authProvider.authToken != null) {
+      RealtimeFeedService.startRealtimeService(
+        token: authProvider.authToken!,
+        currentUserId: authProvider.userProfile!.id,
+        onNewPosts: _onNewPostsDetected,
+        onRefreshStart: _onRefreshStarted,
+        onRefreshComplete: _onRefreshCompleted,
+      );
+      print('HomeScreen: Real-time feed service started');
+    }
+  }
+
+  void _onNewPostsDetected(List<Post> newPosts) {
+    if (mounted) {
+      setState(() {
+        _hasNewPosts = true;
+        _newPostsCount = newPosts.length;
+      });
+      print('HomeScreen: New posts detected: ${newPosts.length} posts');
+      
+      // Show a subtle notification or update UI
+      _showNewPostsIndicator();
+    }
+  }
+
+  void _onRefreshStarted() {
+    if (mounted) {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
+  }
+
+  void _onRefreshCompleted() {
+    if (mounted) {
+      setState(() {
+        _isRefreshing = false;
+      });
+    }
+  }
+
+  void _showNewPostsIndicator() {
+    // Show a subtle indicator that new posts are available
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${_newPostsCount} new posts available! Pull down to refresh.'),
+        duration: Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Refresh',
+          onPressed: _refreshFeed,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refreshFeedWithRealtime() async {
+    print('HomeScreen: Refreshing feed with real-time service...');
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.userProfile != null && authProvider.authToken != null) {
+        // Use real-time service for force refresh
+        final freshPosts = await RealtimeFeedService.forceRefreshFeed(
+          token: authProvider.authToken!,
+          currentUserId: authProvider.userProfile!.id,
+        );
+        
+        if (mounted) {
+          setState(() {
+            // Replace posts with fresh data
+            _posts = freshPosts.take(_maxPostsInMemory).toList();
+            _hasNewPosts = false;
+            _newPostsCount = 0;
+            _isRefreshing = false;
+            
+            // Reset pagination state for refresh
+            _hasMorePosts = true;
+            if (freshPosts.length < _postsPerPage) {
+              _hasMorePosts = false;
+            }
+          });
+        }
+        
+        print('HomeScreen: Feed refreshed with ${freshPosts.length} fresh posts');
+      }
+    } catch (e) {
+      print('HomeScreen: Error refreshing feed with real-time service: $e');
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
+
+  // App lifecycle methods with debouncing
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Debounce rapid lifecycle state changes
+    final now = DateTime.now();
+    if (_lastLifecycleState == state && 
+        _lastLifecycleChangeTime != null && 
+        now.difference(_lastLifecycleChangeTime!).inMilliseconds < 500) {
+      return; // Ignore rapid duplicate state changes
+    }
+    
+    _lastLifecycleState = state;
+    _lastLifecycleChangeTime = now;
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        print('HomeScreen: App resumed - checking for new posts');
+        _onAppResumed();
+        break;
+      case AppLifecycleState.paused:
+        print('HomeScreen: App paused');
+        break;
+      case AppLifecycleState.inactive:
+        // App is transitioning between foreground and background
+        // Reduced logging to prevent terminal spam
+        break;
+      case AppLifecycleState.detached:
+        print('HomeScreen: App detached');
+        break;
+      case AppLifecycleState.hidden:
+        print('HomeScreen: App hidden');
+        break;
+    }
+  }
+
+  void _onAppResumed() {
+    // Check for new posts when app comes to foreground
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.userProfile != null && authProvider.authToken != null) {
+      // Trigger manual check for new posts
+      RealtimeFeedService.manualCheck(
+        token: authProvider.authToken!,
+        currentUserId: authProvider.userProfile!.id,
+      );
+      
+      // Also refresh stories when app resumes
+      _loadStoriesOptimized();
+    }
+  }
 
   // Search methods
   void _showSearchOverlay() {
@@ -926,7 +1172,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // Get the list of users that current user is following
       final followingUsers = await authProvider.getFollowingUsers();
-      print('Found ${followingUsers.length} followed users');
+      print('HomeScreen: Found ${followingUsers.length} followed users');
       
       // Extract user IDs from the following users list
       List<String> followedUserIds = [];
@@ -934,14 +1180,18 @@ class _HomeScreenState extends State<HomeScreen> {
         final userId = userData['id'] ?? userData['_id'];
         if (userId != null && userId.toString().isNotEmpty) {
           followedUserIds.add(userId.toString());
-          print('Following user: ${userData['username'] ?? 'Unknown'} (ID: $userId)');
+          print('HomeScreen: Following user: ${userData['username'] ?? 'Unknown'} (ID: $userId)');
         }
       }
+      
+      // Store followed user IDs for story filtering
+      _followedUserIds = followedUserIds;
+      print('HomeScreen: Stored ${_followedUserIds.length} followed user IDs: $_followedUserIds');
       
       return followedUserIds;
       
     } catch (e) {
-      print('Error getting followed users: $e');
+      print('HomeScreen: Error getting followed users: $e');
       return [];
     }
   }
@@ -1017,34 +1267,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 SafeArea(
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
-            // Show single loader for any loading state - Fixed to prevent infinite loading
+            // Show smooth loader for any loading state
             if (authProvider.userProfile == null || _isRefreshing) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(
-                      strokeWidth: 3, // Thinner for faster visual feedback
-                    ),
-                    const SizedBox(height: 12), // Reduced spacing
-                    Text(
-                      authProvider.userProfile == null 
-                        ? 'Loading...' 
-                        : 'Refreshing feed...',
-                      style: const TextStyle(
-                        fontSize: 14, // Smaller font for faster rendering
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+              return SmoothFeedLoader(
+                message: authProvider.userProfile == null 
+                  ? 'Setting up your feed...' 
+                  : 'Refreshing content...',
+                showStories: true,
+                showPosts: true,
               );
             }
 
             return Stack(
               children: [
-                RefreshIndicator(
-                  onRefresh: _refreshFeed,
+                SmoothRefreshIndicator(
+                  onRefresh: _refreshFeedWithRealtime,
+                  refreshMessage: 'Refreshing your feed...',
                   child: CustomScrollView(
                     controller: _scrollController,
                     slivers: [
@@ -1105,6 +1343,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 fit: BoxFit.contain,
               ),
               const Spacer(),
+              // New Posts Indicator
+              if (_hasNewPosts)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_newPostsCount} new',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               // Search Icon
               IconButton(
                 onPressed: () {
@@ -1528,9 +1784,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          // Add conversation to local storage
                           final authProvider = Provider.of<AuthProvider>(context, listen: false);
                           if (authProvider.userProfile != null) {
+                            // First check if there's an existing conversation with this user
+                            String? existingThreadId;
+                            try {
+                              existingThreadId = await ChatService.createOrGetThread(
+                                currentUserId: authProvider.userProfile!.id,
+                                otherUserId: userData['_id'] ?? '',
+                                token: authProvider.authToken!,
+                              );
+                              print('HomeScreen: Found existing thread ID: $existingThreadId');
+                            } catch (e) {
+                              print('HomeScreen: Error getting thread ID: $e');
+                            }
+                            
+                            // Add conversation to local storage
                             await ChatService.addConversation(
                               currentUserId: authProvider.userProfile!.id,
                               otherUserId: userData['_id'] ?? '',
@@ -1538,20 +1807,20 @@ class _HomeScreenState extends State<HomeScreen> {
                               otherFullName: fullName,
                               otherAvatar: avatar,
                             );
-                          }
-                          
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ChatScreen(
-                                recipientUserId: userData['_id'] ?? '',
-                                recipientUsername: username,
-                                recipientFullName: fullName,
-                                recipientAvatar: avatar,
-                                threadId: null, // New conversation
+                            
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(
+                                  recipientUserId: userData['_id'] ?? '',
+                                  recipientUsername: username,
+                                  recipientFullName: fullName,
+                                  recipientAvatar: avatar,
+                                  threadId: existingThreadId, // Use existing thread ID if found
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          }
                         },
                         icon: const Icon(Icons.message, size: 18),
                         label: const Text('Message'),
@@ -1747,29 +2016,9 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_isLoadingStories && _groupedStories.isEmpty)
               Container(
                 height: 80,
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withOpacity(0.8)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Loading stories...',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 14,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                    ],
-                  ),
+                child: const SmoothLoadingWidget(
+                  message: 'Loading stories...',
+                  size: 16,
                 ),
               )
             else
@@ -1793,13 +2042,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       }
                     }
 
-                    // Filter: show other users if they have any story; exclude current user
+                    // Filter: show only followed users' stories; exclude current user
+                    print('HomeScreen: Debug - _followedUserIds: $_followedUserIds');
+                    print('HomeScreen: Debug - _groupedStories keys: ${_groupedStories.keys.toList()}');
+                    
                     final List<String> displayUserIds = _groupedStories.keys.where((userId) {
                       final stories = _groupedStories[userId]!;
                       if (stories.isEmpty) return false;
                       if (stories.first.authorId == currentUserId) return false;
                       // at least one valid media story
-                      return stories.any((s) => (s.media.isNotEmpty && s.media != 'null'));
+                      if (!stories.any((s) => (s.media.isNotEmpty && s.media != 'null'))) return false;
+                      // Only show stories from users that current user is following
+                      final isFollowing = _followedUserIds.contains(userId);
+                      print('HomeScreen: Debug - User $userId (${stories.first.authorUsername}) - isFollowing: $isFollowing');
+                      return isFollowing;
                     }).toList()
                     // Sort by most recent story time desc
                     ..sort((a, b) {
@@ -1960,10 +2216,9 @@ class _HomeScreenState extends State<HomeScreen> {
       userAvatarUrl = authProvider.userProfile!.profileImageUrl!;
       print('HomeScreen: Using user DP URL: $userAvatarUrl');
     } else {
-      // Try to refresh DP if missing
-      print('HomeScreen: DP URL missing, attempting to refresh');
-      authProvider.refreshUserDP();
-      userAvatarUrl = 'https://via.placeholder.com/70x70/6366F1/FFFFFF?text=DP';
+      // Don't refresh DP repeatedly - use local placeholder
+      print('HomeScreen: DP URL missing, using local placeholder');
+      userAvatarUrl = ''; // Empty string will trigger default avatar in widget
     }
     
     return Container(
@@ -2008,32 +2263,53 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: Colors.white,
                     ),
                     child: ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: userAvatarUrl,
-                        width: storySize,
-                        height: storySize,
-                        fit: BoxFit.cover,
-                        memCacheWidth: (storySize * MediaQuery.of(context).devicePixelRatio).round(),
-                        memCacheHeight: (storySize * MediaQuery.of(context).devicePixelRatio).round(),
-                        httpHeaders: {
-                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        },
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                      child: userAvatarUrl.isNotEmpty && userAvatarUrl != 'null'
+                        ? CachedNetworkImage(
+                            imageUrl: userAvatarUrl,
+                            width: storySize,
+                            height: storySize,
+                            fit: BoxFit.cover,
+                            memCacheWidth: (storySize * MediaQuery.of(context).devicePixelRatio).round(),
+                            memCacheHeight: (storySize * MediaQuery.of(context).devicePixelRatio).round(),
+                            httpHeaders: {
+                              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            },
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) {
-                          print('AddStoryButton: Error loading DP: $error for URL: $url');
-                          return Container(
+                            errorWidget: (context, url, error) {
+                              print('AddStoryButton: Error loading DP: $error for URL: $url');
+                              return Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppTheme.primaryColor.withOpacity(0.1),
+                                      AppTheme.primaryColor.withOpacity(0.2),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.person,
+                                  color: AppTheme.primaryColor,
+                                  size: storySize * 0.4,
+                                ),
+                              );
+                            },
+                          )
+                        : Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
@@ -2050,9 +2326,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: AppTheme.primaryColor,
                               size: storySize * 0.4,
                             ),
-                          );
-                        },
-                      ),
+                          ),
                     ),
                   ),
                 ),
@@ -2298,79 +2572,75 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               Icon(
-                Icons.feed_outlined,
+                Icons.people_outline,
                 size: 64,
                 color: Colors.grey[400],
               ),
               const SizedBox(height: 16),
               Text(
-                'No posts from followed users',
+                'Welcome to R-Gram!',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Follow some users to see their posts and reels in your feed',
+                'Follow people to see their posts and stories in your feed. New users only see content from people they follow.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[500],
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/search');
-                    },
-                    icon: const Icon(Icons.search, size: 18),
-                    label: const Text('Search Users'),
-                    style: AppTheme.primaryButtonStyle.copyWith(
-                      padding: MaterialStateProperty.all(
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                    ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/discover-users');
+                },
+                icon: const Icon(Icons.explore, color: Colors.white),
+                label: const Text(
+                  'Discover Users',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/explore');
-                    },
-                    icon: const Icon(Icons.explore, size: 18),
-                    label: const Text('Explore Posts'),
-                    style: AppTheme.secondaryButtonStyle.copyWith(
-                      backgroundColor: MaterialStateProperty.all(AppTheme.cardColor),
-                      foregroundColor: MaterialStateProperty.all(AppTheme.textSecondary),
-                      padding: MaterialStateProperty.all(
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                    ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue[600],
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const DiscoverUsersScreen(),
-                      ),
-                    );
-                    // Refresh feed when returning from discover users
-                    _refreshFeedOnReturn();
-                  },
-                  icon: const Icon(Icons.people, size: 18),
-                  label: const Text('Discover Users with Posts'),
-                  style: AppTheme.accentButtonStyle.copyWith(
-                    padding: MaterialStateProperty.all(
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    ),
+              const SizedBox(height: 16),
+              Text(
+                'Or explore Baba Ji\'s spiritual content',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[400],
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/baba-pages');
+                },
+                icon: const Icon(Icons.temple_buddhist, color: Colors.white),
+                label: const Text(
+                  'Baba Ji Pages',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[600],
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
                   ),
                 ),
               ),
@@ -2550,9 +2820,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               // Home
               _buildNavItem(
@@ -2561,6 +2831,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 isSelected: true,
                 onTap: () {
                   // Already on home
+                },
+              ),
+              
+              // Live Darshan
+              _buildNavItem(
+                icon: Icons.live_tv,
+                label: 'Live Darshan',
+                isSelected: false,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LiveStreamScreen(),
+                    ),
+                  );
                 },
               ),
               
@@ -2574,21 +2859,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const ReelsScreen(),
-                    ),
-                  );
-                },
-              ),
-              
-              // Live Streaming
-              _buildNavItem(
-                icon: Icons.videocam,
-                label: 'Live Stream',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LiveStreamScreen(),
                     ),
                   );
                 },
@@ -2658,27 +2928,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
-        return GestureDetector(
-          onTap: onTap,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
+        return Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
                   color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  fontFamily: 'Poppins',
+                  size: 20,
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    fontFamily: 'Poppins',
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         );
       },

@@ -51,10 +51,10 @@ dependencies:
   go_router: ^16.0.0
   cached_network_image: ^3.4.1
   image_picker: ^1.1.2  # Re-enabled for image/video picking
-  # image_cropper: ^8.0.2  # Commented out for smaller APK
+  image_cropper: ^8.0.2  # Re-enabled for image cropping functionality
   media_kit: ^1.1.10  # Re-enabled for video playback
   media_kit_video: ^1.1.10  # Re-enabled for video playback
-  video_player: ^2.8.2  # Fallback video player
+  video_player: ^2.10.0  # Fallback video player
   # video_thumbnail: ^0.5.3  # Commented out for smaller APK
   # youtube_player_iframe: ^5.1.2
   webview_flutter: ^4.13.0  # Re-enabled for live darshan WebView
@@ -96,6 +96,8 @@ dependencies:
   # flutter_webrtc: ^0.9.48  # WebRTC for voice/video calls - temporarily disabled due to compatibility issues
   socket_io_client: ^2.0.3+1  # Real-time communication
   audioplayers: ^6.0.0  # For call ringtones and sounds
+  camera_windows: ^0.2.6+2
+  # webview_windows: ^0.1.4  # Using webview_flutter instead for better compatibility
 
 dev_dependencies:
   flutter_test:
@@ -124,8 +126,8 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/video/
-    - assets/animations/
-    - assets/fonts/
+    # - assets/animations/  # Removed: directory not present
+    # - assets/fonts/       # Removed: directory not present
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

@@ -438,9 +438,22 @@ class _SearchScreenState extends State<SearchScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () async {
-                  // Add conversation to local storage
                   final authProvider = Provider.of<AuthProvider>(context, listen: false);
                   if (authProvider.userProfile != null) {
+                    // First check if there's an existing conversation with this user
+                    String? existingThreadId;
+                    try {
+                      existingThreadId = await ChatService.createOrGetThread(
+                        currentUserId: authProvider.userProfile!.id,
+                        otherUserId: userData['_id'] ?? '',
+                        token: authProvider.authToken!,
+                      );
+                      print('SearchScreen: Found existing thread ID: $existingThreadId');
+                    } catch (e) {
+                      print('SearchScreen: Error getting thread ID: $e');
+                    }
+                    
+                    // Add conversation to local storage
                     await ChatService.addConversation(
                       currentUserId: authProvider.userProfile!.id,
                       otherUserId: userData['_id'] ?? '',
@@ -448,20 +461,20 @@ class _SearchScreenState extends State<SearchScreen> {
                       otherFullName: fullName,
                       otherAvatar: avatar,
                     );
-                  }
-                  
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatScreen(
-                        recipientUserId: userData['_id'] ?? '',
-                        recipientUsername: username,
-                        recipientFullName: fullName,
-                        recipientAvatar: avatar,
-                        threadId: null, // New conversation
+                    
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatScreen(
+                          recipientUserId: userData['_id'] ?? '',
+                          recipientUsername: username,
+                          recipientFullName: fullName,
+                          recipientAvatar: avatar,
+                          threadId: existingThreadId, // Use existing thread ID if found
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 },
                 icon: const Icon(Icons.message, size: 16),
                 label: const Text('Message'),

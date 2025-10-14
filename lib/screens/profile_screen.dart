@@ -19,6 +19,11 @@ import '../widgets/verification_badge.dart';
 import '../screens/verification_request_screen.dart';
 import '../services/verification_service.dart';
 import '../models/verification_model.dart';
+import '../models/highlight_model.dart';
+import '../services/highlight_service.dart';
+import '../screens/highlights_screen.dart';
+import '../screens/create_highlight_screen.dart';
+import '../screens/highlight_viewer_screen.dart';
 
 
 class ProfileScreen extends StatefulWidget {
@@ -97,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               child: Column(
                 children: [
                   _buildElegantProfileHeader(authProvider.userProfile!),
-                  const SizedBox(height: 12),
+                  SizedBox(height: MediaQuery.of(context).size.width < 600 ? 8 : 12),
                   _buildRoundedSegmentedTabBar(),
                   _buildTabContent(authProvider.userProfile!),
                 ],
@@ -198,72 +203,78 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   Widget _buildElegantProfileHeader(UserModel user) {
     final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 600; // Mobile detection
+    final mobilePadding = isMobile ? 8.0 : 18.0;
+    final mobileMargin = isMobile ? 12.0 : 18.0;
+    final mobileTopPadding = isMobile ? 40.0 : 72.0;
+    final mobileSpacing = isMobile ? 8.0 : 16.0;
+    
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          margin: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+          margin: EdgeInsets.fromLTRB(mobileMargin, mobileMargin, mobileMargin, 0),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFFEBF6FF), Color(0xFFF5E9FF)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(isMobile ? 16 : 22),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 18, offset: const Offset(0, 8)),
+              BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: isMobile ? 12 : 18, offset: const Offset(0, 8)),
             ],
           ),
-          padding: const EdgeInsets.only(top: 72, bottom: 18, left: 18, right: 18),
+          padding: EdgeInsets.only(top: mobileTopPadding, bottom: mobilePadding, left: mobilePadding, right: mobilePadding),
           child: Column(
             children: [
-              const SizedBox(height: 48),
+              SizedBox(height: isMobile ? 24 : 48),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     user.fullName,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
+                    style: TextStyle(fontSize: isMobile ? 20 : 24, fontWeight: FontWeight.w700, color: const Color(0xFF1A1A1A)),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: isMobile ? 4 : 8),
                   if (user.isVerified)
                     Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: EdgeInsets.all(isMobile ? 2 : 4),
                       decoration: const BoxDecoration(color: Color(0xFF6366F1), shape: BoxShape.circle),
-                      child: const Icon(Icons.verified, size: 16, color: Colors.white),
+                      child: Icon(Icons.verified, size: isMobile ? 12 : 16, color: Colors.white),
                     ),
                 ],
               ),
-              const SizedBox(height: 6),
-              Text('@${user.username}', style: const TextStyle(color: Color(0xFF666666), fontSize: 14)),
-              const SizedBox(height: 12),
+              SizedBox(height: isMobile ? 4 : 6),
+              Text('@${user.username}', style: TextStyle(color: const Color(0xFF666666), fontSize: isMobile ? 12 : 14)),
+              SizedBox(height: isMobile ? 8 : 12),
               Wrap(
-                spacing: 8,
+                spacing: isMobile ? 4 : 8,
                 alignment: WrapAlignment.center,
                 children: [
                   _tag('[ ${user.selectedReligion?.name.toUpperCase() ?? 'RELIGION'} ]', Colors.orange.shade100, Colors.orange.shade700),
                 ],
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: isMobile ? 8 : 14),
               if (user.bio != null && user.bio!.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 12),
                   child: Text(
                     user.bio!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Color(0xFF6B7280), height: 1.35),
-                    maxLines: 3,
+                    style: TextStyle(color: const Color(0xFF6B7280), height: 1.35, fontSize: isMobile ? 12 : 14),
+                    maxLines: isMobile ? 2 : 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              const SizedBox(height: 16),
+              SizedBox(height: isMobile ? 8 : 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _pillButton('Connect & Follow', onTap: () {}),
                 ],
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: isMobile ? 8 : 14),
               FutureBuilder<UserMediaResponse>(
                 future: UserMediaService.getUserMedia(userId: user.id),
                 builder: (context, snapshot) {
@@ -289,6 +300,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   );
                 },
               ),
+              SizedBox(height: isMobile ? 12 : 20),
+              // Highlights Section
+              _buildHighlightsSection(user),
               const SizedBox(height: 20),
               // Action Buttons Section
               _buildActionButtons(user),
@@ -536,19 +550,32 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildRoundedSegmentedTabBar() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final mobileMargin = isMobile ? 12.0 : 18.0;
+    final mobilePadding = isMobile ? 2.0 : 4.0;
+    
     return Container(
-      margin: const EdgeInsets.fromLTRB(18, 12, 18, 8),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 6))]),
+      margin: EdgeInsets.fromLTRB(mobileMargin, isMobile ? 8 : 12, mobileMargin, isMobile ? 4 : 8),
+      padding: EdgeInsets.all(mobilePadding),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(isMobile ? 20 : 30), 
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: isMobile ? 8 : 12, offset: const Offset(0, 6))]
+      ),
       child: TabBar(
         controller: _tabController,
-        indicator: BoxDecoration(color: const Color(0xFFE6FFF6), borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: const Color(0xFF22C55E).withOpacity(0.35), blurRadius: 10, offset: const Offset(0, 4))]),
+        indicator: BoxDecoration(
+          color: const Color(0xFFE6FFF6), 
+          borderRadius: BorderRadius.circular(isMobile ? 16 : 24), 
+          boxShadow: [BoxShadow(color: const Color(0xFF22C55E).withOpacity(0.35), blurRadius: isMobile ? 6 : 10, offset: const Offset(0, 4))]
+        ),
         labelColor: const Color(0xFF0F766E),
         unselectedLabelColor: const Color(0xFF6B7280),
-        tabs: const [
-          Tab(text: 'Posts', icon: Icon(Icons.grid_on)),
-          Tab(text: 'Reels', icon: Icon(Icons.play_circle_outline)),
-          Tab(text: 'Tagged', icon: Icon(Icons.bookmark_border)),
+        labelStyle: TextStyle(fontSize: isMobile ? 12 : 14),
+        tabs: [
+          Tab(text: 'Posts', icon: Icon(Icons.grid_on, size: isMobile ? 16 : 20)),
+          Tab(text: 'Reels', icon: Icon(Icons.play_circle_outline, size: isMobile ? 16 : 20)),
+          Tab(text: 'Tagged', icon: Icon(Icons.bookmark_border, size: isMobile ? 16 : 20)),
         ],
       ),
     );
@@ -1076,8 +1103,21 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildTabContent(UserModel user) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    
+    // Calculate available height more intelligently for mobile
+    double availableHeight;
+    if (isMobile) {
+      // For mobile: Use remaining space after header, tabs, and bottom navigation
+      availableHeight = screenHeight * 0.45; // Reduced from 0.6 to 0.45
+    } else {
+      // For desktop: Use original calculation
+      availableHeight = screenHeight * 0.6;
+    }
+    
     return Container(
-        height: MediaQuery.of(context).size.height * 0.6, // Fixed height to prevent overflow
+        height: availableHeight,
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -2190,6 +2230,212 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           ),
         );
       },
+    );
+  }
+
+  Widget _buildHighlightsSection(UserModel user) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    return FutureBuilder<HighlightsListResponse>(
+      future: HighlightService.getHighlights(
+        token: authProvider.authToken ?? '',
+        page: 1,
+        limit: 10,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 120,
+            margin: const EdgeInsets.symmetric(horizontal: 18),
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.success) {
+          print('ProfileScreen: Highlights error - ${snapshot.error}');
+          return const SizedBox.shrink();
+        }
+
+        final highlights = snapshot.data!.highlights;
+        print('ProfileScreen: Found ${highlights.length} highlights');
+        
+        // Always show the highlights section, even if empty (to show "New" button)
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Highlights',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  if (highlights.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const HighlightsScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        'See all',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6366F1),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: highlights.length + 1, // +1 for "New" highlight button
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      // "New" highlight button
+                      return _buildNewHighlightButton();
+                    } else {
+                      final highlight = highlights[index - 1];
+                      return _buildHighlightItem(highlight);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNewHighlightButton() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CreateHighlightScreen(),
+          ),
+        );
+      },
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.grey[300]!,
+                  width: 2,
+                ),
+                color: Colors.grey[50],
+              ),
+              child: const Icon(
+                Icons.add,
+                color: Colors.grey,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'New',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHighlightItem(Highlight highlight) {
+    return GestureDetector(
+      onTap: () {
+        // Navigate to highlight viewer to show stories
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HighlightViewerScreen(highlight: highlight),
+          ),
+        );
+      },
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.grey[300]!,
+                  width: 2,
+                ),
+              ),
+              child: ClipOval(
+                child: highlight.stories.isNotEmpty && highlight.stories.first.media.isNotEmpty
+                    ? Image.network(
+                        highlight.stories.first.media,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[200],
+                            child: const Icon(
+                              Icons.star,
+                              color: Colors.grey,
+                              size: 24,
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.star,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              highlight.name,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 } 

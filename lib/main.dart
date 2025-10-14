@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:media_kit/media_kit.dart';
 import 'providers/auth_provider.dart';
 import 'providers/admin_provider.dart';
 import 'providers/live_stream_provider.dart';
 import 'services/theme_service.dart';
+import 'models/baba_page_model.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -32,6 +34,7 @@ import 'screens/admin_verification_screen.dart';
 import 'screens/reels_screen.dart';
 import 'screens/create_live_stream_screen.dart';
 import 'screens/live_stream_viewer_screen.dart';
+import 'screens/baba_page_detail_screen.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -119,6 +122,78 @@ class DivineConnectApp extends StatelessWidget {
                 return LiveStreamViewerScreen(
                   room: args?['room'],
                   authToken: args?['authToken'],
+                );
+              },
+              '/baba-page-detail': (context) {
+                final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+                
+                // Create a BabaPage object from the arguments
+                final babaPage = BabaPage(
+                  id: args?['babaPageId'] ?? '',
+                  name: args?['babaPageName'] ?? 'Baba Ji',
+                  description: args?['description'] ?? '',
+                  avatar: args?['avatar'] ?? '',
+                  coverImage: args?['coverImage'] ?? '',
+                  location: args?['location'] ?? '',
+                  religion: args?['religion'] ?? '',
+                  website: args?['website'] ?? '',
+                  creatorId: args?['creatorId'] ?? '',
+                  followersCount: args?['followersCount'] ?? 0,
+                  postsCount: args?['postsCount'] ?? 0,
+                  videosCount: args?['videosCount'] ?? 0,
+                  storiesCount: args?['storiesCount'] ?? 0,
+                  isActive: args?['isActive'] ?? true,
+                  isFollowing: args?['isFollowing'] ?? false,
+                  createdAt: args?['createdAt'] != null 
+                      ? DateTime.parse(args!['createdAt']) 
+                      : DateTime.now(),
+                  updatedAt: args?['updatedAt'] != null 
+                      ? DateTime.parse(args!['updatedAt']) 
+                      : DateTime.now(),
+                );
+                
+                // Validate that we have at least the basic required data
+                if (babaPage.id.isEmpty) {
+                  return Scaffold(
+                    appBar: AppBar(
+                      title: const Text('Error'),
+                      backgroundColor: Colors.red,
+                    ),
+                    body: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.red,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Baba Ji Profile Not Found',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'The Baba Ji profile you are looking for could not be found.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                
+                return BabaPageDetailScreen(
+                  babaPage: babaPage,
                 );
               },
             },

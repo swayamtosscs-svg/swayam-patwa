@@ -60,11 +60,16 @@ class UserMediaService {
             
             if (postType == PostType.image) {
               print('UserMediaService: Adding as POST (image)');
+              // Use empty string for userAvatar since MediaData doesn't have this property
+              // The PostWidget will handle showing initials when avatar is empty
+              final userAvatar = '';
+              print('UserMediaService: User avatar for $authorUsername: $userAvatar');
+              
               posts.add(Post(
                 id: mediaData.mediaId,
                 userId: userId, // Use userId from API
                 username: authorUsername,
-                userAvatar: 'https://via.placeholder.com/50/6366F1/FFFFFF?text=${authorUsername.isNotEmpty ? authorUsername[0].toUpperCase() : 'U'}',
+                userAvatar: userAvatar,
                 caption: 'A post by $authorUsername',
                 imageUrl: mediaData.secureUrl,
                 type: PostType.image,
@@ -94,11 +99,16 @@ class UserMediaService {
               ));
             } else if (postType == PostType.video || postType == PostType.reel) {
               print('UserMediaService: Adding as REEL (video)');
+              // Use empty string for userAvatar since MediaData doesn't have this property
+              // The PostWidget will handle showing initials when avatar is empty
+              final userAvatar = '';
+              print('UserMediaService: User avatar for reel $authorUsername: $userAvatar');
+              
               reels.add(Post(
                 id: mediaData.mediaId,
                 userId: userId, // Use userId from API
                 username: authorUsername,
-                userAvatar: 'https://via.placeholder.com/50/6366F1/FFFFFF?text=${authorUsername.isNotEmpty ? authorUsername[0].toUpperCase() : 'U'}',
+                userAvatar: userAvatar,
                 caption: 'A reel by $authorUsername',
                 videoUrl: mediaData.secureUrl,
                 type: PostType.video,

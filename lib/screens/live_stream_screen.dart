@@ -169,17 +169,19 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text(
-                      'Live Streaming Features',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                        fontFamily: 'Poppins',
+                    const Icon(Icons.info_outline, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Live Streaming Features',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                          fontFamily: 'Poppins',
+                        ),
                       ),
                     ),
                   ],

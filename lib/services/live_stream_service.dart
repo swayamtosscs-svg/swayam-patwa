@@ -358,4 +358,216 @@ class LiveStreamService {
       };
     }
   }
+
+  /// Retrieve list of current streams
+  static Future<Map<String, dynamic>> getStreams() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/streams'),
+        headers: const {'Content-Type': 'application/json'},
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Request timed out'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data,
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Failed to retrieve streams',
+        'error': 'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error retrieving streams: $e',
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Get room live status & metrics
+  static Future<Map<String, dynamic>> getRoomStatus(String roomId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/rooms/$roomId/status'),
+        headers: const {'Content-Type': 'application/json'},
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Request timed out'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data,
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Failed to get room status',
+        'error': 'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error getting room status: $e',
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Join a room as viewer
+  static Future<Map<String, dynamic>> joinRoom({
+    required String roomId,
+    required String userName,
+    String? userId,
+    String? authToken,
+  }) async {
+    try {
+      print('LiveStreamService: Joining room $roomId as $userName');
+      
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (authToken != null && authToken.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $authToken';
+      }
+      
+      // Use the exact API format provided by the user
+      final requestBody = {
+        'userName': userName,
+        'userId': userId ?? 'viewer_${DateTime.now().millisecondsSinceEpoch}',
+      };
+      
+      print('LiveStreamService: Join request body: ${jsonEncode(requestBody)}');
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/rooms/$roomId/join'),
+        headers: headers,
+        body: jsonEncode(requestBody),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Request timed out'),
+      );
+
+      print('LiveStreamService: Join response status: ${response.statusCode}');
+      print('LiveStreamService: Join response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('LiveStreamService: Successfully joined room');
+        return {
+          'success': true,
+          'data': data,
+        };
+      }
+      
+      final errorData = jsonDecode(response.body);
+      return {
+        'success': false,
+        'message': errorData['message'] ?? 'Failed to join room',
+        'error': 'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      print('LiveStreamService: Error joining room: $e');
+      return {
+        'success': false,
+        'message': 'Error joining room: $e',
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Leave a room as viewer
+  static Future<Map<String, dynamic>> leaveRoom({
+    required String roomId,
+    required String userId,
+    String? authToken,
+  }) async {
+    try {
+      print('LiveStreamService: Leaving room $roomId as user $userId');
+      
+      Map<String, String> headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (authToken != null && authToken.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $authToken';
+      }
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/rooms/$roomId/leave'),
+        headers: headers,
+        body: jsonEncode({
+          'userId': userId,
+        }),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Request timed out'),
+      );
+
+      print('LiveStreamService: Leave room response: ${response.statusCode}');
+      print('LiveStreamService: Leave room body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data,
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Failed to leave room',
+        'error': 'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      print('LiveStreamService: Error leaving room: $e');
+      return {
+        'success': false,
+        'message': 'Error leaving room: $e',
+        'error': e.toString(),
+      };
+    }
+  }
+
+  /// Get room analytics
+  static Future<Map<String, dynamic>> getRoomAnalytics(String roomId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/rooms/$roomId/analytics'),
+        headers: const {'Content-Type': 'application/json'},
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Request timed out'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'data': data,
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Failed to get analytics',
+        'error': 'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error getting analytics: $e',
+        'error': e.toString(),
+      };
+    }
+  }
 }

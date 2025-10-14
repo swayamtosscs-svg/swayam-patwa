@@ -180,10 +180,22 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
     }
   }
 
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onTap ?? _openFullScreen,
+      onDoubleTap: () {
+        // Double tap to like/unlike the reel
+        _handleLike();
+        _showDoubleTapAnimation();
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
@@ -331,16 +343,6 @@ class _VideoReelWidgetState extends State<VideoReelWidget> {
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () {
-                                // Handle share action
-                              },
-                              icon: const Icon(
-                                Icons.share,
-                                color: Colors.white,
-                                size: 24,
                               ),
                             ),
                           ],

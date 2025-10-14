@@ -209,38 +209,38 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onTap ?? () {
-        setState(() {
-          _showControls = !_showControls;
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          color: AppTheme.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: AspectRatio(
-          aspectRatio: 9 / 16, // Vertical video aspect ratio
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Video Player
-              VideoPlayerWidget(
-                videoUrl: widget.reel.video.url,
-                autoPlay: widget.autoplay,
-                looping: true,
-                muted: false, // Always start unmuted (audio on)
-                showControls: true, // Show video controls
+          setState(() {
+            _showControls = !_showControls;
+          });
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: AppTheme.cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
+            ],
+          ),
+          child: AspectRatio(
+            aspectRatio: 9 / 16, // Vertical video aspect ratio
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Video Player
+                VideoPlayerWidget(
+                  videoUrl: widget.reel.video.url,
+                  autoPlay: widget.autoplay,
+                  looping: true,
+                  muted: false, // Always start unmuted (audio on)
+                  showControls: true, // Show video controls
+                ),
 
-              // No play button overlay needed - videos auto-play and tap handles mute/unmute
+                // No play button overlay needed - videos auto-play and tap handles mute/unmute
 
               // Caption at top
               if (_showControls)

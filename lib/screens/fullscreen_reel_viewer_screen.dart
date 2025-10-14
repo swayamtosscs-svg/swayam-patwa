@@ -21,6 +21,7 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
   bool _isPlaying = false;
   bool _showControls = true;
   bool _hasError = false;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -127,6 +128,32 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
     });
   }
 
+  void _onProgressBarDragStart() {
+    setState(() {
+      _isDragging = true;
+    });
+  }
+
+  void _onProgressBarDragEnd() {
+    setState(() {
+      _isDragging = false;
+    });
+  }
+
+  void _onProgressBarChanged(double value) {
+    if (_videoController != null && _isVideoInitialized) {
+      final position = Duration(milliseconds: (value * _videoController!.value.duration.inMilliseconds).round());
+      _videoController!.seekTo(position);
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,32 +194,6 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
                 },
               ),
 
-            // Play Button Overlay (when not playing or not initialized)
-            if (!_isPlaying || !_isVideoInitialized || _hasError)
-              Center(
-                child: GestureDetector(
-                  onTap: _hasError ? null : _togglePlayPause,
-                  child: Container(
-                    padding: const EdgeInsets.all(30),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.5),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      _hasError ? Icons.error : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 80,
-                    ),
-                  ),
-                ),
-              ),
 
             // Controls Overlay
             if (_showControls)
@@ -261,6 +262,53 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
 
                     const Spacer(),
 
+                    // Progress bar
+                    if (_videoController != null && _isVideoInitialized && _videoController!.value.duration.inMilliseconds > 0)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Text(
+                              _formatDuration(_videoController!.value.position),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  activeTrackColor: Colors.white,
+                                  inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                  thumbColor: Colors.white,
+                                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                  trackHeight: 2,
+                                ),
+                                child: Slider(
+                                  value: _videoController!.value.duration.inMilliseconds > 0
+                                      ? _videoController!.value.position.inMilliseconds / _videoController!.value.duration.inMilliseconds
+                                      : 0.0,
+                                  onChanged: _onProgressBarChanged,
+                                  onChangeStart: (_) => _onProgressBarDragStart(),
+                                  onChangeEnd: (_) => _onProgressBarDragEnd(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDuration(_videoController!.value.duration),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     // Bottom Info
                     SafeArea(
                       child: Padding(
@@ -294,8 +342,6 @@ class _FullscreenReelViewerScreenState extends State<FullscreenReelViewerScreen>
                                 _buildStatItem(Icons.favorite, widget.reel.likesCount),
                                 const SizedBox(width: 20),
                                 _buildStatItem(Icons.comment, widget.reel.commentsCount),
-                                const SizedBox(width: 20),
-                                _buildStatItem(Icons.share, widget.reel.sharesCount),
                               ],
                             ),
                           ],

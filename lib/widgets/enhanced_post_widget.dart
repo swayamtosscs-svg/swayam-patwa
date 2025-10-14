@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'video_player_widget.dart';
 import '../models/post_model.dart';
+import '../models/baba_page_model.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/baba_like_service.dart';
@@ -10,6 +11,9 @@ import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
 import '../screens/post_full_view_screen.dart';
 import '../screens/post_slider_screen.dart';
+import '../screens/baba_profile_ui_demo.dart';
+import '../utils/avatar_utils.dart';
+import '../utils/responsive_image_utils.dart';
 import 'baba_comment_dialog.dart';
 import 'user_comment_dialog.dart';
 import 'image_slider_widget.dart';
@@ -187,36 +191,40 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   }
 
   Widget _buildAvatarContent() {
-    // Check if userAvatar is a valid image URL
-    if (widget.post.userAvatar.isNotEmpty && 
-        (widget.post.userAvatar.startsWith('http://') || widget.post.userAvatar.startsWith('https://'))) {
+    // Use AvatarUtils to properly handle avatar URLs
+    if (widget.post.userAvatar.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.post.userAvatar)) {
+      final absoluteAvatarUrl = AvatarUtils.getAbsoluteAvatarUrl(widget.post.userAvatar);
+      print('EnhancedPostWidget: Loading avatar for ${widget.post.username}: $absoluteAvatarUrl');
+      
       // If it's a valid URL, show the image
       return ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Image.network(
-          widget.post.userAvatar,
+          absoluteAvatarUrl,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
+            print('EnhancedPostWidget: Avatar load error for URL: $absoluteAvatarUrl');
+            print('EnhancedPostWidget: Error: $error');
             // Fallback to initials if image fails to load
             return _buildAvatarInitials();
           },
         ),
       );
     } else {
+      print('EnhancedPostWidget: No valid avatar URL for ${widget.post.username}, showing initials');
+      print('EnhancedPostWidget: Avatar URL was: ${widget.post.userAvatar}');
       // If not a valid URL, show initials
       return _buildAvatarInitials();
     }
   }
 
   Widget _buildAvatarInitials() {
-    // Get first letter of username for avatar
-    final initial = widget.post.username.isNotEmpty ? widget.post.username[0].toUpperCase() : 'U';
-    return Text(
-      initial,
-      style: const TextStyle(
-        fontSize: 18,
-        color: Color(0xFF6366F1),
-      ),
+    // Use AvatarUtils for consistent styling
+    return AvatarUtils.buildDefaultAvatar(
+      name: widget.post.username,
+      size: 40,
+      borderColor: const Color(0xFF6366F1),
+      borderWidth: 1,
     );
   }
 
@@ -480,27 +488,46 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
           : (widget.post.imageUrl != null ? [widget.post.imageUrl!] : []);
       
       if (imagesToShow.isNotEmpty) {
-        // Use ImageSliderWidget for all images - full width like second image
-        return Stack(
-          children: [
-            ImageSliderWidget(
-              imageUrls: imagesToShow.cast<String>(),
-              height: 300, // Reduced height to prevent stretching and show more content
-              showCounter: true,
-              onTap: () {
-                // Navigate to post slider view
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PostSliderScreen(
-                      posts: [widget.post], // Single post for now
-                      initialIndex: 0,
-                    ),
+        // Use ImageSliderWidget for all images with improved aspect ratio handling
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate optimal height based on screen width and image count
+            final screenWidth = constraints.maxWidth;
+            final optimalHeight = ResponsiveImageUtils.calculateOptimalImageHeight(
+              screenWidth: screenWidth,
+              imageCount: imagesToShow.length,
+              maxHeight: 500.0,
+              minHeight: 250.0,
+            );
+            
+            return Stack(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    // Navigate to user profile when clicking the main content image
+                    _navigateToUserProfile();
+                  },
+                  child: ImageSliderWidget(
+                    imageUrls: imagesToShow.cast<String>(),
+                    height: optimalHeight,
+                    showCounter: true,
+                    onTap: () {
+                      // Navigate to post slider view
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostSliderScreen(
+                            posts: [widget.post], // Single post for now
+                            initialIndex: 0,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         );
       } else {
         // No image URL, show placeholder
@@ -588,32 +615,6 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
             ),
           ),
           
-          // Share Button
-          Expanded(
-            child: GestureDetector(
-              onTap: widget.onShare,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.share_outlined,
-                    color: Color(0xFF666666),
-                    size: 24, // Reduced size
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Share',
-                    style: TextStyle(
-                      fontSize: 12, // Reduced font size
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF666666),
-                      fontFamily: 'Poppins',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1000,22 +1001,103 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   }
 
   void _navigateToUserProfile() {
-    // Navigate to user profile screen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => UserProfileScreen(
-          userId: widget.post.userId,
-          username: widget.post.username,
-          fullName: widget.post.username, // Use username as fallback for fullName
-          avatar: widget.post.userAvatar,
-          bio: '', // Default empty bio
-          followersCount: 0, // Default value
-          followingCount: 0, // Default value
-          postsCount: 0, // Default value
-          isPrivate: false, // Default to public, will be updated when user profile is loaded
+    print('Navigating to profile for user: ${widget.post.userId}, username: ${widget.post.username}, isBabaJiPost: ${widget.post.isBabaJiPost}');
+    
+    try {
+      if (widget.post.isBabaJiPost && widget.post.babaPageData != null) {
+        print('Baba Ji profile detected with complete data, navigating to Baba Ji profile UI demo screen');
+        // Navigate to Baba Ji profile UI demo screen with complete data
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BabaProfileUiDemoScreen(
+              babaPage: widget.post.babaPageData,
+            ),
+          ),
+        );
+      } else if (widget.post.isBabaJiPost) {
+        print('Baba Ji profile detected but no complete data, fetching Baba Ji page data');
+        // Show loading dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+        
+        try {
+          // Fetch Baba Ji page data
+          // Note: You may need to implement a service method to fetch Baba Ji page data by userId
+          // For now, we'll navigate to a basic Baba Ji profile screen
+          Navigator.of(context).pop(); // Close loading dialog
+          
+          // Navigate to Baba Ji profile UI demo screen with basic data
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BabaProfileUiDemoScreen(
+                babaPage: BabaPage(
+                  id: widget.post.userId,
+                  name: widget.post.username,
+                  description: 'Baba Ji Profile',
+                  avatar: widget.post.userAvatar,
+                  coverImage: '',
+                  location: '',
+                  religion: 'Hinduism',
+                  website: '',
+                  creatorId: widget.post.userId,
+                  followersCount: 0,
+                  postsCount: 0,
+                  videosCount: 0,
+                  storiesCount: 0,
+                  isActive: true,
+                  isFollowing: false,
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                ),
+              ),
+            ),
+          );
+        } catch (e) {
+          Navigator.of(context).pop(); // Close loading dialog
+          print('Error fetching Baba Ji page data: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error loading Baba Ji profile: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        print('Regular user profile, navigating to user profile screen');
+        // Navigate to regular user profile screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => UserProfileScreen(
+              userId: widget.post.userId,
+              username: widget.post.username,
+              fullName: widget.post.username, // Use username as fallback for fullName
+              avatar: widget.post.userAvatar,
+              bio: '', // Default empty bio
+              followersCount: 0, // Default value
+              followingCount: 0, // Default value
+              postsCount: 0, // Default value
+              isPrivate: false, // Default to public, will be updated when user profile is loaded
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error navigating to profile: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening profile: $e'),
+          backgroundColor: Colors.red,
         ),
-      ),
-    );
+      );
+    }
   }
 
   Widget _buildExpandableCaption() {

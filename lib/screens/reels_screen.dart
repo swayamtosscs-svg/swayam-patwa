@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../models/post_model.dart';
+import '../models/baba_page_model.dart';
 import '../models/baba_page_reel_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -8,10 +10,12 @@ import '../services/baba_page_service.dart';
 import '../services/baba_page_reel_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/dp_service.dart';
+import '../services/user_media_service.dart';
 import '../widgets/user_comment_dialog.dart';
 import '../widgets/video_player_widget.dart';
 import '../screens/user_profile_screen.dart';
 import '../utils/video_manager.dart';
+import '../test_follow_status_debug.dart';
 
 class ReelsScreen extends StatefulWidget {
   const ReelsScreen({super.key});
@@ -30,6 +34,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   Map<String, bool> _followStates = {}; // Track follow state for each user
   Map<String, bool> _likeStates = {}; // Track like state for each post
   Map<String, int> _likeCounts = {}; // Track like counts for each post
+  bool _isCheckingFollowStatus = false; // Track if follow status check is in progress
 
   @override
   void initState() {
@@ -67,6 +72,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
       }
 
       final List<Post> allReels = [];
+      List<Post> userReels = [];
+      List<Post> additionalReels = [];
+      List<String> followedUserIds = [];
+      List<dynamic> babaPages = [];
+      List<Post> localReels = [];
 
       // 1. Fetch reels from regular feed (user reels)
       try {
@@ -74,22 +84,122 @@ class _ReelsScreenState extends State<ReelsScreen> {
         if (feedResponse['success'] == true && feedResponse['data'] != null) {
           final postsData = feedResponse['data']['posts'] as List<dynamic>? ?? [];
           final posts = postsData.map((json) => Post.fromJson(json)).toList();
-          final userReels = posts.where((post) => 
-            (post.isReel || post.type == PostType.reel || post.type == PostType.video) && 
-            post.videoUrl?.isNotEmpty == true
-          ).toList();
+          userReels = posts.where((post) {
+            // Check if it's a video/reel content
+            final isVideoContent = post.isReel || 
+                                  post.type == PostType.reel || 
+                                  post.type == PostType.video ||
+                                  (post.videoUrl != null && post.videoUrl!.isNotEmpty);
+            
+            // Additional check for posts that might have video URLs but not marked as video type
+            final hasVideoUrl = post.videoUrl != null && post.videoUrl!.isNotEmpty;
+            
+            return isVideoContent && hasVideoUrl;
+          }).toList();
           allReels.addAll(userReels);
           print('ReelsScreen: Found ${userReels.length} user reels from feed');
+          
+          // Debug: Print details of found reels
+          for (final reel in userReels) {
+            print('ReelsScreen: User reel - ID: ${reel.id}, Type: ${reel.type}, isReel: ${reel.isReel}, VideoURL: ${reel.videoUrl?.isNotEmpty == true ? "Present" : "Missing"}');
+          }
         }
       } catch (e) {
         print('ReelsScreen: Error fetching user reels: $e');
+      }
+
+      // 1.5. Fetch additional user reels from UserMediaService
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final currentUserId = authProvider.userProfile?.id;
+        
+        if (currentUserId != null) {
+          final userMediaResponse = await UserMediaService.getUserMedia(userId: currentUserId);
+          if (userMediaResponse.success) {
+            additionalReels = userMediaResponse.reels.where((reel) =>  
+              reel.videoUrl != null && reel.videoUrl!.isNotEmpty
+            ).toList();
+            
+            // Check for duplicates before adding
+            for (final reel in additionalReels) {
+              final alreadyExists = allReels.any((existingReel) => 
+                existingReel.id == reel.id || existingReel.videoUrl == reel.videoUrl
+              );
+              if (!alreadyExists) {
+                allReels.add(reel);
+              }
+            }
+            
+            print('ReelsScreen: Found ${additionalReels.length} additional user reels from UserMediaService');
+          }
+        }
+      } catch (e) {
+        print('ReelsScreen: Error fetching additional user reels: $e');
+      }
+
+      // 1.6. Fetch reels from followed users
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final currentUserId = authProvider.userProfile?.id;
+        
+        if (currentUserId != null) {
+          // Get list of followed users (people the current user follows)
+          final followingResponse = await ApiService.getRGramFollowing(
+            userId: currentUserId,
+            token: token,
+          );
+          
+          if (followingResponse['success'] == true && followingResponse['data'] != null) {
+            final followingData = followingResponse['data']['following'] as List<dynamic>? ?? [];
+            
+            // Fetch reels from each followed user (limit to first 10 to avoid too many API calls)
+            followedUserIds = followingData.take(10).map((following) => following['_id'] ?? following['id']).where((id) => id != null).cast<String>().toList();
+            
+            // Fetch reels from all following users in parallel for better performance
+            final futures = followedUserIds.map((followedUserId) async {
+              try {
+                final userMediaResponse = await UserMediaService.getUserMedia(userId: followedUserId);
+                if (userMediaResponse.success) {
+                  return userMediaResponse.reels.where((reel) => 
+                    reel.videoUrl != null && reel.videoUrl!.isNotEmpty
+                  ).toList();
+                }
+                return <Post>[];
+              } catch (e) {
+                print('ReelsScreen: Error fetching reels from followed user $followedUserId: $e');
+                return <Post>[];
+              }
+            });
+            
+            // Wait for all API calls to complete
+            final results = await Future.wait(futures);
+            
+            // Process all results and add to allReels
+            for (final followedUserReels in results) {
+              // Check for duplicates before adding
+              for (final reel in followedUserReels) {
+                final alreadyExists = allReels.any((existingReel) => 
+                  existingReel.id == reel.id || existingReel.videoUrl == reel.videoUrl
+                );
+                if (!alreadyExists) {
+                  allReels.add(reel);
+                }
+              }
+            }
+            
+            final totalFollowingReels = results.fold<int>(0, (sum, reels) => sum + reels.length);
+            print('ReelsScreen: Fetched $totalFollowingReels reels from ${followedUserIds.length} following users');
+          }
+        }
+      } catch (e) {
+        print('ReelsScreen: Error fetching reels from following users: $e');
       }
 
       // 2. Fetch Baba Ji page reels
       try {
         final babaPagesResponse = await BabaPageService.getBabaPages(token: token);
         if (babaPagesResponse.success && babaPagesResponse.pages.isNotEmpty) {
-          final babaPages = babaPagesResponse.pages;
+          babaPages = babaPagesResponse.pages;
           
           for (final babaPage in babaPages) {
             final babaPageId = babaPage.id;
@@ -107,10 +217,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
                   for (final reelData in reelsData) {
                     final reel = BabaPageReel.fromJson(reelData);
                     // Convert Baba Ji reel to regular Post for reels screen
+                    final babaPageObj = BabaPage.fromJson(babaPage.toJson());
                     final post = Post(
                       id: 'baba_reel_${reel.id}',
                       userId: reel.babaPageId,
-                      username: babaPage.name,
+                      username: '${babaPage.name} (ID: ${reel.babaPageId})',
                       userAvatar: babaPage.avatar,
                       caption: '${reel.title}\n\n${reel.description}',
                       imageUrl: reel.thumbnail.url,
@@ -126,6 +237,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                       isBabaJiPost: true,
                       isReel: true,
                       babaPageId: reel.babaPageId,
+                      babaPageData: babaPageObj, // Store complete Baba Ji page data
                     );
                     allReels.add(post);
                   }
@@ -143,7 +255,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
       // 3. Fetch local storage reels
       try {
-        final localReels = await LocalStorageService.getUserReels();
+        localReels = await LocalStorageService.getUserReels();
         allReels.addAll(localReels);
         print('ReelsScreen: Found ${localReels.length} local reels');
       } catch (e) {
@@ -163,6 +275,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
       sortedReels.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       
       print('ReelsScreen: Total unique reels found: ${sortedReels.length}');
+      print('ReelsScreen: Sources - Feed: ${userReels.length}, UserMedia: ${additionalReels.length}, Following: ${followedUserIds.length} users, Baba Ji: ${babaPages.length} pages, Local: ${localReels.length}');
       
       // Initialize like and follow states
       for (final reel in sortedReels) {
@@ -362,6 +475,39 @@ class _ReelsScreenState extends State<ReelsScreen> {
             ),
           ),
           const Spacer(),
+          // Debug button (only in debug mode)
+          if (kDebugMode)
+            IconButton(
+              onPressed: () {
+                if (_reels.isNotEmpty) {
+                  final currentReel = _reels[_currentIndex];
+                  showFollowStatusDebug(context, currentReel.userId, currentReel.username);
+                }
+              },
+              icon: const Icon(
+                Icons.bug_report,
+                color: Colors.white,
+              ),
+              tooltip: 'Debug Follow Status',
+            ),
+          // Refresh follow status button
+          IconButton(
+            onPressed: () {
+              _checkFollowStatuses();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Refreshing follow statuses...'),
+                  backgroundColor: Color(0xFF6366F1),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(
+              Icons.refresh,
+              color: Colors.white,
+            ),
+            tooltip: 'Refresh Follow Status',
+          ),
           IconButton(
             onPressed: () {
               Navigator.pushNamed(context, '/reel-upload');
@@ -386,10 +532,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
           // User info
           Row(
             children: [
-              InkWell(
+                InkWell(
                 onTap: () {
                   print('Avatar tapped for user: ${reel.userId}');
-                  _navigateToUserProfile(reel.userId, reel.username);
+                  _navigateToUserProfile(reel.userId, reel.username, reel.isBabaJiPost, babaPageData: reel.babaPageData);
                 },
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
@@ -422,7 +568,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                           child: InkWell(
                             onTap: () {
                               print('Username tapped for user: ${reel.userId}');
-                              _navigateToUserProfile(reel.userId, reel.username);
+                              _navigateToUserProfile(reel.userId, reel.username, reel.isBabaJiPost, babaPageData: reel.babaPageData);
                             },
                             borderRadius: BorderRadius.circular(4),
                             child: Padding(
@@ -462,13 +608,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     InkWell(
                       onTap: () {
                         print('Handle tapped for user: ${reel.userId}');
-                        _navigateToUserProfile(reel.userId, reel.username);
+                        _navigateToUserProfile(reel.userId, reel.username, reel.isBabaJiPost, babaPageData: reel.babaPageData);
                       },
                       borderRadius: BorderRadius.circular(4),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
                         child: Text(
-                          '@${reel.username.toLowerCase().replaceAll(' ', '')}',
+                          reel.isBabaJiPost ? '@${reel.userId}' : '@${reel.username.toLowerCase().replaceAll(' ', '')}',
                           style: TextStyle(
                             color: Colors.grey[300],
                             fontSize: 14,
@@ -489,14 +635,23 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     color: (_followStates[reel.userId] ?? false) ? Colors.grey[600] : Colors.red,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Text(
-                    (_followStates[reel.userId] ?? false) ? 'Following' : 'Follow',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isCheckingFollowStatus
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        (_followStates[reel.userId] ?? false) ? 'Following' : 'Follow',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                 ),
               ),
             ],
@@ -636,9 +791,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildNavItem(
                 icon: Icons.home,
@@ -677,6 +832,15 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 },
               ),
               _buildNavItem(
+                icon: Icons.self_improvement,
+                label: 'Baba Ji',
+                isSelected: false,
+                onTap: () {
+                  print('Baba Ji tab tapped');
+                  Navigator.pushNamed(context, '/baba-pages');
+                },
+              ),
+              _buildNavItem(
                 icon: Icons.person,
                 label: 'Account',
                 isSelected: false,
@@ -698,29 +862,34 @@ class _ReelsScreenState extends State<ReelsScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.red : Colors.grey[600],
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
                 color: isSelected ? Colors.red : Colors.grey[600],
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                size: 20,
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.red : Colors.grey[600],
+                  fontSize: 9,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -732,30 +901,88 @@ class _ReelsScreenState extends State<ReelsScreen> {
       final token = authProvider.authToken;
       final currentUserId = authProvider.userProfile?.id;
       
-      if (token == null || currentUserId == null) return;
+      if (token == null || currentUserId == null) {
+        print('ReelsScreen: Cannot check follow statuses - missing token or user ID');
+        return;
+      }
+      
+      setState(() {
+        _isCheckingFollowStatus = true;
+      });
+      
+      print('ReelsScreen: Checking follow statuses for ${_reels.length} reels');
       
       // Check follow status for each unique user
       final uniqueUserIds = _reels.map((reel) => reel.userId).toSet();
+      print('ReelsScreen: Unique user IDs to check: ${uniqueUserIds.toList()}');
+      
       for (final userId in uniqueUserIds) {
         if (userId != currentUserId) {
           try {
+            print('ReelsScreen: Checking follow status for user: $userId');
             final followStatus = await ApiService.checkRGramFollowStatus(
               targetUserId: userId,
               token: token,
             );
             
-            if (followStatus['success'] == true && mounted) {
+            print('ReelsScreen: Follow status response for $userId: $followStatus');
+            
+            if (followStatus['success'] == true && followStatus['data'] != null && mounted) {
+              final isFollowing = followStatus['data']['isFollowing'] ?? false;
+              print('ReelsScreen: User $userId follow status: $isFollowing');
+              
               setState(() {
-                _followStates[userId] = followStatus['data']?['isFollowing'] ?? false;
+                _followStates[userId] = isFollowing;
               });
+            } else {
+              print('ReelsScreen: Follow status check failed for $userId: ${followStatus['message']}');
+              // Fallback: use AuthProvider method
+              try {
+                final authFollowStatus = await authProvider.isFollowingUser(userId);
+                print('ReelsScreen: AuthProvider fallback for $userId: $authFollowStatus');
+                if (mounted) {
+                  setState(() {
+                    _followStates[userId] = authFollowStatus;
+                  });
+                }
+              } catch (fallbackError) {
+                print('ReelsScreen: AuthProvider fallback also failed for $userId: $fallbackError');
+              }
             }
           } catch (e) {
-            print('Error checking follow status for user $userId: $e');
+            print('ReelsScreen: Error checking follow status for user $userId: $e');
+            // Try fallback method
+            try {
+              final authFollowStatus = await authProvider.isFollowingUser(userId);
+              print('ReelsScreen: AuthProvider fallback for $userId after error: $authFollowStatus');
+              if (mounted) {
+                setState(() {
+                  _followStates[userId] = authFollowStatus;
+                });
+              }
+            } catch (fallbackError) {
+              print('ReelsScreen: AuthProvider fallback also failed for $userId after error: $fallbackError');
+            }
           }
+        } else {
+          print('ReelsScreen: Skipping follow status check for current user: $userId');
         }
       }
+      
+      print('ReelsScreen: Final follow states: $_followStates');
+      
+      if (mounted) {
+        setState(() {
+          _isCheckingFollowStatus = false;
+        });
+      }
     } catch (e) {
-      print('Error checking follow statuses: $e');
+      print('ReelsScreen: Error checking follow statuses: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingFollowStatus = false;
+        });
+      }
     }
   }
 
@@ -765,9 +992,19 @@ class _ReelsScreenState extends State<ReelsScreen> {
       final token = authProvider.authToken;
       final currentUserId = authProvider.userProfile?.id;
       
-      if (token == null || currentUserId == null) return;
+      if (token == null || currentUserId == null) {
+        print('ReelsScreen: Cannot follow - missing token or user ID');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please login to follow users'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
       
       final isCurrentlyFollowing = _followStates[reel.userId] ?? false;
+      print('ReelsScreen: Toggling follow for user ${reel.username} (${reel.userId}) - Currently following: $isCurrentlyFollowing');
       
       // Optimistically update UI
       setState(() {
@@ -776,16 +1013,20 @@ class _ReelsScreenState extends State<ReelsScreen> {
       
       Map<String, dynamic> result;
       if (isCurrentlyFollowing) {
+        print('ReelsScreen: Unfollowing user ${reel.username}');
         result = await ApiService.unfollowRGramUser(
           targetUserId: reel.userId,
           token: token,
         );
       } else {
+        print('ReelsScreen: Following user ${reel.username}');
         result = await ApiService.followRGramUser(
           targetUserId: reel.userId,
           token: token,
         );
       }
+      
+      print('ReelsScreen: Follow API result: $result');
       
       if (result['success'] != true && mounted) {
         // Revert on failure
@@ -799,13 +1040,30 @@ class _ReelsScreenState extends State<ReelsScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      } else if (mounted) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isCurrentlyFollowing ? 'Unfollowed ${reel.username}' : 'Following ${reel.username}'),
+            backgroundColor: const Color(0xFF6366F1),
+          ),
+        );
       }
     } catch (e) {
-      print('Error toggling follow: $e');
+      print('ReelsScreen: Error toggling follow: $e');
       // Revert on error
       setState(() {
         _followStates[reel.userId] = !(_followStates[reel.userId] ?? false);
       });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -917,26 +1175,135 @@ class _ReelsScreenState extends State<ReelsScreen> {
     );
   }
 
-  void _navigateToUserProfile(String userId, String username) {
-    print('Navigating to profile for user: $userId, username: $username');
+  void _navigateToUserProfile(String userId, String username, bool isBabaJiPost, {BabaPage? babaPageData}) async {
+    print('Navigating to profile for user: $userId, username: $username, isBabaJiPost: $isBabaJiPost');
     
     try {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => UserProfileScreen(
-            userId: userId,
-            username: username,
-            fullName: username,
-            avatar: '',
-            bio: '',
-            followersCount: 0,
-            followingCount: 0,
-            postsCount: 0,
-            isPrivate: false,
+      if (isBabaJiPost && babaPageData != null) {
+        print('Baba Ji profile detected with complete data, navigating to Baba Ji page screen');
+        // Navigate to Baba Ji page detail screen with complete data
+        Navigator.pushNamed(
+          context,
+          '/baba-page-detail',
+          arguments: {
+            'babaPageId': babaPageData.id,
+            'babaPageName': babaPageData.name,
+            'description': babaPageData.description,
+            'avatar': babaPageData.avatar,
+            'coverImage': babaPageData.coverImage,
+            'location': babaPageData.location,
+            'religion': babaPageData.religion,
+            'website': babaPageData.website,
+            'creatorId': babaPageData.creatorId,
+            'followersCount': babaPageData.followersCount,
+            'postsCount': babaPageData.postsCount,
+            'videosCount': babaPageData.videosCount,
+            'storiesCount': babaPageData.storiesCount,
+            'isActive': babaPageData.isActive,
+            'isFollowing': babaPageData.isFollowing,
+            'createdAt': babaPageData.createdAt.toIso8601String(),
+            'updatedAt': babaPageData.updatedAt.toIso8601String(),
+          },
+        );
+      } else if (isBabaJiPost) {
+        print('Baba Ji profile detected without complete data, fetching full data first');
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
           ),
-        ),
-      );
+        );
+        
+        try {
+          // Fetch complete Baba Ji page data
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          final token = authProvider.authToken;
+          
+          if (token == null) {
+            Navigator.of(context).pop(); // Close loading dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please login to view Baba Ji profiles'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          
+          final response = await BabaPageService.getBabaPageById(
+            pageId: userId,
+            token: token,
+          );
+          
+          Navigator.of(context).pop(); // Close loading dialog
+          
+          if (response.success && response.data != null) {
+            print('Baba Ji page data fetched successfully, navigating with complete data');
+            // Navigate with complete data
+            Navigator.pushNamed(
+              context,
+              '/baba-page-detail',
+              arguments: {
+                'babaPageId': response.data!.id,
+                'babaPageName': response.data!.name,
+                'description': response.data!.description,
+                'avatar': response.data!.avatar,
+                'coverImage': response.data!.coverImage,
+                'location': response.data!.location,
+                'religion': response.data!.religion,
+                'website': response.data!.website,
+                'creatorId': response.data!.creatorId,
+                'followersCount': response.data!.followersCount,
+                'postsCount': response.data!.postsCount,
+                'videosCount': response.data!.videosCount,
+                'storiesCount': response.data!.storiesCount,
+                'isActive': response.data!.isActive,
+                'isFollowing': response.data!.isFollowing,
+                'createdAt': response.data!.createdAt.toIso8601String(),
+                'updatedAt': response.data!.updatedAt.toIso8601String(),
+              },
+            );
+          } else {
+            print('Failed to fetch Baba Ji page data: ${response.message}');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to load Baba Ji profile: ${response.message}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        } catch (e) {
+          Navigator.of(context).pop(); // Close loading dialog
+          print('Error fetching Baba Ji page data: $e');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error loading Baba Ji profile: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        print('Regular user profile, navigating to user profile screen');
+        // Navigate to regular user profile screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => UserProfileScreen(
+              userId: userId,
+              username: username,
+              fullName: username,
+              avatar: '',
+              bio: '',
+              followersCount: 0,
+              followingCount: 0,
+              postsCount: 0,
+              isPrivate: false,
+            ),
+          ),
+        );
+      }
     } catch (e) {
       print('Error navigating to profile: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -964,6 +1331,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
             snapshot.data!['data']['dpUrl'] != null) {
           
           final dpUrl = snapshot.data!['data']['dpUrl'] as String;
+          print('ReelsScreen: Found DP for user $username: $dpUrl');
           
           return Container(
             width: 40,
@@ -1008,6 +1376,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                   );
                 },
                 errorBuilder: (context, error, stackTrace) {
+                  print('ReelsScreen: Error loading DP image for user $username: $error');
                   // Fallback to gradient avatar if image fails to load
                   return Container(
                     width: 40,
@@ -1036,6 +1405,15 @@ class _ReelsScreenState extends State<ReelsScreen> {
               ),
             ),
           );
+        }
+        
+        // Log the reason for fallback
+        if (snapshot.hasData) {
+          print('ReelsScreen: DP API failed for user $username: ${snapshot.data!['message']}');
+        } else if (snapshot.hasError) {
+          print('ReelsScreen: DP API error for user $username: ${snapshot.error}');
+        } else {
+          print('ReelsScreen: DP API loading for user $username');
         }
         
         // Fallback to gradient avatar if no DP is found or API fails

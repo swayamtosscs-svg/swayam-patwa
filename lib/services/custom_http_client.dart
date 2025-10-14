@@ -4,10 +4,13 @@ import 'package:http/io_client.dart';
 
 class CustomHttpClient {
   static http.Client? _client;
-  static const int _maxConnections = 10; // Increased for better concurrency
-  static const Duration _connectionTimeout = Duration(seconds: 5); // Reduced timeout
-  static const Duration _idleTimeout = Duration(seconds: 15); // Reduced idle timeout
-  static const Duration _receiveTimeout = Duration(seconds: 8); // Added receive timeout
+  static const int _maxConnections = 15; // Further increased for better concurrency
+  static const Duration _connectionTimeout = Duration(seconds: 3); // Further reduced timeout
+  static const Duration _idleTimeout = Duration(seconds: 10); // Further reduced idle timeout
+  static const Duration _receiveTimeout = Duration(seconds: 5); // Further reduced receive timeout
+  
+  // Request deduplication to prevent duplicate requests
+  static final Map<String, Future<http.Response>> _activeRequests = {};
   
   /// Get a custom HTTP client that handles SSL issues with memory optimization
   static http.Client get client {
@@ -49,12 +52,27 @@ class CustomHttpClient {
     _client = null;
   }
   
-  /// Make a GET request with custom headers and memory optimization
+  /// Make a GET request with custom headers, memory optimization, and request deduplication
   static Future<http.Response> get(Uri url, {Map<String, String>? headers}) async {
+    // Create request key for deduplication
+    final requestKey = 'GET_${url.toString()}_${headers?.toString() ?? ''}';
+    
+    // Check if same request is already in progress
+    if (_activeRequests.containsKey(requestKey)) {
+      print('CustomHttpClient: Request already in progress, waiting for result');
+      return await _activeRequests[requestKey]!;
+    }
+    
     try {
-      final response = await client.get(url, headers: headers);
+      // Create future for this request
+      final future = client.get(url, headers: headers);
+      _activeRequests[requestKey] = future;
+      
+      final response = await future;
+      _activeRequests.remove(requestKey);
       return response;
     } catch (e) {
+      _activeRequests.remove(requestKey);
       print('CustomHttpClient: GET request failed: $e');
       rethrow;
     }
@@ -75,9 +93,12 @@ class CustomHttpClient {
     }
   }
   
-  /// Clear any cached connections to free memory
+  /// Clear any cached connections and active requests to free memory
   static void clearCache() {
+    // Clear active requests
+    _activeRequests.clear();
     // Force recreation of client to clear any cached connections
     dispose();
+    print('CustomHttpClient: Cache and active requests cleared');
   }
 }

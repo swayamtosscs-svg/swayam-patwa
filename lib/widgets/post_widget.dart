@@ -11,6 +11,7 @@ import '../services/user_like_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
+import '../utils/avatar_utils.dart';
 import '../screens/post_full_view_screen.dart';
 import '../screens/post_slider_screen.dart';
 import 'image_slider_widget.dart';
@@ -199,6 +200,7 @@ class _PostWidgetState extends State<PostWidget> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -248,21 +250,29 @@ class _PostWidgetState extends State<PostWidget> {
   }
 
   Widget _buildAvatarContent() {
-    // Check if userAvatar is a valid image URL
-    if (widget.post.userAvatar.isNotEmpty && 
-        (widget.post.userAvatar.startsWith('http://') || widget.post.userAvatar.startsWith('https://'))) {
+    // Use AvatarUtils to properly handle avatar URLs
+    if (widget.post.userAvatar.isNotEmpty && AvatarUtils.isValidAvatarUrl(widget.post.userAvatar)) {
+      final absoluteAvatarUrl = AvatarUtils.getAbsoluteAvatarUrl(widget.post.userAvatar);
+      print('PostWidget: Loading avatar for ${widget.post.username}: $absoluteAvatarUrl');
+      
       // If it's a valid URL, show the image with caching
       return ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: CachedNetworkImage(
-          imageUrl: widget.post.userAvatar,
+          imageUrl: absoluteAvatarUrl,
           fit: BoxFit.cover,
           width: 40,
           height: 40,
+          httpHeaders: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
           placeholder: (context, url) => Container(
             width: 40,
             height: 40,
-            color: Colors.grey[200],
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: const Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
@@ -273,29 +283,27 @@ class _PostWidgetState extends State<PostWidget> {
           errorWidget: (context, url, error) {
             print('PostWidget: Avatar load error for URL: $url');
             print('PostWidget: Error: $error');
+            print('PostWidget: Original avatar URL: ${widget.post.userAvatar}');
             // Fallback to initials if image fails to load
             return _buildAvatarInitials();
           },
         ),
       );
     } else {
+      print('PostWidget: No valid avatar URL for ${widget.post.username}, showing initials');
+      print('PostWidget: Avatar URL was: ${widget.post.userAvatar}');
       // If not a valid URL, show initials
       return _buildAvatarInitials();
     }
   }
 
   Widget _buildAvatarInitials() {
-    // Get first letter of username for avatar
-    final initial = widget.post.username.isNotEmpty ? widget.post.username[0].toUpperCase() : 'U';
-    return Center(
-      child: Text(
-        initial,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.primaryColor,
-        ),
-      ),
+    // Use AvatarUtils for consistent styling
+    return AvatarUtils.buildDefaultAvatar(
+      name: widget.post.username,
+      size: 40,
+      borderColor: AppTheme.primaryColor,
+      borderWidth: 1,
     );
   }
 
@@ -489,19 +497,25 @@ class _PostWidgetState extends State<PostWidget> {
               height: height,
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                child: ImageSliderWidget(
-                  imageUrls: imagesToShow.cast<String>(),
-                  height: height,
-                  showCounter: true,
+                child: GestureDetector(
                   onTap: () {
-                    // Navigate to full screen image viewer
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PostFullViewScreen(post: widget.post),
-                      ),
-                    );
+                    // Navigate to user profile when clicking the main content image
+                    widget.onUserTap();
                   },
+                  child: ImageSliderWidget(
+                    imageUrls: imagesToShow.cast<String>(),
+                    height: height,
+                    showCounter: true,
+                    onTap: () {
+                      // Navigate to full screen image viewer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PostFullViewScreen(post: widget.post),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             );
@@ -563,64 +577,7 @@ class _PostWidgetState extends State<PostWidget> {
   }
 
   Widget _buildPostActions() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Reduced horizontal padding
-      child: Row(
-        children: [
-          // Like Button
-          _buildActionButton(
-            icon: _isLiked ? Icons.favorite : Icons.favorite_border,
-            label: _likeCount > 0 ? '$_likeCount' : 'Like',
-            onTap: _handleLike,
-            color: _isLiked ? Colors.red : const Color(0xFF666666),
-          ),
-          
-          const SizedBox(width: 24),
-          
-          // Comment Button
-          _buildActionButton(
-            icon: Icons.chat_bubble_outline,
-            label: '${widget.post.comments}',
-            onTap: () {
-              // Show comment dialog for user posts
-              showDialog(
-                context: context,
-                builder: (context) => UserCommentDialog(
-                  postId: widget.post.id,
-                  onCommentAdded: () {
-                    // Call the callback to notify parent
-                    widget.onComment();
-                  },
-                ),
-              );
-            },
-          ),
-          
-          const SizedBox(width: 24),
-          
-          // Share Button
-          _buildActionButton(
-            icon: Icons.share,
-            label: '${widget.post.shares}',
-            onTap: widget.onShare,
-          ),
-          
-          const Spacer(),
-          
-          // Bookmark Button
-          IconButton(
-            onPressed: () {
-              // Handle bookmark
-            },
-            icon: const Icon(
-              Icons.bookmark_border,
-              color: Color(0xFF666666),
-              size: 20,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildActionButton({

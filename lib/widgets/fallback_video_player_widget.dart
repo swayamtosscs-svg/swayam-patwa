@@ -38,6 +38,7 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
   bool _isPlaying = false;
   bool _isDisposed = false;
   bool _showControls = true;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -240,6 +241,40 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
     }
   }
 
+  void _onProgressBarDragStart() {
+    setState(() {
+      _isDragging = true;
+    });
+  }
+
+  void _onProgressBarDragEnd() {
+    setState(() {
+      _isDragging = false;
+    });
+  }
+
+  void _onProgressBarChanged(double value) {
+    if (_isInitialized) {
+      if (_useMediaKit && _mkPlayer != null) {
+        // For media_kit, we need to get duration first
+        // This is a simplified implementation
+        final duration = Duration(seconds: 60); // Default duration, should be updated with actual duration
+        final position = Duration(milliseconds: (value * duration.inMilliseconds).round());
+        _mkPlayer!.seek(position);
+      } else if (_controller != null) {
+        final position = Duration(milliseconds: (value * _controller!.value.duration.inMilliseconds).round());
+        _controller!.seekTo(position);
+      }
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_hasError) {
@@ -361,41 +396,81 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
                     ),
                   ),
                   padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        onPressed: _togglePlayPause,
-                        icon: Icon(
-                          _isPlaying ? Icons.pause : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 32,
+                      // Progress bar
+                      if ((!_useMediaKit && _controller != null && _controller!.value.duration.inMilliseconds > 0) ||
+                          (_useMediaKit && _mkPlayer != null))
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Text(
+                                _useMediaKit 
+                                    ? _formatDuration(Duration.zero) // Placeholder for media_kit
+                                    : _formatDuration(_controller!.value.position),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    activeTrackColor: Colors.white,
+                                    inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                    thumbColor: Colors.white,
+                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                    trackHeight: 2,
+                                  ),
+                                  child: Slider(
+                                    value: _useMediaKit 
+                                        ? 0.0 // Placeholder for media_kit
+                                        : (_controller!.value.duration.inMilliseconds > 0
+                                            ? _controller!.value.position.inMilliseconds / _controller!.value.duration.inMilliseconds
+                                            : 0.0),
+                                    onChanged: _onProgressBarChanged,
+                                    onChangeStart: (_) => _onProgressBarDragStart(),
+                                    onChangeEnd: (_) => _onProgressBarDragEnd(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _useMediaKit 
+                                    ? _formatDuration(Duration(seconds: 60)) // Placeholder for media_kit
+                                    : _formatDuration(_controller!.value.duration),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      // Play/Pause button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            onPressed: _togglePlayPause,
+                            icon: Icon(
+                              _isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
             
-            // Large play button overlay when not playing (only if showControls is true)
-            if (!_isPlaying && _isInitialized && _showControls)
-              Center(
-                child: GestureDetector(
-                  onTap: _togglePlayPause,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),

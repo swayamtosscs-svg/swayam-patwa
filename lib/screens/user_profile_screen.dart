@@ -12,6 +12,11 @@ import '../utils/avatar_utils.dart';
 import '../widgets/follow_button.dart';
 import '../widgets/dp_widget.dart';
 import 'package:flutter/foundation.dart'; // Added for kDebugMode
+import '../models/highlight_model.dart';
+import '../services/highlight_service.dart';
+import '../screens/highlights_screen.dart';
+import '../screens/highlight_viewer_screen.dart';
+import '../test_follow_status_debug.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -187,10 +192,13 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           await _loadUserMedia();
         },
         child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Column(
             children: [
               // Instagram-style Profile Header
               _buildInstagramStyleProfileHeader(),
+              
+              SizedBox(height: MediaQuery.of(context).size.width < 600 ? 8 : 12),
               
               // Instagram-style Tab Bar
               _buildInstagramStyleTabBar(),
@@ -270,6 +278,16 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           icon: const Icon(Icons.message, color: Colors.black),
           tooltip: 'Send Message',
         ),
+        
+        // Debug button (only in debug mode)
+        if (kDebugMode)
+          IconButton(
+            onPressed: () {
+              showFollowStatusDebug(context, widget.userId, widget.username);
+            },
+            icon: const Icon(Icons.bug_report, color: Colors.black),
+            tooltip: 'Debug Follow Status',
+          ),
         
         // More options
         IconButton(
@@ -444,8 +462,21 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildTabContent() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    
+    // Calculate available height more intelligently for mobile
+    double availableHeight;
+    if (isMobile) {
+      // For mobile: Use remaining space after header, tabs, and bottom navigation
+      availableHeight = screenHeight * 0.45; // Reduced from 0.6 to 0.45
+    } else {
+      // For desktop: Use original calculation
+      availableHeight = screenHeight * 0.6;
+    }
+    
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
+      height: availableHeight,
       child: TabBarView(
         controller: _tabController,
         children: [
@@ -458,8 +489,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   }
 
   Widget _buildProfileHeader() {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final mobilePadding = isMobile ? 12.0 : 16.0;
+    
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(mobilePadding),
       child: Column(
         children: [
           // Profile Image using DPWidget
@@ -472,52 +506,54 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               // Update the avatar if needed
               print('UserProfileScreen: Avatar changed to: $newImageUrl');
             },
-            size: 100,
+            size: isMobile ? 80 : 100,
             borderColor: const Color(0xFF6366F1),
             showEditButton: false, // Don't show edit button for other users' profiles
           ),
           
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 12 : 16),
           
           // User Name
           Text(
             widget.fullName,
-            style: const TextStyle(
-              fontSize: 24,
+            style: TextStyle(
+              fontSize: isMobile ? 20 : 24,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A1A),
+              color: const Color(0xFF1A1A1A),
               fontFamily: 'Poppins',
             ),
           ),
           
-          const SizedBox(height: 4),
+          SizedBox(height: isMobile ? 2 : 4),
           
           // Username
           Text(
             '@${widget.username}',
-            style: const TextStyle(
-              fontSize: 16,
-              color: Color(0xFF666666),
+            style: TextStyle(
+              fontSize: isMobile ? 14 : 16,
+              color: const Color(0xFF666666),
               fontFamily: 'Poppins',
             ),
           ),
           
-          const SizedBox(height: 12),
+          SizedBox(height: isMobile ? 8 : 12),
           
           // Bio
           if (widget.bio.isNotEmpty)
             Text(
               widget.bio,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF666666),
+              style: TextStyle(
+                fontSize: isMobile ? 12 : 14,
+                color: const Color(0xFF666666),
                 fontFamily: 'Poppins',
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
+              maxLines: isMobile ? 2 : 3,
+              overflow: TextOverflow.ellipsis,
             ),
           
-          const SizedBox(height: 16),
+          SizedBox(height: isMobile ? 12 : 16),
           
           // Stats Row
           Row(
@@ -560,6 +596,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           
           // Follow/Unfollow Button
           _buildFollowButton(),
+          
+          const SizedBox(height: 20),
+          
+          // Highlights Section
+          _buildHighlightsSection(),
         ],
       ),
     );
@@ -1103,6 +1144,138 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHighlightsSection() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    return FutureBuilder<HighlightsListResponse>(
+      future: HighlightService.getHighlights(
+        token: authProvider.authToken ?? '',
+        page: 1,
+        limit: 10,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 120,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.success) {
+          print('UserProfileScreen: Highlights error - ${snapshot.error}');
+          return const SizedBox.shrink();
+        }
+
+        final highlights = snapshot.data!.highlights;
+        print('UserProfileScreen: Found ${highlights.length} highlights');
+        
+        if (highlights.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Highlights',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF4A2C2A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 100,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: highlights.length,
+                  itemBuilder: (context, index) {
+                    final highlight = highlights[index];
+                    return _buildHighlightItem(highlight);
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHighlightItem(Highlight highlight) {
+    return GestureDetector(
+      onTap: () {
+        // Navigate to highlight viewer to show stories
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HighlightViewerScreen(highlight: highlight),
+          ),
+        );
+      },
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.grey[300]!,
+                  width: 2,
+                ),
+              ),
+              child: ClipOval(
+                child: highlight.stories.isNotEmpty && highlight.stories.first.media.isNotEmpty
+                    ? Image.network(
+                        highlight.stories.first.media,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[200],
+                            child: const Icon(
+                              Icons.star,
+                              color: Colors.grey,
+                              size: 24,
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.star,
+                          color: Colors.grey,
+                          size: 24,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              highlight.name,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF4A2C2A),
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

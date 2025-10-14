@@ -185,21 +185,6 @@ class _ProfileReelWidgetState extends State<ProfileReelWidget> {
             else
               _buildFallbackThumbnail(),
             
-            // Play button overlay
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-            ),
           ],
         ),
       );
@@ -327,25 +312,6 @@ class _ProfileReelWidgetState extends State<ProfileReelWidget> {
               ),
             ),
             
-            // Play/Pause indicator
-            if (!_isPlaying)
-              Center(
-                child: GestureDetector(
-                  onTap: _togglePlayPause,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -357,26 +323,6 @@ class _ProfileReelWidgetState extends State<ProfileReelWidget> {
       decoration: BoxDecoration(
         color: Colors.black,
         borderRadius: BorderRadius.circular(16),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.play_circle_outline,
-              color: Colors.white,
-              size: 48,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap to play',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

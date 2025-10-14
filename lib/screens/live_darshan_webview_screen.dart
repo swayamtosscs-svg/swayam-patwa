@@ -147,7 +147,7 @@ Page resource error:
               debugPrint('Navigation request to: ${request.url}');
               // Allow navigation within the live streaming domain and mobile-specific URLs
               if (request.url.contains('103.14.120.163') || 
-                  request.url.contains('localhost') ||
+                   ||
                   request.url.contains('127.0.0.1') ||
                   request.url.startsWith('data:') ||
                   request.url.startsWith('javascript:') ||
@@ -862,12 +862,6 @@ Page resource error:
                 icon: const Icon(Icons.list, color: Colors.orange, size: 20),
                 onPressed: _selectRoom,
                 tooltip: 'Select Room',
-              ),
-              // Share Room Button
-              IconButton(
-                icon: const Icon(Icons.share, color: Colors.blue, size: 20),
-                onPressed: _shareRoom,
-                tooltip: 'Share Room Link',
               ),
             ],
           ),
@@ -1978,14 +1972,6 @@ Page resource error:
                   
                   // Share Room
                   _buildStreamActionButton(
-                    'Share Room Link',
-                    () {
-                      Navigator.pop(context);
-                      _shareRoom();
-                    },
-                    Icons.share,
-                    Colors.purple,
-                  ),
                   const SizedBox(height: 20),
                   
                   Text(

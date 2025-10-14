@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../models/message_model.dart';
 import '../models/user_model.dart';
@@ -40,6 +42,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isSending = false;
   DateTime? _lastRefreshTime;
   Timer? _messagePollingTimer;
+  bool _hasNewMessages = false;
+  int _lastMessageCount = 0;
 
   @override
   void initState() {
@@ -57,7 +61,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // Add scroll listener for pagination
     _scrollController.addListener(_onScroll);
     
-    // Load messages and start polling
+    // Load cached messages first for immediate display, then load from API
+    _loadCachedMessagesFirst();
     _loadMessages();
     _startMessagePolling();
   }
@@ -89,6 +94,134 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _stopMessagePolling();
     _lastRefreshTime = null;
     super.dispose();
+  }
+
+  /// Load cached messages first for immediate display
+  Future<void> _loadCachedMessagesFirst() async {
+    if (_currentThreadId != null && _currentThreadId!.isNotEmpty) {
+      try {
+        print('ChatScreen: Loading cached messages first for thread: $_currentThreadId');
+        
+        // Get cached messages directly from SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        final key = 'messages_$_currentThreadId';
+        final messagesJson = prefs.getString(key);
+        
+        if (messagesJson != null) {
+          final List<dynamic> messagesData = jsonDecode(messagesJson);
+          final List<Message> cachedMessages = [];
+          
+          for (final messageData in messagesData) {
+            try {
+              final sender = messageData['sender'] ?? {};
+              final message = Message(
+                id: messageData['id'] ?? '',
+                threadId: messageData['threadId'] ?? '',
+                sender: MessageSender(
+                  id: sender['id'] ?? '',
+                  username: sender['username'] ?? '',
+                  fullName: sender['fullName'] ?? '',
+                  avatar: sender['avatar'] ?? '',
+                ),
+                recipient: messageData['recipient'] ?? '',
+                content: messageData['content'] ?? '',
+                messageType: messageData['messageType'] ?? 'text',
+                mediaUrl: messageData['mediaUrl'],
+                mediaInfo: messageData['mediaInfo'],
+                isRead: messageData['isRead'] ?? false,
+                isDeleted: messageData['isDeleted'] ?? false,
+                reactions: messageData['reactions'] ?? [],
+                createdAt: DateTime.parse(messageData['createdAt']),
+                updatedAt: DateTime.parse(messageData['updatedAt']),
+              );
+              cachedMessages.add(message);
+            } catch (e) {
+              print('ChatScreen: Error creating cached message: $e');
+            }
+          }
+          
+          // Sort messages by creation time (oldest first)
+          cachedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          
+          if (mounted && cachedMessages.isNotEmpty) {
+            setState(() {
+              _messages = cachedMessages.where((m) => !m.isDeleted).toList();
+              print('ChatScreen: Loaded ${_messages.length} cached messages immediately');
+            });
+          }
+        }
+      } catch (e) {
+        print('ChatScreen: Error loading cached messages: $e');
+      }
+    } else {
+      // If no thread ID yet, try to get cached messages using user IDs
+      try {
+        print('ChatScreen: No thread ID yet, trying to find cached messages by user IDs');
+        
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        if (authProvider.userProfile != null) {
+          // Try to find cached thread ID first
+          final prefs = await SharedPreferences.getInstance();
+          final threadKey = 'thread_${authProvider.userProfile!.id}_${widget.recipientUserId}';
+          final cachedThreadId = prefs.getString(threadKey);
+          
+          if (cachedThreadId != null && cachedThreadId.isNotEmpty) {
+            print('ChatScreen: Found cached thread ID: $cachedThreadId');
+            _currentThreadId = cachedThreadId;
+            
+            // Now load cached messages for this thread
+            final messagesKey = 'messages_$cachedThreadId';
+            final messagesJson = prefs.getString(messagesKey);
+            
+            if (messagesJson != null) {
+              final List<dynamic> messagesData = jsonDecode(messagesJson);
+              final List<Message> cachedMessages = [];
+              
+              for (final messageData in messagesData) {
+                try {
+                  final sender = messageData['sender'] ?? {};
+                  final message = Message(
+                    id: messageData['id'] ?? '',
+                    threadId: messageData['threadId'] ?? '',
+                    sender: MessageSender(
+                      id: sender['id'] ?? '',
+                      username: sender['username'] ?? '',
+                      fullName: sender['fullName'] ?? '',
+                      avatar: sender['avatar'] ?? '',
+                    ),
+                    recipient: messageData['recipient'] ?? '',
+                    content: messageData['content'] ?? '',
+                    messageType: messageData['messageType'] ?? 'text',
+                    mediaUrl: messageData['mediaUrl'],
+                    mediaInfo: messageData['mediaInfo'],
+                    isRead: messageData['isRead'] ?? false,
+                    isDeleted: messageData['isDeleted'] ?? false,
+                    reactions: messageData['reactions'] ?? [],
+                    createdAt: DateTime.parse(messageData['createdAt']),
+                    updatedAt: DateTime.parse(messageData['updatedAt']),
+                  );
+                  cachedMessages.add(message);
+                } catch (e) {
+                  print('ChatScreen: Error creating cached message: $e');
+                }
+              }
+              
+              // Sort messages by creation time (oldest first)
+              cachedMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+              
+              if (mounted && cachedMessages.isNotEmpty) {
+                setState(() {
+                  _messages = cachedMessages.where((m) => !m.isDeleted).toList();
+                  print('ChatScreen: Loaded ${_messages.length} cached messages immediately from user ID lookup');
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print('ChatScreen: Error loading cached messages by user IDs: $e');
+      }
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -127,15 +260,32 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         );
         
         if (mounted) {
+          // Filter out deleted messages
+          final activeMessages = messages.where((m) => !m.isDeleted).toList();
+          
           setState(() {
-            // Always update messages to ensure we have the latest
-            _messages = messages;
-            print('ChatScreen: Loaded ${messages.length} messages from API');
+            // Check for new messages
+            if (_lastMessageCount > 0 && activeMessages.length > _lastMessageCount) {
+              _hasNewMessages = true;
+            }
+            _lastMessageCount = activeMessages.length;
+            
+            // Always update messages to ensure we have the latest (excluding deleted)
+            _messages = activeMessages;
+            print('ChatScreen: Loaded ${activeMessages.length} active messages from API (${messages.length - activeMessages.length} deleted)');
             
             _isLoading = false;
           });
           _scrollToBottom();
           _lastRefreshTime = DateTime.now();
+          
+          // Mark messages as read
+          if (activeMessages.isNotEmpty) {
+            ChatService.markMessagesAsRead(
+              threadId: _currentThreadId!,
+              token: authProvider.authToken!,
+            );
+          }
         }
       } else if (_currentThreadId != null && _currentThreadId!.startsWith('temp_')) {
         // We have a temporary thread ID, don't load any messages - just show empty state
@@ -165,36 +315,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           print('ChatScreen: Got thread ID: $_currentThreadId');
           print('ChatScreen: Previous thread ID: $previousThreadId');
           
-          // Only load messages if we have a real thread ID
-          if (!_currentThreadId!.startsWith('temp_')) {
-            print('ChatScreen: Loading messages for real thread: $_currentThreadId');
-            final messages = await ChatService.getMessagesByThreadId(
-              threadId: _currentThreadId!,
-              token: authProvider.authToken!,
-            );
+          // Load messages for any thread ID (including temporary ones)
+          print('ChatScreen: Loading messages for thread: $_currentThreadId');
+          final messages = await ChatService.getMessagesByThreadId(
+            threadId: _currentThreadId!,
+            token: authProvider.authToken!,
+          );
+          
+          if (mounted) {
+            // Filter out deleted messages
+            final activeMessages = messages.where((m) => !m.isDeleted).toList();
             
-            if (mounted) {
-              setState(() {
-                _messages = messages;
-                _isLoading = false;
-              });
-              _scrollToBottom();
-              
-              // Mark messages as read
-              if (messages.isNotEmpty) {
-                ChatService.markMessagesAsRead(
-                  threadId: _currentThreadId!,
-                  token: authProvider.authToken!,
-                );
-              }
-            }
-          } else {
-            // Temporary thread, no messages to load
-            print('ChatScreen: Got temporary thread ID, no messages to load');
             setState(() {
-              _messages = [];
+              _messages = activeMessages;
               _isLoading = false;
             });
+            _scrollToBottom();
+            
+            // Mark messages as read
+            if (activeMessages.isNotEmpty) {
+              ChatService.markMessagesAsRead(
+                threadId: _currentThreadId!,
+                token: authProvider.authToken!,
+              );
+            }
           }
         } else {
           // Failed to create thread, start fresh
@@ -257,18 +401,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
 
       if (mounted && messages.isNotEmpty) {
-        // Check if we have new messages
+        // Filter out deleted messages from the server response
+        final activeMessages = messages.where((m) => !m.isDeleted).toList();
+        
+        // Check if we have new messages or if any existing messages were deleted
         final existingMessageIds = _messages.map((m) => m.id).toSet();
-        final newMessages = messages.where((m) => !existingMessageIds.contains(m.id)).toList();
+        final newMessages = activeMessages.where((m) => !existingMessageIds.contains(m.id)).toList();
+        
+        // Check for deleted messages (messages that exist locally but not in server response)
+        final serverMessageIds = activeMessages.map((m) => m.id).toSet();
+        final deletedMessages = _messages.where((m) => !serverMessageIds.contains(m.id)).toList();
 
-        if (newMessages.isNotEmpty) {
-          print('ChatScreen: Found ${newMessages.length} new messages via polling');
+        if (newMessages.isNotEmpty || deletedMessages.isNotEmpty) {
+          print('ChatScreen: Found ${newMessages.length} new messages and ${deletedMessages.length} deleted messages via polling');
           setState(() {
+            // Remove deleted messages
+            _messages.removeWhere((m) => deletedMessages.any((dm) => dm.id == m.id));
+            
+            // Add new messages
             _messages.addAll(newMessages);
+            
             // Sort messages by creation time to maintain chronological order
             _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
           });
-          _scrollToBottom();
+          
+          if (newMessages.isNotEmpty) {
+            _scrollToBottom();
+          }
         }
       }
     } catch (e) {
@@ -410,26 +569,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       Navigator.of(context).pop();
 
       if (response['success'] == true && mounted) {
-        // Update the message in the local list to mark it as deleted
+        // Real-time deletion: Remove message from UI immediately
         setState(() {
-          final index = _messages.indexWhere((m) => m.id == message.id);
-          if (index != -1) {
-            _messages[index] = Message(
-              id: message.id,
-              threadId: message.threadId,
-              sender: message.sender,
-              recipient: message.recipient,
-              content: message.content,
-              messageType: message.messageType,
-              mediaUrl: message.mediaUrl,
-              mediaInfo: message.mediaInfo,
-              isRead: message.isRead,
-              isDeleted: true, // Mark as deleted
-              reactions: message.reactions,
-              createdAt: message.createdAt,
-              updatedAt: DateTime.now(),
-            );
-          }
+          _messages.removeWhere((m) => m.id == message.id);
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -507,8 +649,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  // Check if message can be edited (within 5 minutes)
+  bool _canEditMessage(Message message) {
+    final now = DateTime.now();
+    final messageTime = message.createdAt;
+    final timeDifference = now.difference(messageTime);
+    return timeDifference.inMinutes < 5;
+  }
+
   // Show message options menu
   void _showMessageOptions(Message message, bool isCurrentUser) {
+    final canEdit = isCurrentUser && _canEditMessage(message);
+    
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
@@ -517,20 +669,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isCurrentUser) ...[
-              ListTile(
-                leading: const Icon(Icons.edit, color: Colors.blue),
-                title: const Text('Edit Message'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _showEditDialog(message);
-                },
-              ),
+              if (canEdit) ...[
+                ListTile(
+                  leading: const Icon(Icons.edit, color: Colors.blue),
+                  title: const Text('Edit Message'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showEditDialog(message);
+                  },
+                ),
+              ] else ...[
+                ListTile(
+                  leading: const Icon(Icons.edit, color: Colors.grey),
+                  title: const Text('Edit Message'),
+                  subtitle: const Text('Edit time expired (5 minutes)'),
+                  enabled: false,
+                ),
+              ],
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
                 title: const Text('Delete Message'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showDeleteConfirmation(message);
+                  _deleteMessage(message);
                 },
               ),
             ] else ...[
@@ -539,7 +700,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 title: const Text('Delete Message'),
                 onTap: () {
                   Navigator.of(context).pop();
-                  _showDeleteConfirmation(message);
+                  _deleteMessage(message);
                 },
               ),
             ],
@@ -654,10 +815,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         print('ChatScreen: Using thread ID: $_currentThreadId');
         setState(() {
           _messages.add(newMessage);
+          _lastMessageCount = _messages.length;
         });
         
         print('ChatScreen: Total messages in list: ${_messages.length}');
         _scrollToBottom();
+        
+        // Clear notification dot when user sends a message
+        _clearNewMessageNotification();
         
         // Real-time updates disabled to prevent constant refreshing
         
@@ -1075,6 +1240,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         curve: Curves.easeOut,
       );
     }
+    // Clear notification dot when scrolling to bottom
+    _clearNewMessageNotification();
+  }
+
+  void _clearNewMessageNotification() {
+    if (_hasNewMessages) {
+      setState(() {
+        _hasNewMessages = false;
+      });
+    }
   }
 
 
@@ -1095,6 +1270,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Manual refresh method for when user explicitly wants to refresh
   void _manualRefresh() {
     print('ChatScreen: Manual refresh triggered');
+    // Clear notification dot when user manually refreshes
+    _clearNewMessageNotification();
     print('ChatScreen: Current thread ID before refresh: $_currentThreadId');
     print('ChatScreen: Current messages count before refresh: ${_messages.length}');
     
@@ -1149,19 +1326,41 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           icon: const Icon(Icons.arrow_back, color: Colors.black),
                           onPressed: () => Navigator.pop(context),
                         ),
-                        // Recipient Avatar
-                        DPWidget(
-                          currentImageUrl: widget.recipientAvatar,
-                          userId: widget.recipientUserId,
-                          token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
-                          userName: widget.recipientFullName,
-                          onImageChanged: (String newImageUrl) {
-                            // Update the avatar if needed
-                            print('ChatScreen: Recipient avatar changed to: $newImageUrl');
-                          },
-                          size: 36,
-                          borderColor: Colors.white.withOpacity(0.2),
-                          showEditButton: false, // Don't show edit button for other users' profiles
+                        // Recipient Avatar with notification dot
+                        Stack(
+                          children: [
+                            DPWidget(
+                              currentImageUrl: widget.recipientAvatar,
+                              userId: widget.recipientUserId,
+                              token: Provider.of<AuthProvider>(context, listen: false).authToken ?? '',
+                              userName: widget.recipientFullName,
+                              onImageChanged: (String newImageUrl) {
+                                // Update the avatar if needed
+                                print('ChatScreen: Recipient avatar changed to: $newImageUrl');
+                              },
+                              size: 36,
+                              borderColor: Colors.white.withOpacity(0.2),
+                              showEditButton: false, // Don't show edit button for other users' profiles
+                            ),
+                            // New message notification dot
+                            if (_hasNewMessages)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1316,21 +1515,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
           
           // Message Content
-          Flexible(
+          IntrinsicWidth(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: isCurrentUser 
-                    ? Colors.white.withOpacity(0.2) 
-                    : Colors.white.withOpacity(0.1),
+                    ? const Color(0xFF4A90E2).withOpacity(0.9)  // Blue for sender messages
+                    : const Color(0xFFF5F5F5).withOpacity(0.9), // Light gray for receiver messages
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
+                  color: isCurrentUser 
+                      ? const Color(0xFF4A90E2).withOpacity(0.3)
+                      : Colors.grey.withOpacity(0.3),
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withOpacity(0.1),
                     blurRadius: 10,
                     spreadRadius: 2,
                     offset: const Offset(0, 4),
@@ -1352,14 +1553,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   // Image message
                   if (message.messageType == 'image' && message.mediaUrl != null) ...[
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(
+                        Expanded(
                           child: GestureDetector(
                             onTap: () => _showImageDialog(message.mediaUrl!),
                             child: Container(
-                              constraints: const BoxConstraints(
-                                maxWidth: 180,
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.4,
                                 maxHeight: 200,
                               ),
                               decoration: BoxDecoration(
@@ -1377,8 +1577,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   loadingBuilder: (context, child, loadingProgress) {
                                     if (loadingProgress == null) return child;
                                     return Container(
-                                      width: 200,
-                                      height: 200,
+                                      width: 150,
+                                      height: 150,
                                       color: Colors.grey[300],
                                       child: const Center(
                                         child: CircularProgressIndicator(),
@@ -1387,8 +1587,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   },
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
-                                      width: 200,
-                                      height: 200,
+                                      width: 150,
+                                      height: 150,
                                       color: Colors.grey[300],
                                       child: Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1424,7 +1624,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             child: Icon(
                               Icons.more_vert,
                               size: 18,
-                              color: Colors.black.withOpacity(0.7),
+                              color: isCurrentUser 
+                                  ? Colors.white.withOpacity(0.8)
+                                  : Colors.black.withOpacity(0.7),
                             ),
                           ),
                         ),
@@ -1434,9 +1636,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       const SizedBox(height: 8),
                       Text(
                         message.content,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: Colors.black,
+                          color: isCurrentUser ? Colors.white : Colors.black,
                           fontFamily: 'Poppins',
                         ),
                       ),
@@ -1444,14 +1646,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ] else if (message.messageType == 'video' && message.mediaUrl != null) ...[
                     // Video message
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(
+                        Expanded(
                           child: GestureDetector(
                             onTap: () => _showVideoDialog(message.mediaUrl!),
                             child: Container(
-                              constraints: const BoxConstraints(
-                                maxWidth: 180,
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width * 0.4,
                                 maxHeight: 200,
                               ),
                               decoration: BoxDecoration(
@@ -1467,8 +1668,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   children: [
                                     // Video thumbnail placeholder
                                     Container(
-                                      width: 200,
-                                      height: 200,
+                                      width: 150,
+                                      height: 150,
                                       color: Colors.grey[800],
                                       child: Center(
                                         child: Column(
@@ -1599,18 +1800,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ] else ...[
                     // Text message
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Text(
                             message.content,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
-                              color: Colors.black,
+                              color: isCurrentUser ? Colors.white : Colors.black,
                               fontFamily: 'Poppins',
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         // 3-dot menu button
                         GestureDetector(
                           onTap: () => _showMessageOptions(message, isCurrentUser),
@@ -1619,7 +1820,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             child: Icon(
                               Icons.more_vert,
                               size: 18,
-                              color: Colors.black.withOpacity(0.7),
+                              color: isCurrentUser 
+                                  ? Colors.white.withOpacity(0.8)
+                                  : Colors.black.withOpacity(0.7),
                             ),
                           ),
                         ),
@@ -1631,7 +1834,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     _formatTime(message.createdAt),
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.black.withOpacity(0.7),
+                      color: isCurrentUser 
+                          ? Colors.white.withOpacity(0.8)
+                          : Colors.black.withOpacity(0.7),
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -1690,8 +1895,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           GestureDetector(
             onTap: _isSending ? null : _pickAndSendImage,
             child: Container(
-              width: 50,
-              height: 50,
+              width: 45,
+              height: 45,
               decoration: BoxDecoration(
                 color: _isSending 
                     ? Colors.white.withOpacity(0.3) 
@@ -1707,19 +1912,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 color: _isSending 
                     ? Colors.white.withOpacity(0.5) 
                     : Colors.white.withOpacity(0.8),
-                size: 24,
+                size: 20,
               ),
             ),
           ),
           
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           
           // Video Picker Button
           GestureDetector(
             onTap: _isSending ? null : _pickAndSendVideo,
             child: Container(
-              width: 50,
-              height: 50,
+              width: 45,
+              height: 45,
               decoration: BoxDecoration(
                 color: _isSending 
                     ? Colors.white.withOpacity(0.3) 
@@ -1735,12 +1940,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 color: _isSending 
                     ? Colors.white.withOpacity(0.5) 
                     : Colors.white.withOpacity(0.8),
-                size: 24,
+                size: 20,
               ),
             ),
           ),
           
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           
           // Message Input Field
           Expanded(
@@ -1776,7 +1981,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     fontFamily: 'Poppins',
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 maxLines: null,
                 textInputAction: TextInputAction.send,
@@ -1785,14 +1990,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ),
           
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           
           // Send Button
           GestureDetector(
             onTap: _isSending ? null : _sendMessage,
             child: Container(
-              width: 50,
-              height: 50,
+              width: 45,
+              height: 45,
               decoration: BoxDecoration(
                 color: _isSending 
                     ? Colors.white.withOpacity(0.3) 
@@ -1813,8 +2018,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
               child: _isSending
                   ? const SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: 18,
+                      height: 18,
                       child: CircularProgressIndicator(
                         color: Colors.black,
                         strokeWidth: 2,
@@ -1823,7 +2028,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   : const Icon(
                       Icons.send,
                       color: Colors.black,
-                      size: 24,
+                      size: 20,
                     ),
             ),
           ),

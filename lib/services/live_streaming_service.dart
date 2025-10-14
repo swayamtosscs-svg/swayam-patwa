@@ -302,8 +302,8 @@ class LiveStreamingService {
   // WebSocket connection for real-time communication
   static WebSocketChannel? connectToRoom(String websocketUrl, String roomName) {
     try {
-      // Replace localhost with the actual server IP
-      String wsUrl = websocketUrl.replaceFirst('localhost', '103.14.120.163');
+      // Replace  with the actual server IP
+      String wsUrl = websocketUrl.replaceFirst('', '103.14.120.163');
       
       final channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       return channel;
@@ -393,7 +393,7 @@ class MyHttpOverrides extends HttpOverrides {
     return super.createHttpClient(context)
       ..badCertificateCallback = (X509Certificate cert, String host, int port) {
         // Allow all certificates for the live streaming server
-        return host == '103.14.120.163' || host == 'localhost';
+        return host == '103.14.120.163' || host == '';
       };
   }
 }

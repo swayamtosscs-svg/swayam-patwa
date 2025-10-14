@@ -303,27 +303,6 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
                           muted: true,
                         ),
                       ),
-                      // Play/Pause overlay
-                      Center(
-                        child: GestureDetector(
-                          onTap: () {
-                            // Play/pause is handled by VideoPlayerWidget
-                            setState(() {});
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.play_arrow,
-                              color: Colors.white,
-                              size: 32,
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
                   )
                 : const Center(

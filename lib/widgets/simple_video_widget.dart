@@ -114,32 +114,6 @@ class _SimpleVideoWidgetState extends State<SimpleVideoWidget> {
                   },
                 ),
 
-                // Play Button Overlay
-                Center(
-                  child: GestureDetector(
-                    onTap: _openFullScreen,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(_isHovered ? 0.8 : 0.6),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 50,
-                      ),
-                    ),
-                  ),
-                ),
 
                 // Video Info Overlay
                 if (widget.showFullDetails) ...[

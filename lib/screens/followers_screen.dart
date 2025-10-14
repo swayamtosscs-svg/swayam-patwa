@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../screens/user_profile_screen.dart';
 import '../utils/responsive_utils.dart';
 import '../services/theme_service.dart';
+import '../services/dp_service.dart';
 
 class FollowersScreen extends StatefulWidget {
   final String? userId; // Optional userId, if null use current user
@@ -448,20 +449,26 @@ class _FollowersScreenState extends State<FollowersScreen> {
           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              radius: 25,
-              backgroundColor: Colors.white.withOpacity(0.2),
-              child: avatar.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        avatar,
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(),
-                      ),
-                    )
-                  : _buildDefaultAvatar(),
+            leading: FutureBuilder<String?>(
+              future: _getUserDP(userId),
+              builder: (context, snapshot) {
+                String? dpUrl = snapshot.data;
+                return CircleAvatar(
+                  radius: 25,
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  child: (dpUrl != null && dpUrl.isNotEmpty)
+                      ? ClipOval(
+                          child: Image.network(
+                            dpUrl,
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(),
+                          ),
+                        )
+                      : _buildDefaultAvatar(),
+                );
+              },
             ),
             title: Text(
               fullName,
@@ -547,5 +554,31 @@ class _FollowersScreenState extends State<FollowersScreen> {
       size: 30,
       color: Colors.black,
     );
+  }
+
+  /// Fetch DP for a specific user
+  Future<String?> _getUserDP(String userId) async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      
+      if (token == null || userId.isEmpty) {
+        return null;
+      }
+
+      final response = await DPService.retrieveDP(
+        userId: userId,
+        token: token,
+      );
+
+      if (response['success'] == true && response['data'] != null) {
+        return response['data']['dpUrl'] as String?;
+      }
+      
+      return null;
+    } catch (e) {
+      print('Error fetching DP for user $userId: $e');
+      return null;
+    }
   }
 }

@@ -41,7 +41,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // Refresh chat threads when app becomes active
+    // Refresh chat threads when app becomes active to show updated last messages
     if (state == AppLifecycleState.resumed) {
       _refreshChats();
     }
@@ -390,8 +390,8 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
             ),
           );
           
-          // Refresh chat threads when returning from chat
-          _refreshChats();
+          // Refresh chat threads when returning from chat to show updated last message
+          await _refreshChats();
         },
       ),
     );

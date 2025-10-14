@@ -18,6 +18,7 @@ import 'screens/add_options_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/baba_pages_screen.dart';
 import 'screens/live_stream_screen.dart';
+import 'screens/reels_screen.dart';
 import 'screens/profile_edit_screen.dart';
 import 'screens/story_upload_screen.dart';
 import 'widgets/dp_widget.dart';
@@ -526,9 +527,6 @@ class _ProfileUIState extends State<ProfileUI> {
             if (isVideo)
               Container(
                 color: Colors.black,
-                child: const Center(
-                  child: Icon(Icons.play_circle_filled, color: Colors.white, size: 36),
-                ),
               )
             else
               (post.imageUrl != null && post.imageUrl!.isNotEmpty)
@@ -724,6 +722,14 @@ class _ProfileUIState extends State<ProfileUI> {
                 isSelected: false,
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen()));
+                },
+              ),
+              _buildNavItem(
+                icon: Icons.video_library,
+                label: 'Reels',
+                isSelected: false,
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ReelsScreen()));
                 },
               ),
               _buildNavItem(

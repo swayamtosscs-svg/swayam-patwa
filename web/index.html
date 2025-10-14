@@ -34,5 +34,23 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  
+  <script>
+    // Register iframe view factory for web
+    window.addEventListener('flutter-first-frame', function() {
+      // Register iframe view factory for live streams
+      if (window.flutter_webview_plugin) {
+        window.flutter_webview_plugin.registerViewFactory('iframe-view', function(id) {
+          const iframe = document.createElement('iframe');
+          iframe.style.border = 'none';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.allowFullscreen = true;
+          iframe.allow = 'camera; microphone; autoplay; encrypted-media';
+          return iframe;
+        });
+      }
+    });
+  </script>
 </body>
 </html>

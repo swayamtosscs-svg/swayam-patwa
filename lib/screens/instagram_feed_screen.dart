@@ -472,45 +472,6 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
                 );
               },
             ),
-          // Post actions
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      // Toggle like
-                    });
-                  },
-                  icon: Icon(
-                    post.isLiked ? Icons.favorite : Icons.favorite_border,
-                    color: post.isLiked ? Colors.red : Colors.black,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.chat_bubble_outline),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.send),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      // Toggle save
-                    });
-                  },
-                  icon: Icon(
-                    post.isSaved ? Icons.bookmark : Icons.bookmark_border,
-                    color: post.isSaved ? Colors.black : Colors.black,
-                  ),
-                ),
-              ],
-            ),
-          ),
           // Likes count
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -733,13 +694,6 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
                 },
               ),
               const SizedBox(height: 20),
-              _buildReelActionButton(
-                icon: Icons.share,
-                label: '${reel.shares}',
-                onTap: () {
-                  // Handle share
-                },
-              ),
               const SizedBox(height: 20),
               _buildReelActionButton(
                 icon: Icons.bookmark_border,
@@ -938,7 +892,7 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildNavItem(Icons.home, 'Home', true),
           _buildNavItem(Icons.search, 'Search', false),
@@ -951,24 +905,29 @@ class _InstagramFeedScreenState extends State<InstagramFeedScreen>
   }
 
   Widget _buildNavItem(IconData icon, String label, bool isSelected) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          icon,
-          color: isSelected ? Colors.black : Colors.grey,
-          size: 24,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
+    return Expanded(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
             color: isSelected ? Colors.black : Colors.grey,
-            fontSize: 10,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            size: 20,
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : Colors.grey,
+              fontSize: 9,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 

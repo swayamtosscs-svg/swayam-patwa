@@ -344,8 +344,6 @@ class _BabaPageReelWidgetState extends State<BabaPageReelWidget> {
           _buildStatItem(Icons.favorite, _likeCount, onTap: _handleLike, isLoading: _isLoadingLike),
           const SizedBox(width: 16),
           _buildStatItem(Icons.comment, widget.reel.commentsCount),
-          const SizedBox(width: 16),
-          _buildStatItem(Icons.share, widget.reel.sharesCount),
           const Spacer(),
           Text(
             _formatDate(widget.reel.createdAt),

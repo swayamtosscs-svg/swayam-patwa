@@ -412,6 +412,7 @@ class _InstagramSearchScreenState extends State<InstagramSearchScreen> {
           isVerified: user.isVerified,
           isFollowedByCurrentUser: user.isFollowedByCurrentUser,
           bio: user.bio,
+          isPrivate: user.isPrivate,
         );
       },
     );

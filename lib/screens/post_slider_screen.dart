@@ -162,100 +162,12 @@ class _PostSliderScreenState extends State<PostSliderScreen> {
           
           const Spacer(),
           
-          // Share Button
-          GestureDetector(
-            onTap: () {
-              // Handle share for current post
-              // TODO: Implement share functionality
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.share,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildBottomIndicators() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Previous Button
-          GestureDetector(
-            onTap: () => _navigateToPost(_currentIndex - 1),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _currentIndex > 0 
-                    ? Colors.white.withOpacity(0.2) 
-                    : Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                Icons.chevron_left,
-                color: _currentIndex > 0 ? Colors.white : Colors.white54,
-                size: 24,
-              ),
-            ),
-          ),
-          
-          const SizedBox(width: 20),
-          
-          // Page Indicators
-          Row(
-            children: List.generate(
-              widget.posts.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                width: _currentIndex == index ? 12 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: _currentIndex == index 
-                      ? Colors.white 
-                      : Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(width: 20),
-          
-          // Next Button
-          GestureDetector(
-            onTap: () => _navigateToPost(_currentIndex + 1),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _currentIndex < widget.posts.length - 1 
-                    ? Colors.white.withOpacity(0.2) 
-                    : Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                Icons.chevron_right,
-                color: _currentIndex < widget.posts.length - 1 
-                    ? Colors.white 
-                    : Colors.white54,
-                size: 24,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }

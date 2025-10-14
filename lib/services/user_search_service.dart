@@ -12,6 +12,7 @@ class UserSearchResult {
   final bool isVerified;
   final bool isFollowedByCurrentUser;
   final String? bio;
+  final bool isPrivate;
 
   UserSearchResult({
     required this.id,
@@ -24,6 +25,7 @@ class UserSearchResult {
     required this.isVerified,
     required this.isFollowedByCurrentUser,
     this.bio,
+    this.isPrivate = false,
   });
 
   factory UserSearchResult.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class UserSearchResult {
       isVerified: json['isVerified'] == true || json['is_verified'] == true || json['verified'] == true,
       isFollowedByCurrentUser: json['isFollowedByCurrentUser'] == true || json['is_followed'] == true,
       bio: json['bio'] ?? json['description'],
+      isPrivate: json['isPrivate'] == true || json['is_private'] == true || json['private'] == true,
     );
   }
 }

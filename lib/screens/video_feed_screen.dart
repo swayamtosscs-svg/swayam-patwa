@@ -490,13 +490,10 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
                 children: [
                   // Top Header
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        // Left corner: Empty space
-                        const SizedBox.shrink(),
-                        
                         // Right corner: Like and Message icons
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -506,16 +503,16 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
                               icon: const Icon(
                                 Icons.favorite_border,
                                 color: Colors.white,
-                                size: 28,
+                                size: 24,
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             IconButton(
                               onPressed: () {},
                               icon: const Icon(
                                 Icons.chat_bubble_outline,
                                 color: Colors.white,
-                                size: 28,
+                                size: 24,
                               ),
                             ),
                           ],
@@ -558,7 +555,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
           ),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildNavItem(Icons.home, 'Home', true),
             _buildNavItem(Icons.search, 'Search', false),
@@ -691,57 +688,6 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
             ),
           ),
         ),
-        Positioned(
-          right: 20,
-          bottom: 120,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-                _buildActionButton(
-                  icon: video['isLiked'] ? Icons.favorite : Icons.favorite_border,
-                  label: video['likes'],
-                  color: video['isLiked'] ? Colors.red : Colors.white,
-                  onTap: () {
-                    setState(() {
-                      videos[index]['isLiked'] = !videos[index]['isLiked'];
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-                _buildActionButton(
-                  icon: Icons.chat_bubble_outline,
-                  label: video['comments'],
-                onTap: () => _showCommentDialog(context, video),
-                ),
-                const SizedBox(height: 20),
-                _buildActionButton(
-                  icon: Icons.send,
-                  label: video['shares'],
-                onTap: () => _showShareDialog(context, video),
-                ),
-                const SizedBox(height: 20),
-                _buildActionButton(
-                  icon: video['isSaved'] ? Icons.bookmark : Icons.bookmark_border,
-                  label: 'Save',
-                  color: video['isSaved'] ? Colors.yellow : Colors.white,
-                  onTap: () {
-                    setState(() {
-                      videos[index]['isSaved'] = !videos[index]['isSaved'];
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-                _buildFollowButton(
-                  isFollowing: video['isFollowing'],
-                  onTap: () {
-                    setState(() {
-                      videos[index]['isFollowing'] = !videos[index]['isFollowing'];
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
         Positioned(
           bottom: 120,
           left: 20,
@@ -914,21 +860,17 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.share, color: Colors.white),
-                title: const Text(
-                  'Share to Social Media',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Shared!')),
-                  );
-                },
-              ),
             ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -986,24 +928,29 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
   }
 
   Widget _buildNavItem(IconData icon, String label, bool isSelected) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          icon,
-          color: isSelected ? Colors.black : Colors.grey,
-          size: 24,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
+    return Expanded(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
             color: isSelected ? Colors.black : Colors.grey,
-            fontSize: 10,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            size: 20,
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : Colors.grey,
+              fontSize: 9,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1065,12 +1012,6 @@ class _ReelVideoPlayerState extends State<ReelVideoPlayer> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.play_circle_filled,
-              color: Colors.white,
-              size: 80,
-            ),
-            SizedBox(height: 16),
             Text(
               'YouTube Video',
               style: TextStyle(
@@ -1149,7 +1090,6 @@ class _ReelFrameThumbnailState extends State<ReelFrameThumbnail> {
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
             color: Colors.grey[800],
-            child: const Icon(Icons.play_arrow, color: Colors.white, size: 20),
           ),
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;
@@ -1170,7 +1110,6 @@ class _ReelFrameThumbnailState extends State<ReelFrameThumbnail> {
     // For non-YouTube URLs, show a simple placeholder
     return Container(
       color: Colors.grey[800],
-      child: const Icon(Icons.play_arrow, color: Colors.white, size: 20),
     );
   }
 }
@@ -1196,17 +1135,6 @@ class YouTubePlaceholder extends StatelessWidget {
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
           loadingBuilder: (c, w, p) => const ColoredBox(color: Colors.black),
-        ),
-        Center(
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.play_arrow, size: 48, color: Colors.white),
-          ),
         ),
       ],
     );

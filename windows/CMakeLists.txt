@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(my_auth_app LANGUAGES CXX)
+project(r_gram LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "my_auth_app")
+set(BINARY_NAME "r_gram")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -33,8 +33,13 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 add_definitions(-DUNICODE -D_UNICODE)
 
 # Add /FS flag globally to prevent PDB file conflicts
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /FS /MP")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /FS /MP")
+
+# Set CMake to use the correct generator
+if(NOT CMAKE_GENERATOR_PLATFORM)
+  set(CMAKE_GENERATOR_PLATFORM "x64")
+endif()
 
 # Compilation settings that should be applied to most targets.
 #
@@ -45,9 +50,13 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
   target_compile_options(${TARGET} PRIVATE /EHsc)
-  target_compile_options(${TARGET} PRIVATE /FS)  # Allow multiple CL.EXE processes to write to the same .PDB file
+  target_compile_options(${TARGET} PRIVATE /FS /MP)  # Allow multiple CL.EXE processes to write to the same .PDB file
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+  # Add error handling for CMake
+  set_target_properties(${TARGET} PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_INSTALL_PREFIX}"
+  )
 endfunction()
 
 # Flutter library and tool build rules.

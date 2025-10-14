@@ -5,6 +5,7 @@ import 'story_upload_screen.dart';
 import 'post_upload_screen.dart';
 import 'reel_upload_screen.dart';
 import 'baba_page_creation_screen.dart';
+import 'live_stream_screen.dart';
 
 class AddOptionsScreen extends StatelessWidget {
   const AddOptionsScreen({Key? key}) : super(key: key);
@@ -125,6 +126,19 @@ class AddOptionsScreen extends StatelessWidget {
                         subtitle: 'Create a spiritual page for a spiritual leader',
                         color: const Color(0xFF8B5CF6),
                         onTap: () => _navigateToBabaPageCreation(context),
+                        isCompact: isSmallScreen,
+                      ),
+                      
+                      SizedBox(height: isSmallScreen ? 16 : 24),
+                      
+                      // Live Stream Option
+                      _buildOptionCard(
+                        context,
+                        icon: Icons.videocam,
+                        title: 'Live Stream',
+                        subtitle: 'Start a live spiritual session or darshan',
+                        color: const Color(0xFFEF4444),
+                        onTap: () => _navigateToLiveStream(context),
                         isCompact: isSmallScreen,
                       ),
                       
@@ -302,6 +316,20 @@ class AddOptionsScreen extends StatelessWidget {
       );
     } else {
       _showErrorSnackBar(context, 'Please login to create Baba Ji pages');
+    }
+  }
+
+  void _navigateToLiveStream(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.authToken != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LiveStreamScreen(),
+        ),
+      );
+    } else {
+      _showErrorSnackBar(context, 'Please login to start live streaming');
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../utils/responsive_image_utils.dart';
 
 class ImageSliderController {
   static _ImageSliderWidgetState? _currentSlider;
@@ -41,14 +42,28 @@ class ImageSliderWidget extends StatefulWidget {
   State<ImageSliderWidget> createState() => _ImageSliderWidgetState();
 }
 
-class _ImageSliderWidgetState extends State<ImageSliderWidget> {
+class _ImageSliderWidgetState extends State<ImageSliderWidget> with TickerProviderStateMixin {
   late PageController _pageController;
   int _currentIndex = 0;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    ));
+    _fadeController.forward();
     // Register this slider as the current one
     ImageSliderController.setCurrentSlider(this);
   }
@@ -56,6 +71,7 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
   @override
   void dispose() {
     _pageController.dispose();
+    _fadeController.dispose();
     // Unregister this slider
     if (ImageSliderController._currentSlider == this) {
       ImageSliderController.setCurrentSlider(null);
@@ -193,18 +209,57 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
     try {
       return CachedNetworkImage(
         imageUrl: cleanUrl,
-        fit: BoxFit.cover, // Changed from fitWidth to cover to prevent stretching
+        fit: BoxFit.cover, // Maintain aspect ratio while filling container
         width: double.infinity,
-        height: widget.height, // Use the provided height
-        placeholder: (context, url) => Container(
-          height: widget.height,
-          color: Colors.grey[200],
-          child: const Center(
-            child: CircularProgressIndicator(
-              color: Colors.blue,
-              strokeWidth: 2,
-            ),
-          ),
+        height: widget.height,
+        placeholder: (context, url) => AnimatedBuilder(
+          animation: _fadeController,
+          builder: (context, child) {
+            return Container(
+              height: widget.height,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.grey[200]!,
+                    Colors.grey[300]!,
+                  ],
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _fadeController,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: 0.8 + (0.2 * _fadeAnimation.value),
+                          child: const CircularProgressIndicator(
+                            color: Colors.blue,
+                            strokeWidth: 2,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    AnimatedOpacity(
+                      opacity: _fadeAnimation.value,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Text(
+                        'Loading...',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
         errorWidget: (context, url, error) {
           print('ImageSliderWidget: CachedNetworkImage error for URL: $url');
@@ -212,7 +267,7 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
           // Try fallback to Image.network
           return Image.network(
             cleanUrl,
-            fit: BoxFit.cover, // Changed from fitWidth to cover
+            fit: BoxFit.cover,
             width: double.infinity,
             height: widget.height,
             errorBuilder: (context, error, stackTrace) {
@@ -220,35 +275,74 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
             },
           );
         },
-        memCacheWidth: 1200, // Increased for better quality
-        memCacheHeight: 800, // Increased for better quality
-        maxWidthDiskCache: 1200, // Optimize disk cache
-        maxHeightDiskCache: 800,
-        fadeInDuration: const Duration(milliseconds: 150), // Faster fade in
-        fadeOutDuration: const Duration(milliseconds: 100),
+        memCacheWidth: ResponsiveImageUtils.getOptimalCacheDimensions(MediaQuery.of(context).size.width)['memCacheWidth']!,
+        memCacheHeight: ResponsiveImageUtils.getOptimalCacheDimensions(MediaQuery.of(context).size.width)['memCacheHeight']!,
+        maxWidthDiskCache: ResponsiveImageUtils.getOptimalCacheDimensions(MediaQuery.of(context).size.width)['maxWidthDiskCache']!,
+        maxHeightDiskCache: ResponsiveImageUtils.getOptimalCacheDimensions(MediaQuery.of(context).size.width)['maxHeightDiskCache']!,
+        fadeInDuration: ResponsiveImageUtils.getOptimalFadeDurations(MediaQuery.of(context).size.width)['fadeInDuration']!,
+        fadeOutDuration: ResponsiveImageUtils.getOptimalFadeDurations(MediaQuery.of(context).size.width)['fadeOutDuration']!,
         useOldImageOnUrlChange: true, // Better performance
+        imageBuilder: (context, imageProvider) => AnimatedBuilder(
+          animation: _fadeAnimation,
+          builder: (context, child) {
+            return Opacity(
+              opacity: _fadeAnimation.value,
+              child: Container(
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: imageProvider,
+                    fit: BoxFit.cover,
+                  ),
+                  borderRadius: BorderRadius.circular(8), // Add subtle rounded corners
+                ),
+              ),
+            );
+          },
+        ),
       );
     } catch (e) {
       print('ImageSliderWidget: CachedNetworkImage exception: $e');
       // Fallback to regular Image.network
       return Image.network(
         cleanUrl,
-        fit: BoxFit.cover, // Changed from fitWidth to cover
+        fit: BoxFit.cover,
         width: double.infinity,
         height: widget.height,
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Container(
             height: widget.height,
-            color: Colors.grey[200],
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.grey[200]!,
+                  Colors.grey[300]!,
+                ],
+              ),
+            ),
             child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                color: Colors.blue,
-                strokeWidth: 2,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: Colors.blue,
+                    strokeWidth: 2,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Loading...',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -265,7 +359,17 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
   Widget _buildErrorWidget(String message) {
     return Container(
       height: widget.height,
-      color: Colors.grey[200],
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.grey[200]!,
+            Colors.grey[300]!,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -283,6 +387,15 @@ class _ImageSliderWidgetState extends State<ImageSliderWidget> {
                 fontSize: 12,
               ),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Tap to retry',
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 10,
+                decoration: TextDecoration.underline,
+              ),
             ),
           ],
         ),

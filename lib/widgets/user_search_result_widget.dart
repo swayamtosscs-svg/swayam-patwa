@@ -13,6 +13,7 @@ class UserSearchResultWidget extends StatelessWidget {
   final bool isVerified;
   final bool isFollowedByCurrentUser;
   final String? bio;
+  final bool isPrivate;
 
   const UserSearchResultWidget({
     super.key,
@@ -26,6 +27,7 @@ class UserSearchResultWidget extends StatelessWidget {
     required this.isVerified,
     required this.isFollowedByCurrentUser,
     this.bio,
+    this.isPrivate = false,
   });
 
   @override
@@ -192,7 +194,7 @@ class UserSearchResultWidget extends StatelessWidget {
       followers: [],
       following: [],
       isOnline: false,
-      isPrivate: false,
+      isPrivate: isPrivate,
       isEmailVerified: false,
       isVerified: isVerified,
     );
@@ -209,6 +211,7 @@ class UserSearchResultWidget extends StatelessWidget {
           followersCount: followersCount,
           followingCount: followingCount,
           postsCount: postsCount,
+          isPrivate: isPrivate,
         ),
       ),
     );

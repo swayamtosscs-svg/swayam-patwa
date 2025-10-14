@@ -96,7 +96,7 @@ void main() {
       // Test navigation decision logic
       bool shouldNavigate(String url) {
         return url.contains('103.14.120.163') || 
-               url.contains('localhost') ||
+               ||
                url.startsWith('data:') ||
                url.startsWith('javascript:') ||
                url.startsWith('blob:') ||

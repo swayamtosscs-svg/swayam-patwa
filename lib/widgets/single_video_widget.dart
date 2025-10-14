@@ -404,17 +404,6 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
                           ),
                         ),
                         
-                        // Share button
-                        IconButton(
-                          onPressed: () {
-                            // Handle share
-                          },
-                          icon: const Icon(
-                            Icons.share,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -657,17 +646,6 @@ class _SingleVideoWidgetState extends State<SingleVideoWidget> {
                             ),
                           ),
                           
-                          // Share button
-                          IconButton(
-                            onPressed: () {
-                              // Handle share
-                            },
-                            icon: const Icon(
-                              Icons.share,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
                         ],
                       ),
                     ),

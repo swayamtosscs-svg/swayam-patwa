@@ -170,11 +170,13 @@ class StoryService {
   /// Get stories for a specific user using the story retrieve API
   static Future<List<Story>> getUserStories(String userId, {String? token, int page = 1, int limit = 10}) async {
     try {
-      print('StoryService: Fetching stories for user $userId from $_baseUrl/story/retrieve');
+      print('StoryService: Fetching stories for user $userId from $_baseUrl/stories');
+      print('StoryService: Token provided: ${token != null ? "Yes (${token.length} chars)" : "No"}');
       
+      // Try the correct API endpoint first
       final response = await http.get(
-        Uri.parse('$_baseUrl/story/retrieve?userId=$userId&page=$page&limit=$limit'),
-        headers: token != null ? {'Authorization': token} : {},
+        Uri.parse('$_baseUrl/stories?userId=$userId&page=$page&limit=$limit'),
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
       );
 
       print('StoryService: User stories response status: ${response.statusCode}');
@@ -182,23 +184,36 @@ class StoryService {
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
+        print('StoryService: JSON response success: ${jsonResponse['success']}');
+        print('StoryService: JSON response data: ${jsonResponse['data']}');
+        
         if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
           final userData = jsonResponse['data']['user'];
           final List<dynamic> storiesJson = jsonResponse['data']['stories'] ?? [];
           print('StoryService: Found ${storiesJson.length} stories for user $userId');
+          print('StoryService: User data: $userData');
           
           List<Story> stories = [];
           for (var storyJson in storiesJson) {
             try {
+              print('StoryService: Parsing story: ${storyJson['id']}');
+              
+              // Extract story ID with better handling
+              final storyId = storyJson['id'] ?? storyJson['_id'] ?? '';
+              if (storyId.isEmpty) {
+                print('StoryService: WARNING - Story has no ID, skipping: $storyJson');
+                continue;
+              }
+              
               // Map the API response to Story model
               final story = Story(
-                id: storyJson['id'] ?? '',
+                id: storyId,
                 authorId: storyJson['author']?['_id'] ?? storyJson['author']?['id'] ?? userId,
                 authorName: storyJson['author']?['fullName'] ?? storyJson['author']?['username'] ?? '',
                 authorUsername: storyJson['author']?['username'] ?? '',
                 authorAvatar: storyJson['author']?['avatar'] ?? '',
                 media: _constructFullUrl(storyJson['media'] ?? ''),
-                mediaId: storyJson['id'] ?? '',
+                mediaId: storyId,
                 type: storyJson['type'] ?? 'image',
                 caption: storyJson['caption'] ?? storyJson['description'], // Include caption field
                 mentions: List<String>.from(storyJson['mentions'] ?? []),
@@ -211,16 +226,111 @@ class StoryService {
                 updatedAt: DateTime.tryParse(storyJson['updatedAt'] ?? '') ?? DateTime.now(),
               );
               stories.add(story);
+              print('StoryService: Successfully parsed story: ${story.id}');
             } catch (e) {
               print('StoryService: Error parsing story: $e');
+              print('StoryService: Story JSON: $storyJson');
             }
           }
-          return stories;
+          print('StoryService: Returning ${stories.length} stories');
+          
+          // Additional verification: Ensure all stories belong to the requested user
+          final filteredStories = stories.where((story) => story.authorId == userId).toList();
+          if (filteredStories.length != stories.length) {
+            print('StoryService: WARNING - API returned ${stories.length} stories but only ${filteredStories.length} belong to user $userId');
+            print('StoryService: Filtering out stories from other users');
+          }
+          
+          return filteredStories;
+        } else {
+          print('StoryService: API response indicates failure or no data');
+          print('StoryService: Success: ${jsonResponse['success']}');
+          print('StoryService: Message: ${jsonResponse['message']}');
+        }
+      } else {
+        print('StoryService: HTTP error ${response.statusCode}: ${response.body}');
+        
+        // Try fallback endpoint if the main one fails
+        if (response.statusCode == 404) {
+          print('StoryService: Trying fallback endpoint /story/retrieve');
+          return await _getUserStoriesFallback(userId, token: token, page: page, limit: limit);
         }
       }
       return [];
     } catch (e) {
       print('StoryService: Error getting user stories: $e');
+      return [];
+    }
+  }
+
+  /// Fallback method to get user stories using the old endpoint
+  static Future<List<Story>> _getUserStoriesFallback(String userId, {String? token, int page = 1, int limit = 10}) async {
+    try {
+      print('StoryService: Fallback - Fetching stories for user $userId from $_baseUrl/story/retrieve');
+      
+      final response = await http.get(
+        Uri.parse('$_baseUrl/story/retrieve?userId=$userId&page=$page&limit=$limit'),
+        headers: token != null ? {'Authorization': token} : {},
+      );
+
+      print('StoryService: Fallback response status: ${response.statusCode}');
+      print('StoryService: Fallback response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+          final userData = jsonResponse['data']['user'];
+          final List<dynamic> storiesJson = jsonResponse['data']['stories'] ?? [];
+          print('StoryService: Fallback found ${storiesJson.length} stories for user $userId');
+          
+          List<Story> stories = [];
+          for (var storyJson in storiesJson) {
+            try {
+              // Extract story ID with better handling
+              final storyId = storyJson['id'] ?? storyJson['_id'] ?? '';
+              if (storyId.isEmpty) {
+                print('StoryService: Fallback WARNING - Story has no ID, skipping: $storyJson');
+                continue;
+              }
+              
+              final story = Story(
+                id: storyId,
+                authorId: storyJson['author']?['_id'] ?? storyJson['author']?['id'] ?? userId,
+                authorName: storyJson['author']?['fullName'] ?? storyJson['author']?['username'] ?? '',
+                authorUsername: storyJson['author']?['username'] ?? '',
+                authorAvatar: storyJson['author']?['avatar'] ?? '',
+                media: _constructFullUrl(storyJson['media'] ?? ''),
+                mediaId: storyId,
+                type: storyJson['type'] ?? 'image',
+                caption: storyJson['caption'] ?? storyJson['description'],
+                mentions: List<String>.from(storyJson['mentions'] ?? []),
+                hashtags: List<String>.from(storyJson['hashtags'] ?? []),
+                isActive: storyJson['isActive'] ?? true,
+                views: List<String>.from(storyJson['views'] ?? []),
+                viewsCount: storyJson['viewsCount'] ?? 0,
+                expiresAt: DateTime.tryParse(storyJson['expiresAt'] ?? '') ?? DateTime.now().add(const Duration(hours: 24)),
+                createdAt: DateTime.tryParse(storyJson['createdAt'] ?? '') ?? DateTime.now(),
+                updatedAt: DateTime.tryParse(storyJson['updatedAt'] ?? '') ?? DateTime.now(),
+              );
+              stories.add(story);
+            } catch (e) {
+              print('StoryService: Fallback error parsing story: $e');
+            }
+          }
+          
+          // Additional verification: Ensure all stories belong to the requested user
+          final filteredStories = stories.where((story) => story.authorId == userId).toList();
+          if (filteredStories.length != stories.length) {
+            print('StoryService: Fallback WARNING - API returned ${stories.length} stories but only ${filteredStories.length} belong to user $userId');
+            print('StoryService: Fallback filtering out stories from other users');
+          }
+          
+          return filteredStories;
+        }
+      }
+      return [];
+    } catch (e) {
+      print('StoryService: Fallback error getting user stories: $e');
       return [];
     }
   }
@@ -250,37 +360,18 @@ class StoryService {
     }
   }
 
-  /// Get stories feed for all users - Updated to use story API
+  /// Get stories feed for followed users only - Updated to respect follow status
   static Future<List<Story>> getStoriesFeed(String token) async {
     try {
-      print('StoryService: Fetching stories feed from story API');
+      print('StoryService: Fetching stories feed from story API (followed users only)');
       
       List<Story> allStories = [];
+      Set<String> seenStoryIds = <String>{}; // Track unique story IDs to prevent duplicates
       
-      // For now, let's fetch stories from some known users to demonstrate the functionality
-      // In a real app, you would get this list from a following/friends API
-      List<String> userIdsToFetch = [
-        '68ac303e6f3bb238435477a4', // swayam2 user from your example
-        // Add more user IDs here as needed
-        // You can add more user IDs to test with multiple users
-      ];
-      
-      // Fetch stories from each user
-      for (String userId in userIdsToFetch) {
-        try {
-          final userStories = await getUserStories(userId, token: token, page: 1, limit: 10);
-          print('StoryService: Fetched ${userStories.length} stories for user $userId');
-          allStories.addAll(userStories);
-        } catch (e) {
-          print('StoryService: Error fetching stories for user $userId: $e');
-        }
-      }
-      
-      // Sort all stories by creation date (newest first)
-      if (allStories.isNotEmpty) {
-        allStories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        print('StoryService: Total stories in feed: ${allStories.length}');
-      }
+      // Note: This method should only be called with a list of followed users
+      // For now, return empty list to prevent showing unfollowed users' stories
+      print('StoryService: getStoriesFeed() should not be used directly - use getFollowedUsersStories() instead');
+      print('StoryService: Returning empty list to prevent showing unfollowed users stories');
       
       return allStories;
     } catch (e) {
@@ -289,16 +380,24 @@ class StoryService {
     }
   }
 
-  /// Group stories by user to create story sections
+  /// Group stories by user to create story sections with deduplication
   static Map<String, List<Story>> groupStoriesByUser(List<Story> stories) {
     Map<String, List<Story>> groupedStories = {};
+    Set<String> processedStoryIds = <String>{}; // Track processed stories to prevent duplicates
     
     for (Story story in stories) {
+      // Skip if we've already processed this story
+      if (processedStoryIds.contains(story.id)) {
+        print('StoryService: Skipping duplicate story in grouping: ${story.id}');
+        continue;
+      }
+      
       String userId = story.authorId;
       if (!groupedStories.containsKey(userId)) {
         groupedStories[userId] = [];
       }
       groupedStories[userId]!.add(story);
+      processedStoryIds.add(story.id);
     }
     
     // Sort stories within each user group by creation date (newest first)
@@ -420,5 +519,32 @@ class StoryService {
   }
 
   // Removed retrieveMedia method since it's no longer needed for stories
+  
+  /// Utility method to remove duplicate stories from a list
+  static List<Story> removeDuplicateStories(List<Story> stories) {
+    Set<String> seenIds = <String>{};
+    List<Story> uniqueStories = [];
+    
+    for (Story story in stories) {
+      if (!seenIds.contains(story.id) && story.id.isNotEmpty) {
+        seenIds.add(story.id);
+        uniqueStories.add(story);
+      }
+    }
+    
+    return uniqueStories;
+  }
+  
+  /// Utility method to check if a story list contains duplicates
+  static bool hasDuplicateStories(List<Story> stories) {
+    Set<String> ids = <String>{};
+    for (Story story in stories) {
+      if (ids.contains(story.id)) {
+        return true;
+      }
+      ids.add(story.id);
+    }
+    return false;
+  }
 }
 

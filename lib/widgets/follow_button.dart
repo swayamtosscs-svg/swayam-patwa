@@ -38,7 +38,8 @@ class _FollowButtonState extends State<FollowButton> {
     _isFollowing = widget.isFollowing;
     _isPrivateAccount = widget.isPrivate;
     _checkFollowRequestStatus();
-    _checkAccountPrivacy();
+    // Removed _checkAccountPrivacy() to prevent automatic follow attempts
+    // Privacy status should be passed from the parent widget
   }
 
   @override
@@ -57,6 +58,8 @@ class _FollowButtonState extends State<FollowButton> {
   }
 
   /// Check if the target account is private
+  /// Note: This method is no longer called automatically to prevent unwanted follow attempts
+  /// Privacy status should be determined by the parent widget and passed as a parameter
   Future<void> _checkAccountPrivacy() async {
     try {
       final privacySettings = await PrivacyService.getUserPrivacySettings(widget.targetUserId);
@@ -65,35 +68,10 @@ class _FollowButtonState extends State<FollowButton> {
           _isPrivateAccount = privacySettings.isPrivate;
         });
         print('FollowButton: Privacy settings loaded - isPrivate: ${privacySettings.isPrivate}');
-      } else {
-        // If privacy settings can't be loaded, try to detect by attempting follow
-        await _detectPrivateAccountByFollowAttempt();
       }
     } catch (e) {
       print('Error checking account privacy: $e');
-      // Try to detect private account by follow attempt
-      await _detectPrivateAccountByFollowAttempt();
-    }
-  }
-
-  /// Detect private account by attempting to follow and checking response
-  Future<void> _detectPrivateAccountByFollowAttempt() async {
-    try {
-      // Try to follow the user to see if it's a private account
-      final success = await FollowRequestService.followUser(widget.targetUserId);
-      if (success == false && mounted) {
-        // If follow failed, try sending a follow request
-        final requestSuccess = await FollowRequestService.sendFollowRequest(widget.targetUserId);
-        if (requestSuccess && mounted) {
-          setState(() {
-            _isPrivateAccount = true;
-            _isRequested = true;
-          });
-          print('FollowButton: Detected private account by follow attempt');
-        }
-      }
-    } catch (e) {
-      print('Error detecting private account: $e');
+      // Don't attempt to follow to detect privacy - this should be handled by parent widget
     }
   }
 

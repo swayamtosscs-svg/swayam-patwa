@@ -50,6 +50,43 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
     _loadPosts();
     _loadReels();
     _loadBabaPageDP();
+    _ensureCompleteBabaPageData();
+  }
+
+  /// Ensure we have complete Baba Ji page data, fetch if missing
+  Future<void> _ensureCompleteBabaPageData() async {
+    // Check if we have complete data (not just basic info)
+    if (_currentBabaPage.description.isEmpty && 
+        _currentBabaPage.location.isEmpty && 
+        _currentBabaPage.religion.isEmpty) {
+      print('BabaPageDetailScreen: Incomplete data detected, fetching complete data');
+      
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final token = authProvider.authToken;
+        
+        if (token == null) {
+          print('BabaPageDetailScreen: No auth token for fetching complete data');
+          return;
+        }
+        
+        final response = await BabaPageService.getBabaPageById(
+          pageId: _currentBabaPage.id,
+          token: token,
+        );
+        
+        if (response.success && response.data != null) {
+          print('BabaPageDetailScreen: Complete data fetched successfully');
+          setState(() {
+            _currentBabaPage = response.data!;
+          });
+        } else {
+          print('BabaPageDetailScreen: Failed to fetch complete data: ${response.message}');
+        }
+      } catch (e) {
+        print('BabaPageDetailScreen: Error fetching complete data: $e');
+      }
+    }
   }
 
   Future<void> _loadFollowState() async {
@@ -1530,8 +1567,6 @@ class _BabaPageDetailScreenState extends State<BabaPageDetailScreen> {
                   onTap: () => _showCommentsDialog(post),
                   child: _buildPostStat(Icons.comment, '${post.commentsCount}'),
                 ),
-                const SizedBox(width: 16),
-                _buildPostStat(Icons.share, '${post.sharesCount}'),
               ],
             ),
           ],

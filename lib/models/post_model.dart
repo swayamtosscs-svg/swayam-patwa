@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'baba_page_model.dart';
 
 enum PostType { image, video, reel }
 
@@ -29,6 +30,7 @@ class Post {
   final bool isReel;
   final String? babaPageId;
   final bool isPrivate;
+  final BabaPage? babaPageData; // Store complete Baba Ji page data
 
   Post({
     required this.id,
@@ -57,6 +59,7 @@ class Post {
     this.isReel = false,
     this.babaPageId,
     this.isPrivate = false,
+    this.babaPageData,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -90,6 +93,7 @@ class Post {
       isReel: json['isReel'] ?? false,
       babaPageId: json['babaPageId'],
       isPrivate: json['isPrivate'] ?? false,
+      babaPageData: json['babaPageData'] != null ? BabaPage.fromJson(json['babaPageData']) : null,
     );
   }
 
@@ -121,6 +125,7 @@ class Post {
       'isReel': isReel,
       'babaPageId': babaPageId,
       'isPrivate': isPrivate,
+      'babaPageData': babaPageData?.toJson(),
     };
   }
 
@@ -151,6 +156,7 @@ class Post {
     bool? isReel,
     String? babaPageId,
     bool? isPrivate,
+    BabaPage? babaPageData,
   }) {
     return Post(
       id: id ?? this.id,
@@ -179,6 +185,7 @@ class Post {
       isReel: isReel ?? this.isReel,
       babaPageId: babaPageId ?? this.babaPageId,
       isPrivate: isPrivate ?? this.isPrivate,
+      babaPageData: babaPageData ?? this.babaPageData,
     );
   }
 } 

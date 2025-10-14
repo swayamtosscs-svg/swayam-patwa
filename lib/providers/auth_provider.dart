@@ -30,6 +30,16 @@ class AuthProvider extends ChangeNotifier {
   final Map<String, Map<String, dynamic>> _userCountsCache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration _cacheExpiry = Duration(minutes: 5); // Cache for 5 minutes
+  
+  // DP loading cache to prevent repeated calls
+  bool _isDPLoading = false;
+  DateTime? _lastDPLoadTime;
+  static const Duration _dpLoadCooldown = Duration(minutes: 5); // Prevent DP loading for 5 minutes
+  
+  // Global DP cache to prevent repeated calls from any source
+  static final Map<String, Map<String, dynamic>> _globalDPCache = {};
+  static final Map<String, DateTime> _globalDPCacheTimestamps = {};
+  static const Duration _globalDPCacheExpiry = Duration(minutes: 10); // Cache DP for 10 minutes
 
   // Getters
   GoogleUser? get googleUser => _googleUser;
@@ -256,15 +266,43 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _loadUserDP() async {
     if (_userProfile == null || _authToken == null) return;
     
+    final userId = _userProfile!.id;
+    
+    // Check global cache first
+    if (_isDPCached(userId)) {
+      print('AuthProvider: Using cached DP for user $userId');
+      final cachedDP = _globalDPCache[userId]!;
+      if (cachedDP['dpUrl'] != null) {
+        _userProfile = _userProfile!.copyWith(profileImageUrl: cachedDP['dpUrl']);
+        return;
+      }
+    }
+    
+    // Prevent repeated DP loading calls
+    if (_isDPLoading) {
+      print('AuthProvider: DP loading already in progress, skipping');
+      return;
+    }
+    
+    // Check cooldown period
+    if (_lastDPLoadTime != null && 
+        DateTime.now().difference(_lastDPLoadTime!) < _dpLoadCooldown) {
+      print('AuthProvider: DP loading cooldown active, skipping');
+      return;
+    }
+    
     // Only load DP if profile doesn't already have a valid DP URL
     if (_userProfile!.profileImageUrl == null || 
         _userProfile!.profileImageUrl!.isEmpty || 
         _userProfile!.profileImageUrl == 'null') {
       
+      _isDPLoading = true;
+      _lastDPLoadTime = DateTime.now();
+      
       try {
-        print('AuthProvider: Loading DP for user ${_userProfile!.id}');
+        print('AuthProvider: Loading DP for user $userId');
         final dpResponse = await DPService.retrieveDP(
-          userId: _userProfile!.id,
+          userId: userId,
           token: _authToken!,
         );
         
@@ -275,15 +313,43 @@ class AuthProvider extends ChangeNotifier {
           // Update user profile with DP URL
           _userProfile = _userProfile!.copyWith(profileImageUrl: dpUrl);
           print('AuthProvider: User profile updated with DP URL');
+          
+          // Cache the DP globally
+          _cacheDP(userId, dpUrl);
         } else {
           print('AuthProvider: No DP found for user: ${dpResponse['message']}');
+          // Cache the "no DP" result to prevent repeated calls
+          _cacheDP(userId, null);
         }
       } catch (e) {
         print('AuthProvider: Error loading DP: $e');
+        // Cache the error to prevent repeated calls
+        _cacheDP(userId, null);
+      } finally {
+        _isDPLoading = false;
       }
     } else {
       print('AuthProvider: User already has DP URL: ${_userProfile!.profileImageUrl}');
+      // Cache the existing DP URL
+      _cacheDP(userId, _userProfile!.profileImageUrl);
     }
+  }
+  
+  /// Check if DP is cached for a user
+  bool _isDPCached(String userId) {
+    final timestamp = _globalDPCacheTimestamps[userId];
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _globalDPCacheExpiry;
+  }
+  
+  /// Cache DP result globally
+  void _cacheDP(String userId, String? dpUrl) {
+    _globalDPCache[userId] = {
+      'dpUrl': dpUrl,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    _globalDPCacheTimestamps[userId] = DateTime.now();
+    print('AuthProvider: Cached DP for user $userId: ${dpUrl ?? "no DP"}');
   }
 
   UserModel _createUserFromResponse(Map<String, dynamic> data) {

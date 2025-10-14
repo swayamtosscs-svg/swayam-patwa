@@ -110,170 +110,31 @@ class _PostFullViewScreenState extends State<PostFullViewScreen> {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          // Back Button
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: 24,
+          // Back Button - only show when not in navigation controls mode
+          if (!widget.showNavigationControls)
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
             ),
-          ),
           const Spacer(),
-          // Share Button
-          GestureDetector(
-            onTap: () {
-              // Handle share
-            },
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.share,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          // Like Button
-          GestureDetector(
-            onTap: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              final userId = authProvider.userProfile?.id;
-              final token = authProvider.authToken;
-
-              if (userId == null || token == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please login to like posts'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              final response = await UserLikeService.toggleUserPostLike(
-                postId: widget.post.id,
-                token: token,
-                userId: userId,
-                isCurrentlyLiked: _isLiked,
-              );
-
-              if (mounted) {
-                setState(() {
-                  _isLiked = !_isLiked;
-                  final data = response['data'] as Map<String, dynamic>?;
-                  if (data != null && data['likesCount'] != null) {
-                    _likesCount = data['likesCount'] as int;
-                  } else {
-                    _likesCount = (_likesCount + (_isLiked ? 1 : -1)).clamp(0, 1 << 31);
-                  }
-                });
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                _isLiked ? Icons.favorite : Icons.favorite_border,
-                color: _isLiked ? Colors.red : Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Save Button
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _isSaved = !_isSaved;
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Favorite Button
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _isFavourite = !_isFavourite;
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                _isFavourite ? Icons.star : Icons.star_border,
-                color: _isFavourite ? Colors.yellow : Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
-          const Spacer(),
-          // Comment Button
-          GestureDetector(
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => UserCommentDialog(
-                  postId: widget.post.id,
-                  onCommentAdded: () {},
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.comment,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   @override

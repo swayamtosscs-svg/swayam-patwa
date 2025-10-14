@@ -27,11 +27,17 @@ class CameraService {
       _isInitializing = true;
       debugPrint('Initializing camera for Live Darshan...');
       
-      // Check if running on Windows (camera plugin not supported)
-      if (Platform.isWindows) {
-        debugPrint('Camera plugin not supported on Windows platform');
+      // If running on web, skip native camera init (handled by host page/browser)
+      if (kIsWeb) {
+        debugPrint('Web platform detected: skipping native camera initialization');
         _isInitializing = false;
         return false;
+      }
+      
+      // Check if running on Windows - camera_windows package will handle this automatically
+      if (!kIsWeb && Platform.isWindows) {
+        debugPrint('Windows platform detected: camera_windows package will handle camera initialization');
+        // Continue with normal camera initialization - camera_windows package extends the regular camera package
       }
       
       // Check camera permission

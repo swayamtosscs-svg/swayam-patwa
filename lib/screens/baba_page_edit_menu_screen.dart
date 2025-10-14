@@ -332,11 +332,6 @@ class _BabaPageEditMenuScreenState extends State<BabaPageEditMenuScreen> {
             onTap: _refreshData,
           ),
           _buildQuickActionButton(
-            icon: Icons.share,
-            label: 'Share Page',
-            onTap: _sharePage,
-          ),
-          _buildQuickActionButton(
             icon: Icons.delete_forever,
             label: 'Delete Page',
             onTap: _deletePage,
