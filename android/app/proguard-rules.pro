@@ -64,9 +64,9 @@
 -keep public class * extends android.app.Fragment
 
 # Keep model classes
--keep class com.example.my_auth_app.models.** { *; }
--keep class com.example.my_auth_app.providers.** { *; }
--keep class com.example.my_auth_app.services.** { *; }
+-keep class com.example.r_gram.models.** { *; }
+-keep class com.example.r_gram.providers.** { *; }
+-keep class com.example.r_gram.services.** { *; }
 
 # Maximum compression optimizations
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*

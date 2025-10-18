@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
 import '../utils/app_theme.dart';
@@ -30,8 +31,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      body: SafeArea(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            // Main content
+            SafeArea(
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             return Column(
@@ -76,6 +94,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ],
             );
           },
+        ),
+            ),
+          ],
         ),
       ),
     );

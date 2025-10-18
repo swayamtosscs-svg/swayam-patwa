@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../models/post_model.dart';
 import '../models/baba_page_model.dart';
 import '../models/baba_page_reel_model.dart';
@@ -302,8 +303,25 @@ class _ReelsScreenState extends State<ReelsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            // Main content
+            SafeArea(
         child: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(
@@ -340,6 +358,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
                       },
                     ),
                   ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );

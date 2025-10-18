@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../widgets/post_widget.dart';
@@ -41,8 +42,25 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      body: Column(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            // Main content
+            Column(
         children: [
           // App Bar
           _buildAppBar(),
@@ -65,6 +83,9 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
             ),
           ),
         ],
+            ),
+          ],
+        ),
       ),
     );
   }

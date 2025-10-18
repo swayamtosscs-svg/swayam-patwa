@@ -89,6 +89,14 @@ class _FallbackVideoPlayerWidgetState extends State<FallbackVideoPlayerWidget> {
 
       if (_useMediaKit) {
         // media_kit path (Windows/Linux)
+        // Ensure MediaKit is initialized before creating Player
+        try {
+          mk.MediaKit.ensureInitialized();
+        } catch (e) {
+          print('FallbackVideoPlayerWidget: MediaKit initialization failed: $e');
+          throw Exception('MediaKit initialization failed: $e');
+        }
+        
         _mkPlayer = mk.Player();
         _mkVideoController = mkv.VideoController(_mkPlayer!);
 

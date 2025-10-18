@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import '../services/chat_service.dart';
@@ -92,7 +93,17 @@ class _SearchScreenState extends State<SearchScreen> {
                 fit: BoxFit.cover,
               ),
             ),
-            child: SafeArea(
+            child: Stack(
+              children: [
+                // Blur effect overlay
+                BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                  child: Container(
+                    color: Colors.transparent,
+                  ),
+                ),
+                // Main content
+                SafeArea(
               child: Column(
                 children: [
                   // Custom App Bar
@@ -200,7 +211,9 @@ class _SearchScreenState extends State<SearchScreen> {
                 ],
               ),
             ),
-          ),
+          ],
+        ),
+      ),
         );
       },
     );

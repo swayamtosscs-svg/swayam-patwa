@@ -44,8 +44,6 @@ class EnhancedPostWidget extends StatefulWidget {
 
 class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
   bool _isLiked = false;
-  bool _isSaved = false;
-  bool _isFavourite = false;
   bool _isPlaying = false;
   bool _isCaptionExpanded = false;
   int _likeCount = 0;
@@ -276,99 +274,6 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
                 ),
               ],
             ),
-          ),
-          
-          // Three Dots Menu
-          PopupMenuButton<String>(
-            icon: const Icon(
-              Icons.more_vert,
-              color: Color(0xFF666666),
-            ),
-            onSelected: (value) {
-              _handleMenuSelection(value);
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'save',
-                child: Row(
-                  children: [
-                    Icon(
-                      _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                      color: _isSaved ? const Color(0xFF6366F1) : const Color(0xFF666666),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _isSaved ? 'Saved' : 'Save',
-                      style: TextStyle(
-                        color: _isSaved ? const Color(0xFF6366F1) : const Color(0xFF666666),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'favourite',
-                child: Row(
-                  children: [
-                    Icon(
-                      _isFavourite ? Icons.favorite : Icons.favorite_border,
-                      color: _isFavourite ? Colors.red : const Color(0xFF666666),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _isFavourite ? 'Favourited' : 'Add to Favourite',
-                      style: TextStyle(
-                        color: _isFavourite ? Colors.red : const Color(0xFF666666),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'hide',
-                child: Row(
-                  children: [
-                    Icon(Icons.visibility_off, color: Color(0xFF666666), size: 20),
-                    SizedBox(width: 8),
-                    Text('Hide'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'report',
-                child: Row(
-                  children: [
-                    Icon(Icons.report, color: Color(0xFF666666), size: 20),
-                    SizedBox(width: 8),
-                    Text('Report'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'about',
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Color(0xFF666666), size: 20),
-                    SizedBox(width: 8),
-                    Text('About this Account'),
-                  ],
-                ),
-              ),
-              // Delete option - only show if post belongs to current user
-              if (_isCurrentUserPost())
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, color: Color(0xFFE53E3E), size: 20),
-                      SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(color: Color(0xFFE53E3E))),
-                    ],
-                  ),
-                ),
-            ],
           ),
           
           // Follow Button - only show if post is NOT from current user
@@ -797,59 +702,6 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
     }
   }
 
-  void _handleMenuSelection(String value) {
-    switch (value) {
-      case 'save':
-        setState(() {
-          _isSaved = !_isSaved;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isSaved ? 'Post saved!' : 'Post removed from saved'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        break;
-      case 'favourite':
-        setState(() {
-          _isFavourite = !_isFavourite;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isFavourite ? 'Added to favourites!' : 'Removed from favourites'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        break;
-      case 'hide':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post hidden'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        break;
-      case 'report':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Post reported'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        break;
-      case 'about':
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('About this account'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        break;
-      case 'delete':
-        _showDeleteConfirmation();
-        break;
-    }
-  }
 
   String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();

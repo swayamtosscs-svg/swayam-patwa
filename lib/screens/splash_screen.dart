@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import '../utils/font_theme.dart';
@@ -76,12 +77,25 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0EBE1), // Logo box color from the image
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFFF0EBE1), // Logo box color background
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpg'),
+            fit: BoxFit.cover,
+          ),
         ),
-        child: Center(
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            // Main content
+            Center(
           child: AnimatedBuilder(
             animation: _animationController,
             builder: (context, child) {
@@ -192,6 +206,8 @@ class _SplashScreenState extends State<SplashScreen>
               );
             },
           ),
+        ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
@@ -90,24 +91,56 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         }
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF5F7FB),
-          appBar: _buildInstagramStyleAppBar(authProvider.userProfile!),
-          body: RefreshIndicator(
-            onRefresh: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              await authProvider.refreshUserProfile();
-            },
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background Image
+              Image.asset(
+                'assets/images/Signup page bg.jpeg',
+                fit: BoxFit.cover,
+              ),
+              // Apply Blur Effect
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50), // increase value for stronger blur
+                  child: Container(
+                    color: Colors.black.withOpacity(5.2), // optional: add slight overlay tint
+                  ),
+                ),
+              ),
+              // Semi-transparent overlay for better contrast
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withOpacity(0.2),
+                ),
+              ),
+              // Main content with AppBar
+              Column(
                 children: [
-                  _buildElegantProfileHeader(authProvider.userProfile!),
-                  SizedBox(height: MediaQuery.of(context).size.width < 600 ? 8 : 12),
-                  _buildRoundedSegmentedTabBar(),
-                  _buildTabContent(authProvider.userProfile!),
+                  _buildInstagramStyleAppBar(authProvider.userProfile!),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: () async {
+                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                        await authProvider.refreshUserProfile();
+                      },
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          children: [
+                            _buildElegantProfileHeader(authProvider.userProfile!),
+                            SizedBox(height: MediaQuery.of(context).size.width < 600 ? 8 : 12),
+                            _buildRoundedSegmentedTabBar(),
+                            _buildTabContent(authProvider.userProfile!),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
+            ],
           ),
         );
       },
@@ -116,7 +149,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   PreferredSizeWidget _buildInstagramStyleAppBar(UserModel user) {
     return AppBar(
-      backgroundColor: const Color(0xFFF0EBE1), // Same as login page background
+      backgroundColor: Colors.transparent,
       elevation: 0,
       leading: IconButton(
         onPressed: () => Navigator.of(context).pop(),

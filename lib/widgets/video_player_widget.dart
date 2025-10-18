@@ -115,6 +115,14 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
         throw Exception('Invalid video source: ${widget.videoUrl}');
       }
       
+      // Ensure MediaKit is initialized before creating Player
+      try {
+        MediaKit.ensureInitialized();
+      } catch (e) {
+        print('VideoPlayerWidget: MediaKit initialization failed: $e');
+        throw Exception('MediaKit initialization failed: $e');
+      }
+      
       player = Player();
       videoController = VideoController(player);
       

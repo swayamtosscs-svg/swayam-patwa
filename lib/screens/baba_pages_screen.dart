@@ -579,16 +579,28 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          body: Container(
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/Signup page bg.jpeg'),
-                fit: BoxFit.cover,
+          body: Stack(
+            children: [
+              // Background image
+              Container(
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/images/Signup page bg.jpeg'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: [
+              // Blur effect overlay
+              BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                child: Container(
+                  color: Colors.transparent,
+                ),
+              ),
+              // Main content
+              SafeArea(
+                child: Column(
+                  children: [
                   // White Highlighted Search Bar (Header) - Like second image
                   Container(
                     margin: const EdgeInsets.all(16),
@@ -754,7 +766,8 @@ class _BabaPagesScreenState extends State<BabaPagesScreen> {
                   ),
                 ],
               ),
-            ),
+              ),
+            ],
           ),
         );
       },

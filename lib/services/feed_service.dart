@@ -135,10 +135,18 @@ class FeedService {
         return isFromFollowedUser;
       }).toList();
       
+      // FILTER OUT VIDEOS/REELS: Only show posts (images) in home feed, not videos
+      final postsOnly = strictlyFilteredPosts.where((post) => 
+        post.type != PostType.video && 
+        post.isReel != true && 
+        post.videoUrl == null
+      ).toList();
+      
       print('FeedService: STRICT FILTER - Original posts: ${followedUserPosts.length}, After strict filtering: ${strictlyFilteredPosts.length}');
+      print('FeedService: FILTER OUT VIDEOS - Posts only (no videos/reels): ${postsOnly.length}');
       print('FeedService: Following user IDs: $followingUserIds');
       
-      return strictlyFilteredPosts;
+      return postsOnly;
       
     } catch (e) {
       print('FeedService: Error getting posts from followed users only: $e');
@@ -160,8 +168,16 @@ class FeedService {
       // This ensures we don't show random posts from users the current user doesn't follow
       final followedUserPosts = await _getFeedPostsFromFollowedUsers(token, currentUserId, page, limit);
       
+      // FILTER OUT VIDEOS/REELS: Only show posts (images) in home feed, not videos
+      final postsOnly = followedUserPosts.where((post) => 
+        post.type != PostType.video && 
+        post.isReel != true && 
+        post.videoUrl == null
+      ).toList();
+      
       print('FeedService: Successfully fetched ${followedUserPosts.length} posts from followed users');
-      return followedUserPosts;
+      print('FeedService: FILTER OUT VIDEOS - Posts only (no videos/reels): ${postsOnly.length}');
+      return postsOnly;
       
     } catch (e) {
       print('FeedService: Error getting home feed: $e');

@@ -169,85 +169,36 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             child: SafeArea(
-              child: SingleChildScrollView(
+              child: Padding(
                 padding: ResponsiveUtils.getResponsivePadding(context, horizontal: 4.0),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height - 
-                              MediaQuery.of(context).padding.top - 
-                              MediaQuery.of(context).padding.bottom,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 20),
-                          
-                          // App Logo/Icon (Top Center) - Smaller icon
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  spreadRadius: 1,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.asset(
-                                'assets/images/Peaceful Sunburst Icon Design.png',
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                          // App Logo/Icon (Top Center) - Image only
+                          Image.asset(
+                            'assets/images/Peaceful Sunburst Icon Design.png',
+                            width: 250,
+                            height: 150,
+                            fit: BoxFit.contain,
                           ),
                           
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 8),
                             
-                          // Main Content Card - Semi-transparent white card with message screen styling
+                          // Main Content - Direct on background without container
                           Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1), // Match message screen opacity
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.2),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 15,
-                                    spreadRadius: 3,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
                                         // Title - Centered
                                         Center(
                                           child: Text(
-                                            'Welcome Back to RGRAM',
+                                            'Welcome',
                                             style: TextStyle(
-                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 22),
+                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 15
+                                              ),
                                               fontWeight: FontWeight.bold,
                                               color: Colors.black,
                                               fontFamily: 'Poppins',
@@ -263,8 +214,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                           child: Text(
                                             'Connecting Hearts, Spreading Harmony Worldwide',
                                             style: TextStyle(
-                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 13),
-                                              color: Colors.black.withOpacity(0.8),
+                                              fontSize: ResponsiveUtils.getResponsiveFontSize(context, 10),
+                                              color: Colors.black.withOpacity(0.7),
                                               fontFamily: 'Poppins',
                                               height: 1.2,
                                             ),
@@ -274,21 +225,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                         
                                         const SizedBox(height: 20),
                                         
-                                        // Username or Email Field - Message screen style
+                                        // Username or Email Field - Semi-transparent style
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.1),
+                                            color: Colors.white.withOpacity(0.9),
                                             borderRadius: BorderRadius.circular(12),
                                             border: Border.all(
-                                              color: Colors.white.withOpacity(0.2),
+                                              color: Colors.white.withOpacity(0.3),
                                               width: 1,
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.black.withOpacity(0.05),
+                                                color: Colors.black.withOpacity(0.1),
                                                 blurRadius: 8,
                                                 spreadRadius: 1,
-                                                offset: const Offset(0, 3),
+                                                offset: const Offset(0, 4),
                                               ),
                                             ],
                                           ),
@@ -308,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             decoration: InputDecoration(
                                               hintText: 'Username or Email',
                                               hintStyle: TextStyle(
-                                                color: Colors.black.withOpacity(0.7),
+                                                color: Colors.grey.shade500,
                                                 fontSize: 15,
                                                 fontFamily: 'Poppins',
                                               ),
@@ -335,21 +286,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                         const SizedBox(height: 16),
                                         
-                                        // Password Field - Message screen style
+                                        // Password Field - Semi-transparent style
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.1),
+                                            color: Colors.white.withOpacity(0.9),
                                             borderRadius: BorderRadius.circular(12),
                                             border: Border.all(
-                                              color: Colors.white.withOpacity(0.2),
+                                              color: Colors.white.withOpacity(0.3),
                                               width: 1,
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.black.withOpacity(0.05),
+                                                color: Colors.black.withOpacity(0.1),
                                                 blurRadius: 8,
                                                 spreadRadius: 1,
-                                                offset: const Offset(0, 3),
+                                                offset: const Offset(0, 4),
                                               ),
                                             ],
                                           ),
@@ -370,7 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             decoration: InputDecoration(
                                               hintText: 'Password',
                                               hintStyle: TextStyle(
-                                                color: Colors.black.withOpacity(0.7),
+                                                color: Colors.grey.shade500,
                                                 fontSize: 15,
                                                 fontFamily: 'Poppins',
                                               ),
@@ -395,7 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               suffixIcon: IconButton(
                                                 icon: Icon(
                                                   _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                                                  color: Colors.black.withOpacity(0.7),
+                                                  color: Colors.grey.shade500,
                                                 ),
                                                 onPressed: () {
                                                   setState(() {
@@ -423,7 +374,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             child: Text(
                                               'Forgot Password?',
                                               style: TextStyle(
-                                                color: Colors.black.withOpacity(0.7),
+                                                color: Colors.black.withOpacity(0.8),
                                                 fontSize: 13,
                                                 fontFamily: 'Poppins',
                                                 fontWeight: FontWeight.w500,
@@ -434,23 +385,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                         
                                         const SizedBox(height: 8),
                                         
-                                        // Log In Button - Message screen style
+                                        // Log In Button - Clean style
                                         Container(
                                           width: double.infinity,
                                           height: 48,
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.2),
+                                            color: Colors.blue.shade600,
                                             borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: Colors.white.withOpacity(0.3),
-                                              width: 1,
-                                            ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.black.withOpacity(0.1),
-                                                blurRadius: 10,
+                                                color: Colors.blue.shade200,
+                                                blurRadius: 6,
                                                 spreadRadius: 1,
-                                                offset: const Offset(0, 4),
+                                                offset: const Offset(0, 3),
                                               ),
                                             ],
                                           ),
@@ -468,7 +415,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                     width: 20,
                                                     height: 20,
                                                     child: CircularProgressIndicator(
-                                                      color: Colors.black,
+                                                      color: Colors.white,
                                                       strokeWidth: 2,
                                                     ),
                                                   )
@@ -477,14 +424,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                                     children: [
                                                       Icon(
                                                         Icons.volunteer_activism, // Dove-like icon
-                                                        color: Colors.black,
+                                                        color: Colors.white,
                                                         size: 20,
                                                       ),
                                                       SizedBox(width: 8),
                                                       Text(
                                                         'Log In',
                                                         style: TextStyle(
-                                                          color: Colors.black,
+                                                          color: Colors.white,
                                                           fontSize: 16,
                                                           fontWeight: FontWeight.w600,
                                                           fontFamily: 'Poppins',
@@ -533,8 +480,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                               children: [
                                                 Text(
                                                   "Don't have an account? ",
-                                                  style: const TextStyle(
-                                                    color: Colors.black,
+                                                  style: TextStyle(
+                                                    color: Colors.black.withOpacity(0.7),
                                                     fontSize: 14,
                                                     fontFamily: 'Poppins',
                                                   ),
@@ -542,7 +489,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 Text(
                                                   'Sign Up',
                                                   style: TextStyle(
-                                                    color: Colors.black.withOpacity(0.8),
+                                                    color: Colors.black,
                                                     fontSize: 14,
                                                     fontFamily: 'Poppins',
                                                     fontWeight: FontWeight.w600,
@@ -552,16 +499,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                                ],
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ),

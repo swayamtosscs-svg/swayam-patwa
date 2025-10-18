@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import '../models/message_model.dart';
 import '../models/user_model.dart';
@@ -141,7 +142,17 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
             fit: BoxFit.cover,
           ),
         ),
-        child: SafeArea(
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            // Main content
+            SafeArea(
           child: Column(
             children: [
               // Custom App Bar
@@ -173,6 +184,8 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               ),
             ],
           ),
+        ),
+          ],
         ),
       ),
     );

@@ -289,57 +289,36 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
-        return Scaffold(
-          body: Container(
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/Signup page bg.jpeg'),
-                fit: BoxFit.cover,
-              ),
-            ),
-            child: SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: ResponsiveUtils.getResponsivePadding(context, horizontal: 4.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 5.0)),
+         return Scaffold(
+           body: Container(
+             decoration: const BoxDecoration(
+               image: DecorationImage(
+                 image: AssetImage('assets/images/Signup page bg.jpg'),
+                 fit: BoxFit.cover,
+               ),
+             ),
+             child: Column(
+               children: [
+                 Expanded(
+                   child: SafeArea(
+                     child: SingleChildScrollView(
+                       child: Padding(
+                         padding: ResponsiveUtils.getResponsivePadding(context, horizontal: 4.0),
+                         child: Form(
+                           key: _formKey,
+                           child: Column(
+                             children: [
+                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 2.0)),
                         
-                        // App Logo/Icon (Top Center) - Responsive square rounded icon
-                        Container(
-                          width: ResponsiveUtils.getResponsiveWidth(context, 20),
-                          height: ResponsiveUtils.getResponsiveWidth(context, 20),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.asset(
-                              'assets/images/Peaceful Sunburst Icon Design.png',
-                              width: ResponsiveUtils.getResponsiveWidth(context, 20),
-                              height: ResponsiveUtils.getResponsiveWidth(context, 20),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
+                        // App Logo/Icon (Top Center) - Large icon like login screen
+                        Image.asset(
+                          'assets/images/Peaceful Sunburst Icon Design.png',
+                          width: 250,
+                          height: 150,
+                          fit: BoxFit.contain,
                         ),
                         
                         SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 1.0)),
-                        
-                        // RGRAM text below logo
-                      
-                        
-                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 5.0)),
                         
                         // Main Content Card - Semi-transparent white card with message screen styling
                         Container(
@@ -371,9 +350,9 @@ class _SignupScreenState extends State<SignupScreen> {
                                     // Title - Centered
                                     Center(
                                       child: Text(
-                                        'Welcome to RGRAM',
+                                        'Welcome',
                                         style: TextStyle(
-                                          fontSize: ResponsiveUtils.getResponsiveFontSize(context, 28),
+                                          fontSize: ResponsiveUtils.getResponsiveFontSize(context, 15),
                                           fontWeight: FontWeight.bold,
                                           color: Colors.black,
                                           fontFamily: 'Poppins',
@@ -389,7 +368,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                       child: Text(
                                         'Connecting Hearts, Spreading Harmony Worldwide',
                                         style: TextStyle(
-                                          fontSize: ResponsiveUtils.getResponsiveFontSize(context, 16),
+                                          fontSize: ResponsiveUtils.getResponsiveFontSize(context, 10),
                                           color: Colors.black.withOpacity(0.8),
                                           fontFamily: 'Poppins',
                                           height: 1.4,
@@ -1044,14 +1023,19 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
                         
-                        // Add extra bottom spacing
-                        SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 3.0)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+                         // Add extra bottom spacing
+                         SizedBox(height: ResponsiveUtils.getResponsiveHeight(context, 3.0)),
+                             ],
+                           ),
+                         ),
+                       ),
+                     ),
+                   ),
+                 ),
+                 
+                 
+               ],
+             ),
           ),
         );
       },

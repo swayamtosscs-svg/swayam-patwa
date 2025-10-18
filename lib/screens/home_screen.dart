@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
@@ -1262,6 +1263,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             child: Stack(
               children: [
+                // Blur effect overlay
+                BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                  child: Container(
+                    color: Colors.transparent,
+                  ),
+                ),
                 // Spiritual symbols overlay
                 _buildSpiritualSymbolsOverlay(),
                 SafeArea(
@@ -2670,8 +2678,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
           final post = _posts[index];
           
-          // Check if this is a reel and use video widget
+          // Skip reels/videos in home feed - only show posts
           if (post.isReel && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
+            return const SizedBox.shrink(); // Don't display reels in home feed
+          }
+          
+          // Check if this is a reel and use video widget (this code is now unreachable but kept for reference)
+          if (false && post.isReel && post.videoUrl != null && post.videoUrl!.isNotEmpty) {
             // Convert Post to BabaPageReel for video widget
             final reel = BabaPageReel(
               id: post.id,

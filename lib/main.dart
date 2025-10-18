@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'package:provider/provider.dart';
 import 'package:media_kit/media_kit.dart';
 import 'providers/auth_provider.dart';
@@ -43,12 +44,22 @@ import 'screens/baba_page_detail_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize media_kit
-  MediaKit.ensureInitialized();
+  // Initialize media_kit with error handling
+  try {
+    MediaKit.ensureInitialized();
+    print('MediaKit initialized successfully');
+  } catch (e) {
+    print('MediaKit initialization failed: $e');
+    // Continue app initialization even if MediaKit fails
+  }
   
   // Memory optimization: Set image cache size
-  PaintingBinding.instance.imageCache.maximumSize = 100;
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 << 20; // 50 MB
+  try {
+    PaintingBinding.instance.imageCache.maximumSize = 100;
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 50 << 20; // 50 MB
+  } catch (e) {
+    print('Image cache configuration failed: $e');
+  }
   
   runApp(const DivineConnectApp());
 }
@@ -243,14 +254,18 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   }
 
   void _clearMemoryCaches() {
-    // Clear image caches to free memory
-    PaintingBinding.instance.imageCache.clear();
-    PaintingBinding.instance.imageCache.clearLiveImages();
-    
-    // Force garbage collection
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // This will trigger garbage collection on the next frame
-    });
+    try {
+      // Clear image caches to free memory
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      
+      // Force garbage collection
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // This will trigger garbage collection on the next frame
+      });
+    } catch (e) {
+      print('Error clearing memory caches: $e');
+    }
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:ui';
 import '../models/notification_model.dart';
 import '../services/notification_service.dart';
 import '../widgets/notification_item_widget.dart';
@@ -241,9 +242,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0EBE1),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF0EBE1),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
           'Notifications',
@@ -302,12 +303,32 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildNotificationsList(_allNotifications),
-          _buildNotificationsList(_unreadNotifications),
-        ],
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            // Main content
+            TabBarView(
+              controller: _tabController,
+              children: [
+                _buildNotificationsList(_allNotifications),
+                _buildNotificationsList(_unreadNotifications),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
