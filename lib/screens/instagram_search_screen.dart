@@ -495,6 +495,7 @@ class _InstagramSearchScreenState extends State<InstagramSearchScreen> {
         crossAxisCount: 3,
         crossAxisSpacing: 2,
         mainAxisSpacing: 2,
+        childAspectRatio: 1,
       ),
       itemCount: _babaJiPosts.length,
       itemBuilder: (context, index) {

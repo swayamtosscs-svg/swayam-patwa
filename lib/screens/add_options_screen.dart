@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import 'story_upload_screen.dart';
 import 'post_upload_screen.dart';
@@ -13,155 +14,164 @@ class AddOptionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () {
+            // Navigate back to home screen using bottom navigation
+            // Find the GlobalNavigationWrapper and navigate to home
+            final navigator = Navigator.of(context);
+            navigator.pushNamedAndRemoveUntil('/home', (route) => false);
+          },
         ),
         title: const Text(
           'Create Content',
           style: TextStyle(
-            color: Color(0xFF1A1A1A),
+            color: Colors.black,
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w600,
           ),
         ),
         centerTitle: true,
       ),
-      body: SafeArea(
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpeg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Blur effect overlay
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             // Get screen dimensions for responsive design
             final screenHeight = constraints.maxHeight;
             final isSmallScreen = screenHeight < 600;
             
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: screenHeight,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: isSmallScreen ? 16.0 : 24.0,
-                  ),
-                  child: Column(
-                    children: [
-                      SizedBox(height: isSmallScreen ? 20 : 40),
-                      
-                      // Header text
-                      Text(
-                        'What would you like to create?',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 20 : 24,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1A1A1A),
-                          fontFamily: 'Poppins',
+            return Column(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 24.0,
+                      vertical: isSmallScreen ? 16.0 : 24.0,
+                    ),
+                    child: Column(
+                      children: [
+                        SizedBox(height: isSmallScreen ? 10 : 20),
+                        
+                        // Header text
+                        Text(
+                          'What would you like to create?',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 18 : 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            fontFamily: 'Poppins',
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 12 : 16),
-                      
-                      Text(
-                        'Choose from the options below to share your spiritual journey',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 14 : 16,
-                          color: const Color(0xFF666666),
-                          fontFamily: 'Poppins',
+                        
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+                        
+                        Text(
+                          'Choose from the options below to share your spiritual journey',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 12 : 14,
+                            color: Colors.black,
+                            fontFamily: 'Poppins',
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 30 : 60),
-                      
-                      // Upload Story Option
-                      _buildOptionCard(
-                        context,
-                        icon: Icons.auto_stories,
-                        title: 'Upload Story',
-                        subtitle: 'Share a moment from your spiritual journey',
-                        color: const Color(0xFF6366F1),
-                        onTap: () => _navigateToStoryUpload(context),
-                        isCompact: isSmallScreen,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                      
-                      // Add Post Option
-                      _buildOptionCard(
-                        context,
-                        icon: Icons.grid_on,
-                        title: 'Add Post',
-                        subtitle: 'Share an image or thought with your community',
-                        color: const Color(0xFF10B981),
-                        onTap: () => _navigateToPostUpload(context),
-                        isCompact: isSmallScreen,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                      
-                      // Add Reel Option
-                      _buildOptionCard(
-                        context,
-                        icon: Icons.play_circle_outline,
-                        title: 'Add Reel',
-                        subtitle: 'Create a short video to inspire others',
-                        color: const Color(0xFFF59E0B),
-                        onTap: () => _navigateToReelUpload(context),
-                        isCompact: isSmallScreen,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                      
-                      // Create Baba Ji Page Option
-                      _buildOptionCard(
-                        context,
-                        icon: Icons.self_improvement,
-                        title: 'Create Baba Ji Page',
-                        subtitle: 'Create a spiritual page for a spiritual leader',
-                        color: const Color(0xFF8B5CF6),
-                        onTap: () => _navigateToBabaPageCreation(context),
-                        isCompact: isSmallScreen,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                      
-                      // Live Stream Option
-                      _buildOptionCard(
-                        context,
-                        icon: Icons.videocam,
-                        title: 'Live Stream',
-                        subtitle: 'Start a live spiritual session or darshan',
-                        color: const Color(0xFFEF4444),
-                        onTap: () => _navigateToLiveStream(context),
-                        isCompact: isSmallScreen,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 30 : 60),
-                      
-                      // Footer text
-                      Text(
-                        'All content will be shared with your spiritual community',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 12 : 14,
-                          color: const Color(0xFF999999),
-                          fontFamily: 'Poppins',
+                        
+                        SizedBox(height: isSmallScreen ? 20 : 30),
+                        
+                        // Upload Story Option
+                        _buildOptionCard(
+                          context,
+                          icon: Icons.auto_stories,
+                          title: 'Upload Story',
+                          subtitle: 'Share a moment from your spiritual journey',
+                          color: const Color(0xFF6366F1),
+                          onTap: () => _navigateToStoryUpload(context),
+                          isCompact: isSmallScreen,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      
-                      SizedBox(height: isSmallScreen ? 16 : 24),
-                    ],
+                        
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+                        
+                        // Add Post Option
+                        _buildOptionCard(
+                          context,
+                          icon: Icons.grid_on,
+                          title: 'Add Post',
+                          subtitle: 'Share an image or thought with your community',
+                          color: const Color(0xFF10B981),
+                          onTap: () => _navigateToPostUpload(context),
+                          isCompact: isSmallScreen,
+                        ),
+                        
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+                        
+                        // Add Reel Option
+                        _buildOptionCard(
+                          context,
+                          icon: Icons.play_circle_outline,
+                          title: 'Add Reel',
+                          subtitle: 'Create a short video to inspire others',
+                          color: const Color(0xFFF59E0B),
+                          onTap: () => _navigateToReelUpload(context),
+                          isCompact: isSmallScreen,
+                        ),
+                        
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+                        
+                        // Create Baba Ji Page Option
+                        _buildOptionCard(
+                          context,
+                          icon: Icons.self_improvement,
+                          title: 'Create Baba Ji Page',
+                          subtitle: 'Create a spiritual page for a spiritual leader',
+                          color: const Color(0xFF8B5CF6),
+                          onTap: () => _navigateToBabaPageCreation(context),
+                          isCompact: isSmallScreen,
+                        ),
+                        
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+                        
+                        // Live Stream Option
+                        _buildOptionCard(
+                          context,
+                          icon: Icons.videocam,
+                          title: 'Live Stream',
+                          subtitle: 'Start a live spiritual session or darshan',
+                          color: const Color(0xFFEF4444),
+                          onTap: () => _navigateToLiveStream(context),
+                          isCompact: isSmallScreen,
+                        ),
+                        
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             );
           },
+        ),
+            ),
+          ],
         ),
       ),
     );
@@ -179,13 +189,13 @@ class AddOptionsScreen extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.all(isCompact ? 16 : 24),
+        padding: EdgeInsets.all(isCompact ? 8 : 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.white.withOpacity(0.9),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withOpacity(0.1),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -195,8 +205,8 @@ class AddOptionsScreen extends StatelessWidget {
           children: [
             // Icon container
             Container(
-              width: isCompact ? 50 : 60,
-              height: isCompact ? 50 : 60,
+              width: isCompact ? 40 : 50,
+              height: isCompact ? 40 : 50,
               decoration: BoxDecoration(
                 color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
@@ -204,7 +214,7 @@ class AddOptionsScreen extends StatelessWidget {
               child: Icon(
                 icon,
                 color: color,
-                size: isCompact ? 24 : 28,
+                size: isCompact ? 20 : 24,
               ),
             ),
             
@@ -225,17 +235,6 @@ class AddOptionsScreen extends StatelessWidget {
                       fontFamily: 'Poppins',
                     ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: isCompact ? 2 : 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: isCompact ? 12 : 14,
-                      color: const Color(0xFF666666),
-                      fontFamily: 'Poppins',
-                    ),
-                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

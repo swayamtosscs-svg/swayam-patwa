@@ -150,13 +150,27 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       extendBody: true,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _openCreateBottomSheet(context),
+        backgroundColor: Colors.orange.shade400,
+        elevation: 6,
+        child: const Icon(Icons.add, size: 28),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(
         child: DefaultTextStyle.merge(
           style: GoogleFonts.poppins(),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              children: [
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
                 // Header (avatar, gradient background, name, tags)
                 Stack(
                   clipBehavior: Clip.none,
@@ -328,7 +342,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 16),
                                         Text(
                                           'Upload your first post to get started',
                                           style: TextStyle(
@@ -380,34 +394,48 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                                             children: [
                                               ClipRRect(
                                                 borderRadius: BorderRadius.circular(12),
-                                                child: mediaUrl != null
-                                                    ? Image.network(
-                                                        mediaUrl, 
-                                                        fit: BoxFit.cover,
-                                                        loadingBuilder: (context, child, loadingProgress) {
-                                                          if (loadingProgress == null) return child;
-                                                          return Container(
-                                                            color: Colors.grey.shade200,
-                                                            child: const Center(
-                                                              child: CircularProgressIndicator(
-                                                                strokeWidth: 2,
-                                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  height: double.infinity,
+                                                  child: mediaUrl != null
+                                                      ? Image.network(
+                                                          mediaUrl, 
+                                                          width: double.infinity,
+                                                          height: double.infinity,
+                                                          fit: BoxFit.cover,
+                                                          loadingBuilder: (context, child, loadingProgress) {
+                                                            if (loadingProgress == null) return child;
+                                                            return Container(
+                                                              width: double.infinity,
+                                                              height: double.infinity,
+                                                              color: Colors.grey.shade200,
+                                                              child: const Center(
+                                                                child: CircularProgressIndicator(
+                                                                  strokeWidth: 2,
+                                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                                                ),
                                                               ),
-                                                            ),
-                                                          );
-                                                        },
-                                                        errorBuilder: (context, error, stackTrace) {
-                                                          return Container(
-                                                            color: Colors.grey.shade200,
-                                                            child: const Icon(
-                                                              Icons.image_not_supported,
-                                                              color: Colors.grey,
-                                                              size: 32,
-                                                            ),
-                                                          );
-                                                        },
-                                                      )
-                                                    : Container(color: Colors.grey.shade200),
+                                                            );
+                                                          },
+                                                          errorBuilder: (context, error, stackTrace) {
+                                                            return Container(
+                                                              width: double.infinity,
+                                                              height: double.infinity,
+                                                              color: Colors.grey.shade200,
+                                                              child: const Icon(
+                                                                Icons.image_not_supported,
+                                                                color: Colors.grey,
+                                                                size: 32,
+                                                              ),
+                                                            );
+                                                          },
+                                                        )
+                                                      : Container(
+                                                          width: double.infinity,
+                                                          height: double.infinity,
+                                                          color: Colors.grey.shade200,
+                                                        ),
+                                                ),
                                               ),
                                               // Delete button overlay
                                               Positioned(
@@ -435,31 +463,41 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                                       }
                                       return ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.network(
-                                          'https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800&q=80&auto=format&fit=crop', 
-                                          fit: BoxFit.cover,
-                                          loadingBuilder: (context, child, loadingProgress) {
-                                            if (loadingProgress == null) return child;
-                                            return Container(
-                                              color: Colors.grey.shade200,
-                                              child: const Center(
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                        child: Container(
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                          child: Image.network(
+                                            'https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800&q=80&auto=format&fit=crop', 
+                                            width: double.infinity,
+                                            height: double.infinity,
+                                            fit: BoxFit.cover,
+                                            loadingBuilder: (context, child, loadingProgress) {
+                                              if (loadingProgress == null) return child;
+                                              return Container(
+                                                width: double.infinity,
+                                                height: double.infinity,
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                                  ),
                                                 ),
-                                              ),
-                                            );
-                                          },
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return Container(
-                                              color: Colors.grey.shade200,
-                                              child: const Icon(
-                                                Icons.image_not_supported,
-                                                color: Colors.grey,
-                                                size: 32,
-                                              ),
-                                            );
-                                          },
+                                              );
+                                            },
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Container(
+                                                width: double.infinity,
+                                                height: double.infinity,
+                                                color: Colors.grey.shade200,
+                                                child: const Icon(
+                                                  Icons.image_not_supported,
+                                                  color: Colors.grey,
+                                                  size: 32,
+                                                ),
+                                              );
+                                            },
+                                          ),
                                         ),
                                       );
                                     },
@@ -481,15 +519,9 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
             ),
           ),
         ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openCreateBottomSheet(context),
-        backgroundColor: Colors.orange.shade400,
-        elevation: 6,
-        child: const Icon(Icons.add, size: 28),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-    );
+      );
+    },
+  );
   }
 
   Widget _buildTag(String text, Color bg, Color textColor, {bool isSmall = false}) {
@@ -528,6 +560,8 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
       itemCount: 6,
       itemBuilder: (context, i) {
         return Container(
+          width: double.infinity,
+          height: double.infinity,
           decoration: BoxDecoration(
             color: Colors.grey.shade200,
             borderRadius: BorderRadius.circular(12),
@@ -860,9 +894,9 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
+          initialChildSize: 0.45,
+          minChildSize: 0.35,
+          maxChildSize: 0.8,
           builder: (context, scrollController) {
             return Container(
               decoration: const BoxDecoration(
@@ -871,7 +905,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
               ),
               child: ListView(
                 controller: scrollController,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
                 children: [
                   Center(
                     child: Container(
@@ -886,138 +920,69 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                   const SizedBox(height: 16),
                   const Text('Create', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (constraints.maxWidth < 300) {
-                        // For very small screens, use vertical layout
-                        return Column(
-                          children: [
-                            _createTile(
-                              icon: Icons.grid_3x3_outlined,
-                              label: 'Post',
-                              color: Colors.blue.shade100,
-                              onTap: page == null ? null : () async {
-                                Navigator.pop(context);
-                                final ok = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => BabaPagePostCreationScreen(babaPage: page),
-                                  ),
-                                );
-                                if (ok == true) {
-                                  _fetchPosts(page);
-                                }
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _createTile(
-                                    icon: Icons.video_call_outlined,
-                                    label: 'Reel',
-                                    color: Colors.green.shade100,
-                                    onTap: page == null ? null : () async {
-                                      Navigator.pop(context);
-                                      final ok = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => BabaPageReelUploadScreen(babaPage: page),
-                                        ),
-                                      );
-                                      if (ok == true) {
-                                        // Refresh reels if needed
-                                        print('Baba Ji reel uploaded successfully');
-                                      }
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: _createTile(
-                                    icon: Icons.auto_stories_outlined,
-                                    label: 'Story',
-                                    color: Colors.orange.shade100,
-                                    onTap: page == null ? null : () async {
-                                      Navigator.pop(context);
-                                      final ok = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => BabaPageStoryUploadScreen(babaPage: page),
-                                        ),
-                                      );
-                                      if (ok == true) {
-                                        _fetchStories(page);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        );
-                      } else {
-                        // For normal screens, use horizontal layout
-                        return Row(
-                          children: [
-                            _createTile(
-                              icon: Icons.grid_3x3_outlined,
-                              label: 'Post',
-                              color: Colors.blue.shade100,
-                              onTap: page == null ? null : () async {
-                                Navigator.pop(context);
-                                final ok = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => BabaPagePostCreationScreen(babaPage: page),
-                                  ),
-                                );
-                                if (ok == true) {
-                                  _fetchPosts(page);
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            _createTile(
-                              icon: Icons.video_call_outlined,
-                              label: 'Reel',
-                              color: Colors.green.shade100,
-                              onTap: page == null ? null : () async {
-                                Navigator.pop(context);
-                                final ok = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => BabaPageReelUploadScreen(babaPage: page),
-                                  ),
-                                );
-                                if (ok == true) {
-                                  // Refresh reels if needed
-                                  print('Baba Ji reel uploaded successfully');
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            _createTile(
-                              icon: Icons.auto_stories_outlined,
-                              label: 'Story',
-                              color: Colors.orange.shade100,
-                              onTap: page == null ? null : () async {
-                                Navigator.pop(context);
-                                final ok = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => BabaPageStoryUploadScreen(babaPage: page),
-                                  ),
-                                );
-                                if (ok == true) {
-                                  _fetchStories(page);
-                                }
-                              },
-                            ),
-                          ],
-                        );
-                      }
-                    },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _createTile(
+                          icon: Icons.grid_3x3_outlined,
+                          label: 'Post',
+                          color: const Color(0xFF2196F3), // Vibrant blue
+                          onTap: page == null ? null : () async {
+                            Navigator.pop(context);
+                            final ok = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BabaPagePostCreationScreen(babaPage: page),
+                              ),
+                            );
+                            if (ok == true) {
+                              _fetchPosts(page);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _createTile(
+                          icon: Icons.video_call_outlined,
+                          label: 'Reel',
+                          color: const Color(0xFF4CAF50), // Vibrant green
+                          onTap: page == null ? null : () async {
+                            Navigator.pop(context);
+                            final ok = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BabaPageReelUploadScreen(babaPage: page),
+                              ),
+                            );
+                            if (ok == true) {
+                              // Refresh reels if needed
+                              print('Baba Ji reel uploaded successfully');
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _createTile(
+                          icon: Icons.auto_stories_outlined,
+                          label: 'Story',
+                          color: const Color(0xFFFF9800), // Vibrant orange
+                          onTap: page == null ? null : () async {
+                            Navigator.pop(context);
+                            final ok = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BabaPageStoryUploadScreen(babaPage: page),
+                              ),
+                            );
+                            if (ok == true) {
+                              _fetchStories(page);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   )
                 ],
               ),
@@ -1031,19 +996,34 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   Widget _createTile({required IconData icon, required String label, required Color color, VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        height: 100,
+        height: 120,
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 28),
-            const SizedBox(height: 8),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 24, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label, 
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
       ),

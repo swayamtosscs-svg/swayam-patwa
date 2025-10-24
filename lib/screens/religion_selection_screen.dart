@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import 'home_screen.dart';
+import '../widgets/global_navigation_wrapper.dart';
 
 class ReligionSelectionScreen extends StatefulWidget {
   final Map<String, dynamic> googleUserData;
@@ -142,10 +143,13 @@ class _ReligionSelectionScreenState extends State<ReligionSelectionScreen> {
           ),
         );
 
-        // Navigate to home screen
+        // Navigate to home screen with global navigation
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(builder: (context) => const GlobalNavigationWrapper(
+            child: HomeScreen(),
+            initialIndex: 0,
+          )),
         );
       }
     } catch (e) {

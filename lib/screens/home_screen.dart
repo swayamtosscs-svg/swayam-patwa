@@ -1277,13 +1277,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           builder: (context, authProvider, child) {
             // Show smooth loader for any loading state
             if (authProvider.userProfile == null || _isRefreshing) {
-              return SmoothFeedLoader(
-                message: authProvider.userProfile == null 
-                  ? 'Setting up your feed...' 
-                  : 'Refreshing content...',
-                showStories: true,
-                showPosts: true,
-              );
+              return SmoothFeedLoader();
             }
 
             return Stack(
@@ -1319,7 +1313,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
         );
       },
     );
@@ -2815,162 +2808,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       PerformanceTest.printPerformanceReport(results);
     }
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return Consumer<ThemeService>(
-      builder: (context, themeService, child) {
-        return Container(
-          decoration: BoxDecoration(
-            color: themeService.surfaceColor,
-            boxShadow: [
-              BoxShadow(
-                color: themeService.primaryColor.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Home
-              _buildNavItem(
-                icon: Icons.home,
-                label: 'Home',
-                isSelected: true,
-                onTap: () {
-                  // Already on home
-                },
-              ),
-              
-              // Live Darshan
-              _buildNavItem(
-                icon: Icons.live_tv,
-                label: 'Live Darshan',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LiveStreamScreen(),
-                    ),
-                  );
-                },
-              ),
-              
-              // Reels
-              _buildNavItem(
-                icon: Icons.video_library,
-                label: 'Reels',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ReelsScreen(),
-                    ),
-                  );
-                },
-              ),
-              
-              // Add Button (Simple)
-              _buildNavItem(
-                icon: Icons.add,
-                label: 'Add',
-                isSelected: false,
-                onTap: () {
-                  // Navigate to add options screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AddOptionsScreen(),
-                    ),
-                  );
-                },
-              ),
-              
-              // Baba Ji Pages
-              _buildNavItem(
-                icon: Icons.self_improvement,
-                label: 'Baba Ji',
-                isSelected: false,
-                onTap: () {
-                  // Navigate to Baba Ji pages screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const BabaPagesScreen(),
-                    ),
-                  );
-                },
-              ),
-              
-              // Account
-              _buildNavItem(
-                icon: Icons.person,
-                label: 'Account',
-                isSelected: false,
-                onTap: () {
-                  // Navigate to account/profile screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ProfileUI(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Consumer<ThemeService>(
-      builder: (context, themeService, child) {
-        return Expanded(
-          child: GestureDetector(
-            onTap: onTap,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
-                  size: 20,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: isSelected ? themeService.primaryColor : themeService.onSurfaceColor.withOpacity(0.6),
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    fontFamily: 'Poppins',
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void _showInterestChangeDialog(BuildContext context) {

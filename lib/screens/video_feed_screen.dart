@@ -544,27 +544,6 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
           ],
         ),
       ),
-      
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        height: 60,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            top: BorderSide(color: Colors.grey, width: 0.5),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildNavItem(Icons.home, 'Home', true),
-            _buildNavItem(Icons.search, 'Search', false),
-            _buildNavItem(Icons.add_box_outlined, 'Post', false),
-            _buildNavItem(Icons.shopping_bag_outlined, 'Shop', false),
-            _buildNavItem(Icons.person_outline, 'Profile', false),
-          ],
-        ),
-      ),
     );
   }
 

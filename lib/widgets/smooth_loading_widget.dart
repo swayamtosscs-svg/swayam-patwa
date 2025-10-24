@@ -205,77 +205,19 @@ class _SmoothFeedLoaderState extends State<SmoothFeedLoader>
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (widget.showStories) ...[
-            FadeTransition(
-              opacity: _storiesAnimation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, -0.5),
-                  end: Offset.zero,
-                ).animate(_storiesAnimation),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Loading stories...',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-          if (widget.showPosts) ...[
-            FadeTransition(
-              opacity: _postsAnimation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.5),
-                  end: Offset.zero,
-                ).animate(_postsAnimation),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Loading posts...',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-          if (widget.message != null) ...[
-            const SizedBox(height: 16),
-            FadeTransition(
-              opacity: _postsAnimation,
-              child: Text(
-                widget.message!,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ],
+      child: FadeTransition(
+        opacity: _storiesAnimation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, -0.5),
+            end: Offset.zero,
+          ).animate(_storiesAnimation),
+          child: const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+        ),
       ),
     );
   }

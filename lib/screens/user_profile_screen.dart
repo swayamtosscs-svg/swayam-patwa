@@ -190,7 +190,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/Signup page bg.jpg'),
+            image: AssetImage('assets/images/Signup page bg.jpeg'),
             fit: BoxFit.cover,
           ),
         ),
@@ -210,22 +210,22 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 await _loadUserMedia();
               },
               child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              // Instagram-style Profile Header
-              _buildInstagramStyleProfileHeader(),
-              
-              SizedBox(height: MediaQuery.of(context).size.width < 600 ? 8 : 12),
-              
-              // Instagram-style Tab Bar
-              _buildInstagramStyleTabBar(),
-              
-              // Tab Content
-              _buildTabContent(),
-            ],
-          ),
-        ),
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    // Instagram-style Profile Header
+                    _buildInstagramStyleProfileHeader(),
+                    
+                    SizedBox(height: MediaQuery.of(context).size.width < 600 ? 8 : 12),
+                    
+                    // Instagram-style Tab Bar
+                    _buildInstagramStyleTabBar(),
+                    
+                    // Tab Content
+                    _buildTabContent(),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -235,7 +235,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   PreferredSizeWidget _buildInstagramStyleAppBar() {
     return AppBar(
-      backgroundColor: const Color(0xFFF0EBE1), // Same as own profile page background
+      backgroundColor: Colors.white, // White background
       elevation: 0,
       leading: IconButton(
         onPressed: () => Navigator.of(context).pop(),
@@ -405,7 +405,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               Text(
                 widget.fullName,
                 style: const TextStyle(
-                  color: Color(0xFF4A2C2A), // Deep Brown
+                  color: Colors.black,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -416,7 +416,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                 Text(
                   widget.bio,
                   style: const TextStyle(
-                    color: Color(0xFF4A2C2A), // Deep Brown
+                    color: Colors.black,
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
@@ -440,7 +440,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         Text(
           count,
           style: const TextStyle(
-            color: Color(0xFF4A2C2A), // Deep Brown
+            color: Colors.black,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -449,7 +449,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         Text(
           label,
           style: const TextStyle(
-            color: Color(0xFF4A2C2A), // Deep Brown
+            color: Colors.black,
             fontSize: 12,
             fontWeight: FontWeight.w400,
           ),
@@ -463,16 +463,17 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   Widget _buildInstagramStyleTabBar() {
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(
+      decoration: BoxDecoration(
+        color: Colors.white, // White background
+        border: const Border(
           top: BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
         ),
       ),
       child: TabBar(
         controller: _tabController,
-        labelColor: const Color(0xFF4A2C2A), // Deep Brown
-        unselectedLabelColor: const Color(0xFF999999),
-        indicatorColor: const Color(0xFF4A2C2A), // Deep Brown
+        labelColor: Colors.black,
+        unselectedLabelColor: Colors.grey[600],
+        indicatorColor: Colors.black,
         tabs: const [
           Tab(icon: Icon(Icons.grid_on)),
           Tab(icon: Icon(Icons.play_circle_outline)),
@@ -860,6 +861,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         crossAxisCount: 3,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
+        childAspectRatio: 1,
       ),
       itemCount: _userPosts.length,
       itemBuilder: (context, index) {
@@ -889,13 +891,19 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: (post.imageUrl?.isNotEmpty == true)
-              ? Image.network(
-                  post.imageUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => _buildPostPlaceholder(),
-                )
-              : _buildPostPlaceholder(),
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            child: (post.imageUrl?.isNotEmpty == true)
+                ? Image.network(
+                    post.imageUrl!,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _buildPostPlaceholder(),
+                  )
+                : _buildPostPlaceholder(),
+          ),
         ),
       ),
     );
@@ -903,6 +911,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   Widget _buildPostPlaceholder() {
     return Container(
+      width: double.infinity,
+      height: double.infinity,
       color: Colors.grey[200],
       child: const Icon(
         Icons.image,
@@ -1036,6 +1046,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         crossAxisCount: 3,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
+        childAspectRatio: 1,
       ),
       itemCount: _userReels.length,
       itemBuilder: (context, index) {
@@ -1063,27 +1074,33 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Show video thumbnail or placeholder
-              (reel.videoUrl?.isNotEmpty == true)
-                  ? Container(
-                      color: Colors.black,
-                      child: const Icon(
-                        Icons.play_circle_outline,
-                        color: Colors.white,
-                        size: 40,
-                      ),
-                    )
-                  : _buildReelPlaceholder(),
-              // Play button overlay
-              const Icon(
-                Icons.play_arrow,
-                color: Colors.white,
-                size: 24,
-              ),
-            ],
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Show video thumbnail or placeholder
+                (reel.videoUrl?.isNotEmpty == true)
+                    ? Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: Colors.black,
+                        child: const Icon(
+                          Icons.play_circle_outline,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      )
+                    : _buildReelPlaceholder(),
+                // Play button overlay
+                const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1092,6 +1109,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
 
   Widget _buildReelPlaceholder() {
     return Container(
+      width: double.infinity,
+      height: double.infinity,
       color: Colors.grey[200],
       child: const Icon(
         Icons.video_library,

@@ -36,6 +36,7 @@ import 'screens/reels_screen.dart';
 import 'screens/create_live_stream_screen.dart';
 import 'screens/live_stream_viewer_screen.dart';
 import 'screens/baba_page_detail_screen.dart';
+import 'widgets/global_navigation_wrapper.dart';
 
 // import 'services/custom_http_client.dart';
 // import 'services/memory_optimization_service.dart';
@@ -90,8 +91,14 @@ class DivineConnectApp extends StatelessWidget {
               '/signup': (context) => const SignupScreen(),
               '/interests': (context) => const InterestSelectionScreen(),
               '/onboarding': (context) => const OnboardingScreen(),
-              '/home': (context) => const HomeScreen(),
-              '/dashboard': (context) => const HomeScreen(),
+              '/home': (context) => const GlobalNavigationWrapper(
+                child: HomeScreen(),
+                initialIndex: 0,
+              ),
+              '/dashboard': (context) => const GlobalNavigationWrapper(
+                child: HomeScreen(),
+                initialIndex: 0,
+              ),
               '/video-feed': (context) {
                 final args = ModalRoute.of(context)!.settings.arguments as String?;
                 return VideoFeedScreen(selectedReligion: args ?? 'Spiritual');
@@ -282,8 +289,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
 
         // Check if user is authenticated
         if (authProvider.isAuthenticated && authProvider.authToken != null) {
-          print('AuthWrapper: User is authenticated, showing home screen');
-          return const HomeScreen();
+          print('AuthWrapper: User is authenticated, showing home screen with global navigation');
+          return const GlobalNavigationWrapper(
+            child: HomeScreen(),
+            initialIndex: 0,
+          );
         } else {
           print('AuthWrapper: User not authenticated, showing login screen');
           // Show login screen when user is not authenticated (first time or after logout)

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'host_page.dart';
 import 'viewer_page.dart';
 
@@ -32,13 +33,17 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            // Navigate back to home screen using bottom navigation
+            final navigator = Navigator.of(context);
+            navigator.pushNamedAndRemoveUntil('/home', (route) => false);
+          },
         ),
         title: const Text(
           'Live Streaming',
@@ -50,7 +55,21 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
         ),
         centerTitle: true,
       ),
-      body: _buildBody(),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/Signup page bg.jpeg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+          child: Container(
+            color: Colors.transparent,
+            child: _buildBody(),
+          ),
+        ),
+      ),
     );
   }
 

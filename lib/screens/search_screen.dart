@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
+import 'dart:math';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import '../services/chat_service.dart';
@@ -102,6 +103,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     color: Colors.transparent,
                   ),
                 ),
+                // Spiritual symbols overlay
+                _buildSpiritualSymbolsOverlay(),
                 // Main content
                 SafeArea(
               child: Column(
@@ -566,4 +569,145 @@ class _SearchScreenState extends State<SearchScreen> {
       ],
     );
   }
+
+  // Spiritual symbols overlay (same as home screen)
+  Widget _buildSpiritualSymbolsOverlay() {
+    return Positioned.fill(
+      child: CustomPaint(
+        painter: SpiritualSymbolsPainter(),
+      ),
+    );
+  }
+}
+
+// Spiritual symbols painter for background overlay
+class SpiritualSymbolsPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+
+    // Draw various spiritual symbols across the background
+    _drawOm(canvas, size, paint);
+    _drawCross(canvas, size, paint);
+    _drawStarOfDavid(canvas, size, paint);
+    _drawCrescent(canvas, size, paint);
+    _drawLotus(canvas, size, paint);
+    _drawPeaceSymbol(canvas, size, paint);
+  }
+
+  void _drawOm(Canvas canvas, Size size, Paint paint) {
+    final path = Path();
+    final center = Offset(size.width * 0.2, size.height * 0.3);
+    final radius = 20.0;
+    
+    // Simplified Om symbol
+    path.addOval(Rect.fromCircle(center: center, radius: radius));
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawCross(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.8, size.height * 0.2);
+    final length = 30.0;
+    
+    // Vertical line
+    canvas.drawLine(
+      Offset(center.dx, center.dy - length),
+      Offset(center.dx, center.dy + length),
+      paint,
+    );
+    
+    // Horizontal line
+    canvas.drawLine(
+      Offset(center.dx - length, center.dy),
+      Offset(center.dx + length, center.dy),
+      paint,
+    );
+  }
+
+  void _drawStarOfDavid(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.7, size.height * 0.6);
+    final radius = 25.0;
+    
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60.0) * (pi / 180);
+      final x = center.dx + radius * cos(angle);
+      final y = center.dy + radius * sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawCrescent(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.3, size.height * 0.7);
+    final radius = 20.0;
+    
+    final path = Path();
+    path.addArc(
+      Rect.fromCircle(center: center, radius: radius),
+      0.5 * pi,
+      pi,
+    );
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawLotus(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.5, size.height * 0.8);
+    final radius = 15.0;
+    
+    // Draw lotus petals
+    for (int i = 0; i < 8; i++) {
+      final angle = (i * 45.0) * (pi / 180);
+      final x = center.dx + radius * cos(angle);
+      final y = center.dy + radius * sin(angle);
+      
+      final petalPath = Path();
+      petalPath.addOval(Rect.fromCircle(center: Offset(x, y), radius: 8));
+      canvas.drawPath(petalPath, paint);
+    }
+  }
+
+  void _drawPeaceSymbol(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.1, size.height * 0.5);
+    final radius = 25.0;
+    
+    // Draw circle
+    canvas.drawCircle(center, radius, paint);
+    
+    // Draw peace symbol lines
+    final linePaint = Paint()
+      ..color = Colors.white.withOpacity(0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+    
+    // Vertical line
+    canvas.drawLine(
+      Offset(center.dx, center.dy - radius),
+      Offset(center.dx, center.dy + radius),
+      linePaint,
+    );
+    
+    // Diagonal lines
+    final diagonalLength = radius * 0.7;
+    canvas.drawLine(
+      center,
+      Offset(center.dx - diagonalLength, center.dy - diagonalLength),
+      linePaint,
+    );
+    canvas.drawLine(
+      center,
+      Offset(center.dx + diagonalLength, center.dy - diagonalLength),
+      linePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

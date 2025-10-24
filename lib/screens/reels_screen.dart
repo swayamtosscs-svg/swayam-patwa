@@ -304,6 +304,28 @@ class _ReelsScreenState extends State<ReelsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () {
+            // Navigate back to home screen using bottom navigation
+            // Find the GlobalNavigationWrapper and navigate to home
+            final navigator = Navigator.of(context);
+            navigator.pushNamedAndRemoveUntil('/home', (route) => false);
+          },
+        ),
+        title: const Text(
+          'Reels',
+          style: TextStyle(
+            color: Colors.black,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -362,7 +384,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -800,120 +821,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
       return '${(count / 1000).toStringAsFixed(1)}K';
     }
     return count.toString();
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2)),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildNavItem(
-                icon: Icons.home,
-                label: 'Home',
-                isSelected: false,
-                onTap: () {
-                  print('Home tab tapped');
-                  Navigator.pushReplacementNamed(context, '/home');
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.live_tv,
-                label: 'Live Darshan',
-                isSelected: false,
-                onTap: () {
-                  print('Live Darshan tab tapped');
-                  Navigator.pushNamed(context, '/live-stream');
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.add,
-                label: 'Add',
-                isSelected: false,
-                onTap: () {
-                  print('Add tab tapped');
-                  Navigator.pushNamed(context, '/add-options');
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.video_library,
-                label: 'Reels',
-                isSelected: true,
-                onTap: () {
-                  print('Reels tab tapped');
-                  Navigator.pushReplacementNamed(context, '/home');
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.self_improvement,
-                label: 'Baba Ji',
-                isSelected: false,
-                onTap: () {
-                  print('Baba Ji tab tapped');
-                  Navigator.pushNamed(context, '/baba-pages');
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.person,
-                label: 'Account',
-                isSelected: false,
-                onTap: () {
-                  print('Account tab tapped');
-                  Navigator.pushNamed(context, '/profile');
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? Colors.red : Colors.grey[600],
-                size: 20,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? Colors.red : Colors.grey[600],
-                  fontSize: 9,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _checkFollowStatuses() async {

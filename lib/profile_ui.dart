@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -63,6 +64,7 @@ class _ProfileUIState extends State<ProfileUI> {
           );
         }
         return Scaffold(
+          backgroundColor: Colors.transparent,
           body: Container(
             decoration: const BoxDecoration(
               image: DecorationImage(
@@ -70,136 +72,151 @@ class _ProfileUIState extends State<ProfileUI> {
                 fit: BoxFit.cover,
               ),
             ),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  // Custom App Bar (Messages screen style)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(20),
-                        bottomRight: Radius.circular(20),
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.black),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const Expanded(
-                          child: Text(
-                            'Account',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                              fontSize: 20,
-                            ),
-                            textAlign: TextAlign.center,
+            child: Stack(
+              children: [
+                // Blur effect overlay
+                BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+                  child: Container(
+                    color: Colors.transparent,
+                  ),
+                ),
+                // Spiritual symbols overlay
+                _buildSpiritualSymbolsOverlay(),
+                SafeArea(
+                  child: Column(
+                    children: [
+                      // Custom App Bar (Messages screen style)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
+                          ),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1,
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.search, color: Colors.black),
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen()));
-                          },
-                        ),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Colors.black),
-                          tooltip: 'More options',
-                          onSelected: (String value) {
-                            if (value == 'edit_profile') {
-                              _navigateToEditProfile(user);
-                            } else if (value == 'logout') {
-                              _showLogoutDialog(context);
-                            }
-                          },
-                          itemBuilder: (BuildContext context) => [
-                            const PopupMenuItem<String>(
-                              value: 'edit_profile',
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit, color: Color(0xFF1A1A1A), size: 20),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Edit Profile',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF1A1A1A),
-                                      ),
-                                    ),
-                                  ],
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back, color: Colors.black),
+                              onPressed: () {
+                                // Navigate back to home screen using bottom navigation
+                                final navigator = Navigator.of(context);
+                                navigator.pushNamedAndRemoveUntil('/home', (route) => false);
+                              },
+                            ),
+                            const Expanded(
+                              child: Text(
+                                'Account',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                  fontSize: 20,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
-                            const PopupMenuDivider(),
-                            const PopupMenuItem<String>(
-                              value: 'logout',
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.logout, color: Color(0xFFE53E3E), size: 20),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Logout',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFFE53E3E),
-                                      ),
+                            IconButton(
+                              icon: const Icon(Icons.search, color: Colors.black),
+                              onPressed: () {
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen()));
+                              },
+                            ),
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, color: Colors.black),
+                              tooltip: 'More options',
+                              onSelected: (String value) {
+                                if (value == 'edit_profile') {
+                                  _navigateToEditProfile(user);
+                                } else if (value == 'logout') {
+                                  _showLogoutDialog(context);
+                                }
+                              },
+                              itemBuilder: (BuildContext context) => [
+                                const PopupMenuItem<String>(
+                                  value: 'edit_profile',
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 4),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit, color: Color(0xFF1A1A1A), size: 20),
+                                        SizedBox(width: 12),
+                                        Text(
+                                          'Edit Profile',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                            color: Color(0xFF1A1A1A),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                                const PopupMenuDivider(),
+                                const PopupMenuItem<String>(
+                                  value: 'logout',
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 4),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.logout, color: Color(0xFFE53E3E), size: 20),
+                                        SizedBox(width: 12),
+                                        Text(
+                                          'Logout',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                            color: Color(0xFFE53E3E),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
 
-                  // Profile Header Card
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      physics: const BouncingScrollPhysics(),
-                      child: GestureDetector(
-                        onTap: () {}, // Allow taps to pass through
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.08), // Semi-transparent white to show background
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.15),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, spreadRadius: 5, offset: const Offset(0, 10)),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(22),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                                child: Column(
-                                  children: [
-                                    // Avatar with story add overlay; DP editing moved to Edit Profile
-                                    Stack(
-                                      alignment: Alignment.center,
+                      // Profile Header Card
+                      Expanded(
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          physics: const BouncingScrollPhysics(),
+                          child: GestureDetector(
+                            onTap: () {}, // Allow taps to pass through
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08), // Semi-transparent white to show background
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.15),
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, spreadRadius: 5, offset: const Offset(0, 10)),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(22),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                                    child: Column(
                                       children: [
+                                        // Avatar with story add overlay; DP editing moved to Edit Profile
+                                        Stack(
+                                          alignment: Alignment.center,
+                                          children: [
                                         Container(
                                           width: 96,
                                           height: 96,
@@ -446,6 +463,7 @@ class _ProfileUIState extends State<ProfileUI> {
                                             crossAxisCount: 3,
                                             crossAxisSpacing: 10,
                                             mainAxisSpacing: 10,
+                                            childAspectRatio: 1,
                                           ),
                                           itemCount: mediaItems.length,
                                           itemBuilder: (context, i) {
@@ -466,11 +484,12 @@ class _ProfileUIState extends State<ProfileUI> {
                       ),
                     ),
                   ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          bottomNavigationBar: _buildBottomNavigationBar(),
         );
       },
     );
@@ -694,103 +713,6 @@ class _ProfileUIState extends State<ProfileUI> {
     }
   }
 
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2)),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(
-                icon: Icons.home,
-                label: 'Home',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.live_tv,
-                label: 'Live Darshan',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen()));
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.video_library,
-                label: 'Reels',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ReelsScreen()));
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.add,
-                label: 'Add',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AddOptionsScreen()));
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.self_improvement,
-                label: 'Baba Ji',
-                isSelected: false,
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const BabaPagesScreen()));
-                },
-              ),
-              _buildNavItem(
-                icon: Icons.person,
-                label: 'Account',
-                isSelected: true,
-                onTap: () {},
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? const Color(0xFF8B2E2E) : Colors.black54,
-            size: 24,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isSelected ? const Color(0xFF8B2E2E) : Colors.black54,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -900,6 +822,147 @@ class _ProfileUIState extends State<ProfileUI> {
       }
     }
   }
+
+  // Spiritual symbols overlay (same as home screen)
+  Widget _buildSpiritualSymbolsOverlay() {
+    return Positioned.fill(
+      child: CustomPaint(
+        painter: SpiritualSymbolsPainter(),
+      ),
+    );
+  }
+}
+
+// Spiritual symbols painter for background overlay
+class SpiritualSymbolsPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+
+    // Draw various spiritual symbols across the background
+    _drawOm(canvas, size, paint);
+    _drawCross(canvas, size, paint);
+    _drawStarOfDavid(canvas, size, paint);
+    _drawCrescent(canvas, size, paint);
+    _drawLotus(canvas, size, paint);
+    _drawPeaceSymbol(canvas, size, paint);
+  }
+
+  void _drawOm(Canvas canvas, Size size, Paint paint) {
+    final path = Path();
+    final center = Offset(size.width * 0.2, size.height * 0.3);
+    final radius = 20.0;
+    
+    // Simplified Om symbol
+    path.addOval(Rect.fromCircle(center: center, radius: radius));
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawCross(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.8, size.height * 0.2);
+    final length = 30.0;
+    
+    // Vertical line
+    canvas.drawLine(
+      Offset(center.dx, center.dy - length),
+      Offset(center.dx, center.dy + length),
+      paint,
+    );
+    
+    // Horizontal line
+    canvas.drawLine(
+      Offset(center.dx - length, center.dy),
+      Offset(center.dx + length, center.dy),
+      paint,
+    );
+  }
+
+  void _drawStarOfDavid(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.7, size.height * 0.6);
+    final radius = 25.0;
+    
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60.0) * (pi / 180);
+      final x = center.dx + radius * cos(angle);
+      final y = center.dy + radius * sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawCrescent(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.3, size.height * 0.7);
+    final radius = 20.0;
+    
+    final path = Path();
+    path.addArc(
+      Rect.fromCircle(center: center, radius: radius),
+      0.5 * pi,
+      pi,
+    );
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawLotus(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.5, size.height * 0.8);
+    final radius = 15.0;
+    
+    // Draw lotus petals
+    for (int i = 0; i < 8; i++) {
+      final angle = (i * 45.0) * (pi / 180);
+      final x = center.dx + radius * cos(angle);
+      final y = center.dy + radius * sin(angle);
+      
+      final petalPath = Path();
+      petalPath.addOval(Rect.fromCircle(center: Offset(x, y), radius: 8));
+      canvas.drawPath(petalPath, paint);
+    }
+  }
+
+  void _drawPeaceSymbol(Canvas canvas, Size size, Paint paint) {
+    final center = Offset(size.width * 0.1, size.height * 0.5);
+    final radius = 25.0;
+    
+    // Draw circle
+    canvas.drawCircle(center, radius, paint);
+    
+    // Draw peace symbol lines
+    final linePaint = Paint()
+      ..color = Colors.white.withOpacity(0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+    
+    // Vertical line
+    canvas.drawLine(
+      Offset(center.dx, center.dy - radius),
+      Offset(center.dx, center.dy + radius),
+      linePaint,
+    );
+    
+    // Diagonal lines
+    final diagonalLength = radius * 0.7;
+    canvas.drawLine(
+      center,
+      Offset(center.dx - diagonalLength, center.dy - diagonalLength),
+      linePaint,
+    );
+    canvas.drawLine(
+      center,
+      Offset(center.dx + diagonalLength, center.dy - diagonalLength),
+      linePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _StatItem extends StatelessWidget {

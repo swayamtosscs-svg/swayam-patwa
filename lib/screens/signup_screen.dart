@@ -8,6 +8,7 @@ import '../services/theme_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../screens/home_screen.dart';
+import '../widgets/global_navigation_wrapper.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -97,11 +98,14 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
             );
             
-            // Navigate to home screen
+            // Navigate to home screen with global navigation
             if (mounted) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                MaterialPageRoute(builder: (context) => const GlobalNavigationWrapper(
+                  child: HomeScreen(),
+                  initialIndex: 0,
+                )),
               );
             }
             return;
@@ -147,11 +151,14 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
             );
             
-            // Navigate to home screen
+            // Navigate to home screen with global navigation
             if (mounted) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                MaterialPageRoute(builder: (context) => const GlobalNavigationWrapper(
+                  child: HomeScreen(),
+                  initialIndex: 0,
+                )),
               );
             }
             return;

@@ -61,12 +61,15 @@ class NotificationItemWidget extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: notification.isRead ? Colors.white : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.black,
-            width: 1,
-          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Material(
           color: Colors.transparent,
@@ -78,12 +81,12 @@ class NotificationItemWidget extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Notification icon or profile image
+                  // Notification icon - purple circle like in the image
                   Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.black,
+                      color: const Color(0xFF6A5ACD), // Purple color like in the image
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: ClipRRect(
@@ -97,20 +100,22 @@ class NotificationItemWidget extends StatelessWidget {
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
-                                  color: Colors.black,
-                                  child: Center(
-                                    child: Text(
-                                      notification.icon,
-                                      style: const TextStyle(fontSize: 20, color: Colors.white),
+                                  color: const Color(0xFF6A5ACD),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.person,
+                                      color: Colors.white,
+                                      size: 24,
                                     ),
                                   ),
                                 );
                               },
                             )
-                          : Center(
-                              child: Text(
-                                notification.icon,
-                                style: const TextStyle(fontSize: 20, color: Colors.white),
+                          : const Center(
+                              child: Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 24,
                               ),
                             ),
                     ),
@@ -123,54 +128,29 @@ class NotificationItemWidget extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title with follower name for all notification types
-                        if (notification.followerName.isNotEmpty)
-                          RichText(
-                            text: TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: notification.followerName,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: _getActionText(notification.type),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: notification.isRead ? FontWeight.w500 : FontWeight.w600,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          Text(
-                            notification.displayTitle,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: notification.isRead ? FontWeight.w500 : FontWeight.w600,
-                              color: Colors.black,
-                            ),
+                        // Title - "Notification" like in the image
+                        const Text(
+                          'Notification',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black,
                           ),
+                        ),
                         
                         const SizedBox(height: 4),
                         
-                        // Message (only show if username is not already displayed in title)
-                        if (notification.followerName.isEmpty)
-                          Text(
-                            notification.formattedMessage,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black,
-                              height: 1.3,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                        // Message - "Someone started following you" like in the image
+                        Text(
+                          notification.formattedMessage,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black,
+                            height: 1.3,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         
                         const SizedBox(height: 8),
                         
@@ -181,15 +161,15 @@ class NotificationItemWidget extends StatelessWidget {
                               notification.timeAgo,
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Colors.black,
+                                color: Colors.black54,
                               ),
                             ),
                             
                             if (!notification.isRead) ...[
                               const SizedBox(width: 8),
                               Container(
-                                width: 8,
-                                height: 8,
+                                width: 6,
+                                height: 6,
                                 decoration: const BoxDecoration(
                                   color: Colors.black,
                                   shape: BoxShape.circle,
@@ -202,7 +182,7 @@ class NotificationItemWidget extends StatelessWidget {
                     ),
                   ),
                   
-                  // Action button (if applicable)
+                  // Action buttons - checkmark and X like in the image
                   if (notification.type.toLowerCase() == 'friend_request' ||
                       notification.type.toLowerCase() == 'follow')
                     Container(

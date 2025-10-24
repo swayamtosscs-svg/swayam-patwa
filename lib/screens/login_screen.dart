@@ -11,6 +11,7 @@ import '../screens/home_screen.dart';
 import '../screens/forgot_password_screen.dart';
 import '../screens/admin_dashboard_screen.dart';
 import '../services/theme_service.dart';
+import '../widgets/global_navigation_wrapper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -114,10 +115,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               );
               
-              // Navigate to home screen
+              // Navigate to home screen with global navigation
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                MaterialPageRoute(builder: (context) => const GlobalNavigationWrapper(
+                  child: HomeScreen(),
+                  initialIndex: 0,
+                )),
               );
             }
           } else {
