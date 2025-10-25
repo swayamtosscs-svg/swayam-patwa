@@ -21,11 +21,11 @@ class RealtimeFeedService {
   static DateTime? _lastCheckTime;
   static String? _lastPostId;
   
-  // Configuration
-  static const Duration _refreshInterval = Duration(minutes: 2); // Check every 2 minutes
+  // Configuration - DISABLED to prevent constant feed refresh
+  static const Duration _refreshInterval = Duration(minutes: 2); // DISABLED - was causing constant refresh
   static const Duration _backgroundRefreshInterval = Duration(minutes: 5); // Background check every 5 minutes
   
-  /// Start the real-time feed service
+  /// Start the real-time feed service (periodic refresh DISABLED to prevent constant feed refresh)
   static void startRealtimeService({
     required String token,
     required String currentUserId,
@@ -38,7 +38,7 @@ class RealtimeFeedService {
       return;
     }
     
-    print('RealtimeFeedService: Starting real-time feed service');
+    print('RealtimeFeedService: Starting real-time feed service (periodic refresh DISABLED)');
     
     // Set callbacks
     onNewPostsDetected = onNewPosts;
@@ -48,7 +48,7 @@ class RealtimeFeedService {
     _isServiceActive = true;
     _lastCheckTime = DateTime.now();
     
-    // Start periodic refresh
+    // Start periodic refresh (DISABLED to prevent constant feed refresh)
     _startPeriodicRefresh(token, currentUserId);
     
     // Set up background refresh listener
@@ -73,17 +73,22 @@ class RealtimeFeedService {
     onRefreshCompleted = null;
   }
   
-  /// Start periodic refresh timer
+  /// Start periodic refresh timer - DISABLED to prevent constant refresh
   static void _startPeriodicRefresh(String token, String currentUserId) {
-    _refreshTimer = Timer.periodic(_refreshInterval, (timer) async {
-      if (!_isServiceActive) {
-        timer.cancel();
-        return;
-      }
-      
-      print('RealtimeFeedService: Periodic refresh triggered');
-      await _checkForNewPosts(token, currentUserId);
-    });
+    // DISABLED: Periodic refresh was causing constant feed refresh
+    // Only refresh manually when user pulls to refresh or app resumes
+    print('RealtimeFeedService: Periodic refresh DISABLED to prevent constant feed refresh');
+    
+    // Uncomment below lines if you want to re-enable periodic refresh
+    // _refreshTimer = Timer.periodic(_refreshInterval, (timer) async {
+    //   if (!_isServiceActive) {
+    //     timer.cancel();
+    //     return;
+    //   }
+    //   
+    //   print('RealtimeFeedService: Periodic refresh triggered');
+    //   await _checkForNewPosts(token, currentUserId);
+    // });
   }
   
   /// Setup background refresh when app comes to foreground
@@ -97,8 +102,8 @@ class RealtimeFeedService {
     try {
       print('RealtimeFeedService: Checking for new posts...');
       
-      // Get latest posts (only first page to check for new content) - ONLY from followed users
-      final latestPosts = await FeedService.getFeedPostsFromFollowedUsersOnly(
+      // Get latest posts (only first page to check for new content) - includes followed users + Baba Ji
+      final latestPosts = await FeedService.getMixedFeedPosts(
         token: token,
         currentUserId: currentUserId,
         page: 1,
@@ -146,8 +151,8 @@ class RealtimeFeedService {
       // Clear cache and get fresh data
       await _clearFeedCache();
       
-      // Get fresh posts - ONLY from followed users
-      final freshPosts = await FeedService.getFeedPostsFromFollowedUsersOnly(
+      // Get fresh posts - includes followed users + Baba Ji
+      final freshPosts = await FeedService.getMixedFeedPosts(
         token: token,
         currentUserId: currentUserId,
         page: 1,

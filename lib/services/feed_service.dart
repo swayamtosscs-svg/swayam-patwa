@@ -112,7 +112,119 @@ class FeedService {
     }
   }
 
-  /// Get feed posts ONLY from followed users (no random posts)
+  /// Get mixed feed posts (followed users + Baba Ji) with proper filtering
+  static Future<List<Post>> getMixedFeedPosts({
+    required String token,
+    required String currentUserId,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      print('FeedService: Fetching mixed feed posts (followed users + Baba Ji) for user: $currentUserId');
+      
+      // Check if user follows anyone
+      final followingCount = await _getFollowingCount(token, currentUserId);
+      
+      // Check if user is following Baba Ji before loading Baba Ji posts
+      final isFollowingBabji = await _isUserFollowingBabji(token, currentUserId);
+      print('FeedService: User is following Baba Ji: $isFollowingBabji');
+      
+      // If user doesn't follow anyone AND doesn't follow Baba Ji, return empty feed
+      if (followingCount == 0 && !isFollowingBabji) {
+        print('FeedService: User follows no one and doesn\'t follow Baba Ji, returning empty feed - new users should follow people to see content');
+        return [];
+      }
+      
+      print('FeedService: User follows $followingCount users, loading feed content');
+      
+      // Prepare futures list
+      final futures = <Future<List<Post>>>[];
+      
+      // Load posts from followed users (only if user follows anyone)
+      if (followingCount > 0) {
+        futures.add(getFeedPostsFromFollowedUsersOnly(
+          token: token,
+          currentUserId: currentUserId,
+          page: page,
+          limit: isFollowingBabji ? limit ~/ 2 : limit, // Adjust limit based on Baba Ji follow status
+        ));
+      } else {
+        print('FeedService: User follows no one, skipping followed users posts');
+        futures.add(Future.value(<Post>[])); // Empty list for followed users posts
+      }
+      
+      // Only load Baba Ji posts if user is following Baba Ji
+      if (isFollowingBabji) {
+        futures.add(getBabaJiPostsOptimized(
+          token: token,
+          page: page,
+          limit: followingCount > 0 ? limit ~/ 2 : limit, // Full limit if no followed users
+        ));
+      } else {
+        print('FeedService: User is not following Baba Ji, skipping Baba Ji posts');
+        futures.add(Future.value(<Post>[])); // Empty list for Baba Ji posts
+      }
+      
+      // Wait for all futures to complete
+      final results = await Future.wait(futures);
+      final followedUserPosts = results[0] as List<Post>;
+      final babaJiPosts = results.length > 1 ? results[1] as List<Post> : <Post>[];
+
+      // STRICT FILTERING: Only include posts from followed users (but not videos)
+      // Double-check that these are NOT Baba Ji posts and are from followed users only
+      final filteredFollowedUserPosts = followedUserPosts.where((post) => 
+        post.type != PostType.video && 
+        post.isReel != true && 
+        post.videoUrl == null &&
+        !post.isBabaJiPost && // Ensure these are not Baba Ji posts
+        post.userId != null && // Ensure user ID exists
+        post.userId!.isNotEmpty // Ensure user ID is not empty
+      ).toList();
+      
+      // Include both image posts and reels from Baba Ji (but not videos)
+      final filteredBabaJiPosts = babaJiPosts.where((post) => 
+        post.type != PostType.video && 
+        post.isReel != true && 
+        post.videoUrl == null &&
+        post.isBabaJiPost == true // Ensure these are Baba Ji posts
+      ).toList();
+
+      // STRICT FINAL VALIDATION: Combine and sort all posts (prioritize Baba Ji posts, then followed users)
+      final List<Post> allPosts = [...filteredBabaJiPosts, ...filteredFollowedUserPosts];
+      
+      // Final validation to ensure no unauthorized posts slip through
+      final validatedPosts = allPosts.where((post) {
+        if (post.isBabaJiPost == true) {
+          // Baba Ji posts are always allowed
+          return true;
+        } else {
+          // For user posts, ensure they are from followed users only
+          return !post.isBabaJiPost && post.userId != null && post.userId!.isNotEmpty;
+        }
+      }).toList();
+      
+      validatedPosts.sort((a, b) {
+        // Sort by creation date only - latest posts first regardless of who posted
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+      // Apply final pagination
+      final startIndex = (page - 1) * limit;
+      final endIndex = startIndex + limit;
+      final paginatedPosts = validatedPosts.skip(startIndex).take(limit).toList();
+      
+      print('FeedService: Mixed feed - Followed users: ${filteredFollowedUserPosts.length}, Baba Ji: ${filteredBabaJiPosts.length}, Total: ${validatedPosts.length}, Paginated: ${paginatedPosts.length}');
+      print('FeedService: SORTED BY DATE - Latest posts first (no priority given to Baba Ji)');
+      
+      return paginatedPosts;
+      
+    } catch (e) {
+      print('FeedService: Error getting mixed feed posts: $e');
+      return [];
+    }
+  }
+
+  /// Get feed posts ONLY from followed users (no random posts) with deduplication
   static Future<List<Post>> getFeedPostsFromFollowedUsersOnly({
     required String token,
     required String currentUserId,
@@ -122,6 +234,41 @@ class FeedService {
     try {
       print('FeedService: Fetching posts ONLY from followed users for user: $currentUserId');
       
+      // Create request key for deduplication
+      final requestKey = 'followed_users_only_${currentUserId}_${page}_${limit}';
+      
+      // Check if same request is already in progress
+      if (_activeRequests.containsKey(requestKey)) {
+        print('FeedService: Followed users only request already in progress, waiting for result');
+        return await _activeRequests[requestKey]!;
+      }
+      
+      // Create future for this request
+      final future = _loadFollowedUsersOnlyPosts(token, currentUserId, page, limit);
+      _activeRequests[requestKey] = future;
+      
+      try {
+        final result = await future;
+        _activeRequests.remove(requestKey);
+        return result;
+      } catch (e) {
+        _activeRequests.remove(requestKey);
+        rethrow;
+      }
+    } catch (e) {
+      print('FeedService: Error getting followed users posts: $e');
+      return [];
+    }
+  }
+  
+  /// Internal method to load posts only from followed users
+  static Future<List<Post>> _loadFollowedUsersOnlyPosts(
+    String token,
+    String currentUserId,
+    int page,
+    int limit
+  ) async {
+    try {
       // Always use the fallback method to ensure we only get posts from followed users
       final followedUserPosts = await _getFeedPostsFromFollowedUsers(token, currentUserId, page, limit);
       
@@ -149,7 +296,7 @@ class FeedService {
       return postsOnly;
       
     } catch (e) {
-      print('FeedService: Error getting posts from followed users only: $e');
+      print('FeedService: Error loading followed users only posts: $e');
       return [];
     }
   }
@@ -195,6 +342,43 @@ class FeedService {
   ) async {
     try {
       print('FeedService: Optimized: Getting posts from followed users');
+      
+      // Create request key for deduplication
+      final requestKey = 'followed_users_posts_${currentUserId}_${page}_${limit}';
+      
+      // Check if same request is already in progress
+      if (_activeRequests.containsKey(requestKey)) {
+        print('FeedService: Request already in progress, waiting for result');
+        return await _activeRequests[requestKey]!;
+      }
+      
+      // Create future for this request
+      final future = _loadFollowedUsersPosts(token, currentUserId, page, limit);
+      _activeRequests[requestKey] = future;
+      
+      try {
+        final result = await future;
+        _activeRequests.remove(requestKey);
+        return result;
+      } catch (e) {
+        _activeRequests.remove(requestKey);
+        rethrow;
+      }
+    } catch (e) {
+      print('FeedService: Optimized: Error creating feed: $e');
+      return [];
+    }
+  }
+  
+  /// Internal method to load posts from followed users
+  static Future<List<Post>> _loadFollowedUsersPosts(
+    String token, 
+    String currentUserId, 
+    int page, 
+    int limit
+  ) async {
+    try {
+      print('FeedService: Loading posts from followed users');
       
       // Get cached following users first
       List<String> followingUserIds = await _getCachedFollowingUsers(token, currentUserId);
@@ -268,7 +452,7 @@ class FeedService {
       print('FeedService: Optimized: Successfully created feed with ${paginatedPosts.length} posts from ${followingUserIds.length} users');
       return paginatedPosts;
     } catch (e) {
-      print('FeedService: Optimized: Error creating feed: $e');
+      print('FeedService: Optimized: Error loading posts: $e');
       return [];
     }
   }
@@ -389,8 +573,38 @@ class FeedService {
     }
   }
 
-  /// Get posts from a specific user using the working media API
+  /// Get posts from a specific user using the working media API with deduplication
   static Future<List<Post>> _getUserPostsFromMediaAPI(String userId, String token) async {
+    try {
+      // Create request key for deduplication
+      final requestKey = 'user_posts_${userId}';
+      
+      // Check if same request is already in progress
+      if (_activeRequests.containsKey(requestKey)) {
+        print('FeedService: User posts request already in progress for $userId, waiting for result');
+        return await _activeRequests[requestKey]!;
+      }
+      
+      // Create future for this request
+      final future = _loadUserPostsFromMediaAPI(userId, token);
+      _activeRequests[requestKey] = future;
+      
+      try {
+        final result = await future;
+        _activeRequests.remove(requestKey);
+        return result;
+      } catch (e) {
+        _activeRequests.remove(requestKey);
+        rethrow;
+      }
+    } catch (e) {
+      print('FeedService: Error getting user posts: $e');
+      return [];
+    }
+  }
+  
+  /// Internal method to load posts from a specific user
+  static Future<List<Post>> _loadUserPostsFromMediaAPI(String userId, String token) async {
     try {
       print('FeedService: Fetching posts for user: $userId');
       final response = await CustomHttpClient.get(
@@ -684,36 +898,41 @@ class FeedService {
     // First check if user follows anyone
     final followingCount = await _getFollowingCount(token, currentUserId);
     
-    // If user doesn't follow anyone, return empty feed
-    if (followingCount == 0) {
-      print('FeedService: User follows no one, returning empty feed - new users should follow people to see content');
+    // Check if user is following Babji before loading Babji posts
+    final isFollowingBabji = await _isUserFollowingBabji(token, currentUserId);
+    print('FeedService: User is following Babji: $isFollowingBabji');
+    
+    // If user doesn't follow anyone AND doesn't follow Baba Ji, return empty feed
+    if (followingCount == 0 && !isFollowingBabji) {
+      print('FeedService: User follows no one and doesn\'t follow Baba Ji, returning empty feed - new users should follow people to see content');
       clearCache();
       return [];
     }
     
     print('FeedService: User follows $followingCount users, loading feed content');
     
-    // Check if user is following Babji before loading Babji posts
-    final isFollowingBabji = await _isUserFollowingBabji(token, currentUserId);
-    print('FeedService: User is following Babji: $isFollowingBabji');
-    
     // Prepare futures list
     final futures = <Future<List<Post>>>[];
     
-    // Always load posts from followed users
-    futures.add(getFeedPostsFromFollowedUsersOnly(
-      token: token,
-      currentUserId: currentUserId,
-      page: page,
-      limit: isFollowingBabji ? limit ~/ 2 : limit, // Adjust limit based on Babji follow status
-    ));
+    // Load posts from followed users (only if user follows anyone)
+    if (followingCount > 0) {
+      futures.add(getFeedPostsFromFollowedUsersOnly(
+        token: token,
+        currentUserId: currentUserId,
+        page: page,
+        limit: isFollowingBabji ? limit ~/ 2 : limit, // Adjust limit based on Babji follow status
+      ));
+    } else {
+      print('FeedService: User follows no one, skipping followed users posts');
+      futures.add(Future.value(<Post>[])); // Empty list for followed users posts
+    }
     
     // Only load Babji posts if user is following Babji
     if (isFollowingBabji) {
       futures.add(getBabaJiPostsOptimized(
         token: token,
         page: page,
-        limit: limit ~/ 2, // Half for Baba Ji posts
+        limit: followingCount > 0 ? limit ~/ 2 : limit, // Full limit if no followed users
       ));
     } else {
       print('FeedService: User is not following Babji, skipping Babji posts');
@@ -759,9 +978,7 @@ class FeedService {
     }).toList();
     
     validatedPosts.sort((a, b) {
-      // Prioritize Babji posts first, then sort by creation date
-      if (a.isBabaJiPost && !b.isBabaJiPost) return -1;
-      if (!a.isBabaJiPost && b.isBabaJiPost) return 1;
+      // Sort by creation date only - latest posts first regardless of who posted
       return b.createdAt.compareTo(a.createdAt);
     });
 
@@ -778,6 +995,7 @@ class FeedService {
     );
 
     print('FeedService: STRICT FILTERING - Mixed feed created with ${paginatedPosts.length} items (${filteredBabaJiPosts.length} Babji posts ${isFollowingBabji ? 'shown (user follows Babji)' : 'hidden (user not following Babji)'}, ${filteredFollowedUserPosts.length} followed user posts - videos filtered out)');
+    print('FeedService: SORTED BY DATE - Latest posts first (no priority given to Baba Ji)');
     
     // Debug: Log details of Babji posts
     if (filteredBabaJiPosts.isNotEmpty) {

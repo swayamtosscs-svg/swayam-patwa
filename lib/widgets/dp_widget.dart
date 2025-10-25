@@ -42,6 +42,7 @@ class DPWidget extends StatefulWidget {
 class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin {
   String? _localImageUrl;
   String? _fileName;
+  String? _filePath; // Store the file path for deletion
   bool _isLoading = false;
   bool _hasActiveStory = false;
   List<Story> _stories = [];
@@ -151,10 +152,12 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
           setState(() {
             _localImageUrl = data['dpUrl'];
             _fileName = data['fileName'];
+            _filePath = data['publicUrl']; // Store the publicUrl as filePath
             _isLoading = false;
           });
           print('DPWidget: DP loaded: $_localImageUrl');
           print('DPWidget: File name: $_fileName');
+          print('DPWidget: File path: $_filePath');
           print('DPWidget: Absolute URL: ${AvatarUtils.getAbsoluteAvatarUrl(_localImageUrl!)}');
           print('DPWidget: Is valid URL: ${AvatarUtils.isValidAvatarUrl(_localImageUrl)}');
           
@@ -170,12 +173,14 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
             setState(() {
               _localImageUrl = widget.currentImageUrl;
               _fileName = null; // We don't have fileName from props
+              _filePath = null; // We don't have filePath from props
               _isLoading = false;
             });
           } else {
             setState(() {
               _localImageUrl = null;
               _fileName = null;
+              _filePath = null;
               _isLoading = false;
             });
           }
@@ -190,12 +195,14 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
           setState(() {
             _localImageUrl = widget.currentImageUrl;
             _fileName = null; // We don't have fileName from props
+            _filePath = null; // We don't have filePath from props
             _isLoading = false;
           });
         } else {
           setState(() {
             _localImageUrl = null;
             _fileName = null;
+            _filePath = null;
             _isLoading = false;
           });
         }
@@ -217,12 +224,14 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         setState(() {
           _localImageUrl = widget.currentImageUrl;
           _fileName = null; // We don't have fileName from props
+          _filePath = null; // We don't have filePath from props
           _isLoading = false;
         });
       } else {
         setState(() {
           _localImageUrl = null;
           _fileName = null;
+          _filePath = null;
           _isLoading = false;
         });
         _showSnackBar('Error loading display picture: $e', Colors.red);
@@ -410,6 +419,7 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         setState(() {
           _localImageUrl = data['dpUrl'];
           _fileName = data['fileName'];
+          _filePath = data['publicUrl']; // Store the publicUrl as filePath
           _isLoading = false;
         });
 
@@ -469,6 +479,7 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         setState(() {
           _localImageUrl = data['dpUrl'];
           _fileName = data['fileName'];
+          _filePath = data['publicUrl']; // Store the publicUrl as filePath
           _isLoading = false;
         });
 
@@ -538,10 +549,12 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
 
     try {
       print('DPWidget: Deleting DP with fileName: $_fileName');
+      print('DPWidget: Deleting DP with filePath: $_filePath');
       final response = await DPService.deleteDP(
         userId: widget.userId,
         fileName: _fileName!,
         token: widget.token,
+        filePath: _filePath, // Pass the filePath parameter
       );
 
       print('DPWidget: Delete response: $response');
@@ -550,13 +563,19 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         setState(() {
           _localImageUrl = null;
           _fileName = null;
+          _filePath = null;
           _isLoading = false;
         });
 
         // Notify parent about the change
         widget.onImageChanged('');
 
-        _showSnackBar('Display picture deleted successfully!', Colors.green);
+        // Show appropriate message based on the response
+        if (response['warning'] != null) {
+          _showSnackBar(response['warning'], Colors.orange);
+        } else {
+          _showSnackBar('Display picture deleted successfully!', Colors.green);
+        }
       } else {
         setState(() {
           _isLoading = false;
@@ -596,6 +615,7 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     print('DPWidget: Building widget');
     print('DPWidget: _localImageUrl: $_localImageUrl');
     print('DPWidget: _fileName: $_fileName');
+    print('DPWidget: _filePath: $_filePath');
     print('DPWidget: showEditButton: ${widget.showEditButton}');
     print('DPWidget: Should show delete button: ${widget.showEditButton && _localImageUrl != null && _localImageUrl!.isNotEmpty && _fileName != null && _fileName!.isNotEmpty}');
     print('DPWidget: Is valid URL: ${_localImageUrl != null ? AvatarUtils.isValidAvatarUrl(_localImageUrl) : false}');

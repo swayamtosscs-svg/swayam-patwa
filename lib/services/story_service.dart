@@ -6,6 +6,7 @@ import '../models/story_model.dart';
 // Removed local story service import to prevent showing old local stories
 import 'custom_http_client.dart';
 import 'api_service.dart';
+import 'dp_service.dart';
 
 class StoryService {
   static const String _baseUrl = 'http://103.14.120.163:8081/api';
@@ -225,6 +226,13 @@ class StoryService {
                 createdAt: DateTime.tryParse(storyJson['createdAt'] ?? '') ?? DateTime.now(),
                 updatedAt: DateTime.tryParse(storyJson['updatedAt'] ?? '') ?? DateTime.now(),
               );
+              
+              // Debug: Log author avatar information
+              print('StoryService: Story ${storyId} - Author: ${story.authorName}');
+              print('StoryService: Author Avatar URL: ${story.authorAvatar}');
+              if (story.authorAvatar == null || story.authorAvatar!.isEmpty) {
+                print('StoryService: WARNING - No avatar URL for story ${storyId}');
+              }
               stories.add(story);
               print('StoryService: Successfully parsed story: ${story.id}');
             } catch (e) {
@@ -406,6 +414,49 @@ class StoryService {
     });
     
     return groupedStories;
+  }
+
+  /// Ensure stories have valid author avatars by fetching missing DPs
+  static Future<List<Story>> ensureStoriesHaveDPs(List<Story> stories, String token) async {
+    final List<Story> updatedStories = [];
+    
+    for (final story in stories) {
+      // If story already has a valid avatar, keep it as is
+      if (story.authorAvatar != null && 
+          story.authorAvatar!.isNotEmpty && 
+          story.authorAvatar != 'null') {
+        updatedStories.add(story);
+        continue;
+      }
+      
+      // Try to fetch DP for this user
+      try {
+        print('StoryService: Fetching DP for user ${story.authorId} (${story.authorName})');
+        final dpResponse = await DPService.retrieveDP(
+          userId: story.authorId,
+          token: token,
+        );
+        
+        String? dpUrl;
+        if (dpResponse['success'] == true && dpResponse['data'] != null) {
+          dpUrl = dpResponse['data']['dpUrl'] as String?;
+          print('StoryService: DP found for ${story.authorName}: $dpUrl');
+        } else {
+          print('StoryService: No DP found for ${story.authorName}: ${dpResponse['message']}');
+        }
+        
+        // Create updated story with DP
+        final updatedStory = story.copyWith(authorAvatar: dpUrl);
+        updatedStories.add(updatedStory);
+        
+      } catch (e) {
+        print('StoryService: Error fetching DP for ${story.authorName}: $e');
+        // Keep original story without DP
+        updatedStories.add(story);
+      }
+    }
+    
+    return updatedStories;
   }
 
   /// Delete a story

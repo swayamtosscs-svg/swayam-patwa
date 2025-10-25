@@ -52,12 +52,20 @@ import '../services/baba_page_story_service.dart'; // Added import for BabaPageS
 import '../screens/discover_users_screen.dart'; // Added import for DiscoverUsersScreen
 import '../screens/notifications_screen.dart'; // Added import for NotificationsScreen
 import '../utils/performance_test.dart';
+import '../services/feed_refresh_service.dart'; // Added import for FeedRefreshService
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+  
+  // Static method to refresh feed from anywhere in the app
+  static void refreshFeedOnFollowChange() {
+    // This will be called when follow status changes
+    print('HomeScreen: Static method called to refresh feed on follow change');
+    // The actual refresh will be handled by the instance method
+  }
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
@@ -65,16 +73,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Map<String, List<Story>> _groupedStories = {}; // Grouped stories by user
   List<String> _followedUserIds = []; // Store followed user IDs for story filtering
   List<Post> _posts = []; // Cache posts to avoid regeneration
-  bool _isLoadingStories = false;
-  bool _isLoadingPosts = false;
+  bool _isLoading = false; // Single unified loading state for both stories and posts
   bool _isRefreshing = false; // Single loading state for refresh operations
   bool _hasNewPosts = false; // Track if there are new posts available
   int _newPostsCount = 0; // Count of new posts
   bool _hasMorePosts = true; // Track if there are more posts to load
   final ScrollController _scrollController = ScrollController();
   int _currentPostIndex = 0;
-  static const int _postsPerPage = 4; // Further reduced for faster loading
-  static const int _maxPostsInMemory = 15; // Further reduced memory usage
+  static const int _postsPerPage = 5; // Load more posts per page
+  static const int _maxPostsInMemory = 20; // Increased memory limit for more posts
   
   // Search overlay state
   bool _isSearchOverlayVisible = false;
@@ -87,6 +94,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Lifecycle state debouncing
   AppLifecycleState? _lastLifecycleState;
   DateTime? _lastLifecycleChangeTime;
+  
+  // Scroll debouncing to prevent multiple API calls
+  DateTime? _lastScrollTime;
+  static const Duration _scrollDebounceDelay = Duration(milliseconds: 200); // Reduced debounce time
+  
+  // API call debouncing to prevent multiple simultaneous calls
+  DateTime? _lastApiCallTime;
+  static const Duration _apiCallDebounceDelay = Duration(milliseconds: 1000);
 
   @override
   void initState() {
@@ -99,10 +114,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Start real-time feed service
     _startRealtimeFeedService();
     
-    // Force load Babaji stories on app start
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureBabajiStoriesVisible();
-    });
+    // Register feed refresh callback for follow status changes
+    FeedRefreshService().registerRefreshCallback(refreshFeedOnFollowChange);
+    
+    // Skip heavy operations for ultra-fast loading
   }
   
   // Ensure Babaji stories are visible ONLY if user is following Babaji
@@ -193,16 +208,129 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     print('=== END MANUAL FORCE LOAD (FOLLOW CHECK) ===');
   }
 
-  // Load initial data in parallel for faster startup
+  // Ultra-fast initial data loading
   Future<void> _loadInitialData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
     try {
-      // Load stories and posts in parallel for faster initial loading
+      // Ultra-fast parallel loading with minimal data
       await Future.wait([
-        _loadStories(),
-        _loadInitialPosts(),
+        _loadStoriesUltraFast(),
+        _loadInitialPostsUltraFast(),
       ]);
     } catch (e) {
       print('HomeScreen: Error loading initial data: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Validate that only followed users and Baba Ji content is being shown
+  void _validateContentFiltering() {
+    print('=== CONTENT FILTERING VALIDATION ===');
+    
+    // Validate posts
+    print('Posts validation:');
+    for (final post in _posts) {
+      if (post.isBabaJiPost == true) {
+        print('  ✓ Baba Ji post: ${post.username} - ${post.caption?.substring(0, post.caption!.length > 30 ? 30 : post.caption!.length)}...');
+      } else {
+        final isFromFollowedUser = _followedUserIds.contains(post.userId);
+        if (isFromFollowedUser) {
+          print('  ✓ Followed user post: ${post.username} - ${post.caption?.substring(0, post.caption!.length > 30 ? 30 : post.caption!.length)}...');
+        } else {
+          print('  ✗ UNFILTERED POST: ${post.username} (${post.userId}) - NOT FOLLOWED!');
+        }
+      }
+    }
+    
+    // Validate stories
+    print('Stories validation:');
+    for (final entry in _groupedStories.entries) {
+      final userId = entry.key;
+      final stories = entry.value;
+      if (stories.isEmpty) continue;
+      
+      final firstStory = stories.first;
+      final isBabaJiContent = stories.any((story) => 
+        story.authorName.toLowerCase().contains('baba') || 
+        story.authorUsername.toLowerCase().contains('babaji') ||
+        story.authorName.toLowerCase().contains('dhani') ||
+        story.authorUsername.toLowerCase().contains('dhani')
+      );
+      
+      if (isBabaJiContent) {
+        print('  ✓ Baba Ji stories: ${firstStory.authorName} (${firstStory.authorUsername}) - ${stories.length} stories');
+      } else {
+        final isFromFollowedUser = _followedUserIds.contains(userId);
+        if (isFromFollowedUser) {
+          print('  ✓ Followed user stories: ${firstStory.authorName} (${firstStory.authorUsername}) - ${stories.length} stories');
+        } else {
+          print('  ✗ UNFILTERED STORIES: ${firstStory.authorName} (${firstStory.authorUsername}) - NOT FOLLOWED!');
+        }
+      }
+    }
+    
+    print('=== END VALIDATION ===');
+  }
+
+  /// Force refresh the entire feed (for manual refresh)
+  Future<void> _forceRefreshFeed() async {
+    print('HomeScreen: Force refreshing entire feed (followed users + Baba Ji)...');
+    
+    setState(() {
+      _isRefreshing = true;
+    });
+    
+    try {
+      // Clear all caches to ensure fresh data
+      FeedService.clearCache();
+      
+      // Force refresh both posts and stories
+      await Future.wait([
+        _refreshFeedWithRealtime(),
+        _loadStoriesOptimized(),
+      ]);
+      
+      print('HomeScreen: Force refresh completed - showing latest followed users + Baba Ji content');
+    } catch (e) {
+      print('HomeScreen: Error during force refresh: $e');
+    }
+    
+    setState(() {
+      _isRefreshing = false;
+    });
+  }
+
+  /// Refresh feed when follow status changes
+  Future<void> refreshFeedOnFollowChange() async {
+    print('HomeScreen: Follow status changed - refreshing feed to update content...');
+    
+    try {
+      // Clear caches to ensure fresh data
+      FeedService.clearCache();
+      
+      // Reload followed users list
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.authToken != null) {
+        await _getFollowedUsers(authProvider.authToken!);
+      }
+      
+      // Refresh posts and stories
+      await Future.wait([
+        _loadInitialPostsUltraFast(),
+        _loadStoriesOptimized(),
+      ]);
+      
+      print('HomeScreen: Feed refreshed after follow status change');
+    } catch (e) {
+      print('HomeScreen: Error refreshing feed after follow change: $e');
     }
   }
 
@@ -213,143 +341,85 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _searchController.dispose();
     // Stop real-time feed service
     RealtimeFeedService.stopRealtimeService();
+    
+    // Unregister feed refresh callback
+    FeedRefreshService().unregisterRefreshCallback();
+    
     super.dispose();
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      // Only load more posts if we're not already loading, have posts to load, and there are more posts available
-      if (!_isLoadingPosts && _posts.isNotEmpty && _hasMorePosts) {
+    // Debounce scroll events to prevent multiple API calls
+    final now = DateTime.now();
+    if (_lastScrollTime != null && now.difference(_lastScrollTime!) < _scrollDebounceDelay) {
+      return; // Skip this scroll event
+    }
+    _lastScrollTime = now;
+    
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 100) {
+      // Ultra-fast loading - load more posts immediately
+      if (!_isLoading && _posts.isNotEmpty && _hasMorePosts) {
+        print('HomeScreen: Scroll triggered load more posts (debounced)');
         _loadMorePosts();
       }
     }
   }
 
-  Future<void> _loadInitialPosts() async {
-    if (_isLoadingPosts) return;
+  // Ultra-fast posts loading - minimal data, maximum speed with debouncing
+  Future<void> _loadInitialPostsUltraFast() async {
+    // Debounce API calls to prevent multiple simultaneous calls
+    final now = DateTime.now();
+    if (_lastApiCallTime != null && now.difference(_lastApiCallTime!) < _apiCallDebounceDelay) {
+      print('HomeScreen: Initial posts loading skipped - too soon after last API call');
+      return;
+    }
+    _lastApiCallTime = now;
     
-    setState(() {
-      _isLoadingPosts = true;
-    });
-
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      print('HomeScreen: Auth provider - userProfile: ${authProvider.userProfile != null}, authToken: ${authProvider.authToken != null ? "exists" : "null"}');
       
       if (authProvider.userProfile != null) {
-        print('HomeScreen: Current user ID: ${authProvider.userProfile!.id}');
-        print('HomeScreen: Calling FeedService.getFeedPosts...');
+        // First load followed users to ensure proper filtering
+        await _getFollowedUsers(authProvider.authToken!);
         
-        // Clear following cache to ensure fresh data
-        FeedService.clearFollowingCache();
-        
-        // Use FeedService to get posts ONLY from followed users (no random posts)
-        List<Post> posts = await FeedService.getFeedPostsFromFollowedUsersOnly(
+        // Load more posts initially to show content from all followed users
+        final posts = await FeedService.getMixedFeedPosts(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: 1,
-          limit: _postsPerPage,
+          limit: 10, // Load more posts to show content from all followed users
         );
 
-        print('HomeScreen: FeedService returned ${posts.length} posts');
-        
-        // Debug feed loading if no posts found
-        if (posts.isEmpty) {
-          print('HomeScreen: No posts found, running debug...');
-          await FeedService.debugFollowingAndPosts(authProvider.authToken!, authProvider.userProfile!.id);
-          await FeedService.debugFeedLoading(authProvider.authToken!, authProvider.userProfile!.id);
-          
-          // Clear cache and try again
-          print('HomeScreen: Clearing cache and trying again...');
-          FeedService.clearCache();
-          
-          // Try one more time with fresh data
-          final retryPosts = await FeedService.getFeedPostsFromFollowedUsersOnly(
-            token: authProvider.authToken!,
-            currentUserId: authProvider.userProfile!.id,
-            page: 1,
-            limit: _postsPerPage,
-          );
-          
-          if (retryPosts.isNotEmpty) {
-            print('HomeScreen: Retry successful! Got ${retryPosts.length} posts');
-            posts = retryPosts;
-          }
-        }
-        
         if (mounted) {
           setState(() {
-            // Remove duplicates based on post ID
-            final uniquePosts = <String, Post>{};
-            for (final post in posts) {
-              uniquePosts[post.id] = post;
-            }
-            _posts = uniquePosts.values.take(_maxPostsInMemory).toList();
-            _isLoadingPosts = false; // Always clear loading state
-            
-            // Check if we have more posts to load
-            if (posts.length < _postsPerPage) {
-              _hasMorePosts = false;
-            }
+            _posts = posts.take(_maxPostsInMemory).toList();
+            _hasMorePosts = posts.length >= 10;
           });
-        print('HomeScreen: Loaded ${posts.length} posts from followed users');
-        if (posts.isNotEmpty) {
-          print('HomeScreen: Posts data: ${posts.map((p) => '${p.username}: ${p.caption}').toList()}');
           
-          // Debug: Check for Baba Ji reels
-          final babjiReels = posts.where((p) => p.isBabaJiPost && p.isReel).toList();
-          print('HomeScreen: Found ${babjiReels.length} Baba Ji reels in feed');
-          for (final reel in babjiReels) {
-            print('  - Baba Ji Reel: ${reel.id} by ${reel.username}');
-            print('    Video URL: ${reel.videoUrl}');
-            print('    Thumbnail: ${reel.thumbnailUrl}');
-          }
-        } else {
-          print('HomeScreen: No posts available - showing empty state');
-        }
-        }
-      } else {
-        print('HomeScreen: No user profile found');
-        if (mounted) {
-          setState(() {
-            _isLoadingPosts = false; // Always clear loading state
-          });
+          // Validate content filtering
+          _validateContentFiltering();
         }
       }
     } catch (e) {
-      print('HomeScreen: Error loading posts: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingPosts = false; // Always clear loading state
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading posts: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      print('HomeScreen: Error loading posts (ultra-fast): $e');
     }
   }
 
   // Ultra-optimized posts loading for refresh with better error handling
   Future<void> _loadInitialPostsOptimized() async {
-    if (_isLoadingPosts) return;
-    
-    setState(() {
-      _isLoadingPosts = true;
-    });
-
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
       if (authProvider.userProfile != null) {
-        // Use smaller limit for faster loading during refresh - ONLY from followed users
-        final posts = await FeedService.getFeedPostsFromFollowedUsersOnly(
+        // First load followed users to ensure proper filtering
+        await _getFollowedUsers(authProvider.authToken!);
+        
+        // Load more posts for refresh to show content from all followed users
+        final posts = await FeedService.getMixedFeedPosts(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: 1,
-          limit: 2, // Further reduced for ultra-fast refresh
+          limit: 10, // Load more posts to show content from all followed users
         );
         
         if (mounted) {
@@ -358,11 +428,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             final existingIds = _posts.map((p) => p.id).toSet();
             final newPosts = posts.where((post) => !existingIds.contains(post.id)).toList();
             _posts = [..._posts, ...newPosts].take(_maxPostsInMemory).toList();
-            _isLoadingPosts = false; // Always clear loading state
             
             // Reset pagination state for refresh
             _hasMorePosts = true;
-            if (posts.length < 2) {
+            if (posts.length < 10) {
               _hasMorePosts = false;
             }
             
@@ -370,11 +439,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _hasNewPosts = false;
             _newPostsCount = 0;
           });
+          
+          // Validate content filtering
+          _validateContentFiltering();
         }
       } else {
         if (mounted) {
           setState(() {
-            _isLoadingPosts = false; // Always clear loading state
+            // Loading state handled by unified loading
           });
         }
       }
@@ -382,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       print('HomeScreen: Error loading posts (ultra-optimized): $e');
       if (mounted) {
         setState(() {
-          _isLoadingPosts = false; // Always clear loading state
+          // Loading state handled by unified loading
         });
         
         // Show user-friendly error message
@@ -397,22 +469,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Ultra-fast load more posts with debouncing
   Future<void> _loadMorePosts() async {
-    if (_isLoadingPosts || _posts.length >= _maxPostsInMemory || !_hasMorePosts) return;
+    if (_isLoading || _posts.length >= _maxPostsInMemory || !_hasMorePosts) {
+      print('HomeScreen: Load more posts skipped - isLoading: $_isLoading, posts: ${_posts.length}, hasMore: $_hasMorePosts');
+      return;
+    }
     
-    setState(() {
-      _isLoadingPosts = true;
-    });
-
+    // Additional debouncing check
+    final now = DateTime.now();
+    if (_lastScrollTime != null && now.difference(_lastScrollTime!) < _scrollDebounceDelay) {
+      print('HomeScreen: Load more posts skipped - too soon after last scroll');
+      return;
+    }
+    
     try {
+      // Set loading state to prevent multiple calls
+      setState(() {
+        _isLoading = true;
+      });
+      
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.userProfile != null) {
+        // First load followed users to ensure proper filtering
+        await _getFollowedUsers(authProvider.authToken!);
+        
         final nextPage = (_posts.length ~/ _postsPerPage) + 1;
-        final newPosts = await FeedService.getFeedPostsFromFollowedUsersOnly(
+        print('HomeScreen: Loading more posts - page: $nextPage');
+        
+        // Load more posts at once to show content from all followed users
+        final newPosts = await FeedService.getMixedFeedPosts(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: nextPage,
-          limit: _postsPerPage,
+          limit: 5, // Load more posts at once
         );
 
         if (mounted) {
@@ -424,29 +514,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               final totalPosts = [..._posts, ...uniqueNewPosts];
               _posts = totalPosts.take(_maxPostsInMemory).toList();
             }
-            _isLoadingPosts = false; // Always clear loading state
             
             // Check if we have more posts to load
-            if (newPosts.length < _postsPerPage) {
+            if (newPosts.length < 5) {
               _hasMorePosts = false;
             }
+            
+            // Validate content filtering
+            _validateContentFiltering();
           });
-          if (newPosts.isNotEmpty) {
-            print('HomeScreen: Loaded ${newPosts.length} more posts from followed users');
-          } else {
-            print('HomeScreen: No more posts available');
-            _hasMorePosts = false;
-          }
         }
-      } else {
-        setState(() {
-          _isLoadingPosts = false;
-        });
       }
     } catch (e) {
+      print('HomeScreen: Error loading more posts (ultra-fast): $e');
+    } finally {
+      // Always reset loading state
       if (mounted) {
         setState(() {
-          _isLoadingPosts = false;
+          _isLoading = false;
         });
       }
     }
@@ -490,13 +575,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return 0;
   }
 
+  // Ultra-fast stories loading - minimal data, maximum speed
+  Future<void> _loadStoriesUltraFast() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      if (authProvider.authToken != null) {
+        List<Story> allStories = [];
+        
+        // Ultra-fast loading - only current user's stories initially
+        if (authProvider.userProfile != null) {
+          try {
+            final userStories = await StoryService.getUserStories(
+              authProvider.userProfile!.id,
+              token: authProvider.authToken,
+              page: 1,
+              limit: 2, // Ultra-minimal for instant loading
+            );
+            allStories.addAll(userStories);
+          } catch (e) {
+            print('Error loading user stories (ultra-fast): $e');
+          }
+        }
+        
+        // Sort and group stories
+        if (allStories.isNotEmpty) {
+          allStories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          _groupedStories = StoryService.groupStoriesByUser(allStories);
+        } else {
+          _groupedStories = {};
+        }
+        
+        if (mounted) {
+          setState(() {
+            _stories = allStories;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading stories (ultra-fast): $e');
+      if (mounted) {
+        setState(() {
+          _groupedStories = {};
+        });
+      }
+    }
+  }
+
   // Ultra-optimized stories loading for refresh
   Future<void> _loadStoriesOptimized() async {
-    if (mounted) {
-      setState(() {
-        _isLoadingStories = true;
-      });
-    }
 
     try {
       List<Story> allStories = [];
@@ -545,6 +672,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Group stories by user
         _groupedStories = StoryService.groupStoriesByUser(allStories);
         
+        // Ensure all stories have DPs by fetching missing ones
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        if (authProvider.authToken != null) {
+          print('HomeScreen: Ensuring all stories have DPs (optimized)...');
+          final storiesWithDPs = await StoryService.ensureStoriesHaveDPs(allStories, authProvider.authToken!);
+          print('HomeScreen: Updated ${storiesWithDPs.length} stories with DP information (optimized)');
+          
+          // Re-group stories with updated DP information
+          _groupedStories = StoryService.groupStoriesByUser(storiesWithDPs);
+        }
+        
         // Preload user DPs for better performance
         _preloadUserDPs(allStories);
       } else {
@@ -554,14 +692,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _stories = allStories;
-          _isLoadingStories = false;
         });
       }
     } catch (e) {
       print('Error loading stories (optimized): $e');
       if (mounted) {
         setState(() {
-          _isLoadingStories = false;
           _groupedStories = {};
         });
       }
@@ -653,11 +789,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadStories() async {
-    if (mounted) {
-      setState(() {
-        _isLoadingStories = true;
-      });
-    }
 
     try {
       List<Story> allStories = [];
@@ -837,6 +968,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _groupedStories = StoryService.groupStoriesByUser(allStories);
         print('HomeScreen: Grouped stories into ${_groupedStories.length} user sections');
         
+        // Ensure all stories have DPs by fetching missing ones
+        if (authProvider.authToken != null) {
+          print('HomeScreen: Ensuring all stories have DPs...');
+          final storiesWithDPs = await StoryService.ensureStoriesHaveDPs(allStories, authProvider.authToken!);
+          print('HomeScreen: Updated ${storiesWithDPs.length} stories with DP information');
+          
+          // Re-group stories with updated DP information
+          _groupedStories = StoryService.groupStoriesByUser(storiesWithDPs);
+          print('HomeScreen: Re-grouped stories with DP information');
+          
+          // Validate content filtering
+          _validateContentFiltering();
+        }
+        
         // Debug: Print details of each user's story section
         print('=== GROUPED STORIES ===');
         _groupedStories.forEach((userId, userStories) {
@@ -886,14 +1031,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _stories = allStories;
-          _isLoadingStories = false;
         });
       }
     } catch (e) {
       print('Error loading stories: $e');
       if (mounted) {
         setState(() {
-          _isLoadingStories = false;
           _groupedStories = {};
         });
       }
@@ -912,38 +1055,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Refresh the entire feed - Ultra-optimized for speed
+  // Ultra-fast refresh - minimal data, maximum speed
   Future<void> _refreshFeed() async {
-    print('HomeScreen: Refreshing feed...');
+    print('HomeScreen: Ultra-fast refreshing feed (followed users + Baba Ji)...');
     setState(() {
-      _isRefreshing = true; // Set single loading state for refresh
-      _hasMorePosts = true; // Reset pagination state
+      _isRefreshing = true;
+      _hasMorePosts = true;
     });
     
     try {
-      // Load stories and posts in parallel for maximum speed
-      final futures = <Future>[];
+      // Clear cache to ensure fresh data
+      FeedService.clearCache();
       
-      // Always reload stories for fresh content
-      futures.add(_loadStoriesOptimized());
+      // Ultra-fast parallel loading with minimal data
+      await Future.wait([
+        _loadStoriesUltraFast(),
+        _loadInitialPostsUltraFast(),
+      ]);
       
-      // Only refresh posts if we have very few posts (less than 5)
-      if (_posts.length < 5) {
-        futures.add(_loadInitialPostsOptimized());
-      }
-      
-      // Wait for all operations to complete in parallel
-      await Future.wait(futures);
-      
+      print('HomeScreen: Refresh completed - showing followed users + Baba Ji content');
     } catch (e) {
-      print('HomeScreen: Error during refresh: $e');
+      print('HomeScreen: Error during ultra-fast refresh: $e');
     }
     
     setState(() {
-      _isRefreshing = false; // Clear loading state
+      _isRefreshing = false;
     });
     
-    print('HomeScreen: Feed refresh completed');
+    print('HomeScreen: Ultra-fast feed refresh completed');
   }
 
   // Real-time feed service methods
@@ -1005,12 +1144,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _refreshFeedWithRealtime() async {
-    print('HomeScreen: Refreshing feed with real-time service...');
+    print('HomeScreen: Refreshing feed with real-time service (followed users + Baba Ji)...');
     
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.userProfile != null && authProvider.authToken != null) {
-        // Use real-time service for force refresh
+        // Use real-time service for force refresh (now includes Baba Ji)
         final freshPosts = await RealtimeFeedService.forceRefreshFeed(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
@@ -1026,13 +1165,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             
             // Reset pagination state for refresh
             _hasMorePosts = true;
-            if (freshPosts.length < _postsPerPage) {
+            if (freshPosts.length < 5) {
               _hasMorePosts = false;
             }
           });
+          
+          // Validate content filtering
+          _validateContentFiltering();
         }
         
-        print('HomeScreen: Feed refreshed with ${freshPosts.length} fresh posts');
+        print('HomeScreen: Feed refreshed with ${freshPosts.length} fresh posts (followed users + Baba Ji)');
       }
     } catch (e) {
       print('HomeScreen: Error refreshing feed with real-time service: $e');
@@ -1085,7 +1227,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Check for new posts when app comes to foreground
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.userProfile != null && authProvider.authToken != null) {
-      // Trigger manual check for new posts
+      print('HomeScreen: App resumed - refreshing feed with followed users + Baba Ji content');
+      
+      // Trigger manual check for new posts (now includes Baba Ji)
       RealtimeFeedService.manualCheck(
         token: authProvider.authToken!,
         currentUserId: authProvider.userProfile!.id,
@@ -1093,6 +1237,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       // Also refresh stories when app resumes
       _loadStoriesOptimized();
+      
+      // Force refresh posts to ensure latest content is shown
+      _refreshFeed();
     }
   }
 
@@ -1276,14 +1423,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Consumer<AuthProvider>(
           builder: (context, authProvider, child) {
             // Show smooth loader for any loading state
-            if (authProvider.userProfile == null || _isRefreshing) {
+            if (authProvider.userProfile == null || _isLoading || _isRefreshing) {
               return SmoothFeedLoader();
             }
 
             return Stack(
               children: [
                 SmoothRefreshIndicator(
-                  onRefresh: _refreshFeedWithRealtime,
+                  onRefresh: _forceRefreshFeed,
                   refreshMessage: 'Refreshing your feed...',
                   child: CustomScrollView(
                     controller: _scrollController,
@@ -2013,17 +2160,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Show loading indicator if stories are loading
-            if (_isLoadingStories && _groupedStories.isEmpty)
-              Container(
-                height: 80,
-                child: const SmoothLoadingWidget(
-                  message: 'Loading stories...',
-                  size: 16,
-                ),
-              )
-            else
-              // Always show stories list with add story button
+            // Always show stories list with add story button
               Container(
                 height: 80,
                 child: Builder(
@@ -2053,6 +2190,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       if (stories.first.authorId == currentUserId) return false;
                       // at least one valid media story
                       if (!stories.any((s) => (s.media.isNotEmpty && s.media != 'null'))) return false;
+                      
+                      // Check if this is Baba Ji content (always show if user is following Baba Ji)
+                      final isBabaJiContent = stories.any((story) => 
+                        story.authorName.toLowerCase().contains('baba') || 
+                        story.authorUsername.toLowerCase().contains('babaji') ||
+                        story.authorName.toLowerCase().contains('dhani') ||
+                        story.authorUsername.toLowerCase().contains('dhani')
+                      );
+                      
+                      if (isBabaJiContent) {
+                        print('HomeScreen: Debug - Baba Ji content detected for user $userId (${stories.first.authorUsername}) - Always showing');
+                        return true; // Always show Baba Ji content
+                      }
+                      
                       // Only show stories from users that current user is following
                       final isFollowing = _followedUserIds.contains(userId);
                       print('HomeScreen: Debug - User $userId (${stories.first.authorUsername}) - isFollowing: $isFollowing');
@@ -2114,8 +2265,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           storyType: firstStory.type,
                           onTap: () {
                             // Open story viewer with all stories from this user
-                            print('Opening story section for user: ${firstStory.authorName}');
-                            print('User has ${userStories.length} stories to view');
+                            print('HomeScreen: Opening story section for user: ${firstStory.authorName}');
+                            print('HomeScreen: User DP URL: ${firstStory.authorAvatar}');
+                            print('HomeScreen: Story media URL: $mediaUrl');
+                            print('HomeScreen: User has ${userStories.length} stories to view');
                             _openStoryViewerForUser(userId, userStories);
                           },
                         );
@@ -2556,7 +2709,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildFeedContent() {
-    if (_posts.isEmpty && !_isRefreshing && !_isLoadingPosts) {
+    if (_posts.isEmpty && !_isRefreshing && !_isLoading) {
       // Show message when no posts are available
       return SliverToBoxAdapter(
         child: Container(
@@ -2655,17 +2808,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       delegate: SliverChildBuilderDelegate(
         (context, index) {
           if (index >= _posts.length) {
-            // Show loading indicator at the bottom (only when not refreshing) - Optimized
-            if (_isLoadingPosts && _currentPostIndex < _maxPostsInMemory && !_isRefreshing) {
-              return Container(
-                padding: const EdgeInsets.all(12), // Reduced padding
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2, // Thinner for faster rendering
-                  ),
-                ),
-              );
-            }
             return const SizedBox.shrink();
           }
 
@@ -2778,7 +2920,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           );
         },
-        childCount: _posts.length + (_isLoadingPosts && _currentPostIndex < _maxPostsInMemory && !_isRefreshing ? 1 : 0),
+        childCount: _posts.length,
       ),
     );
   }
@@ -2787,7 +2929,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _refreshFeedOnReturn() async {
     // Clear cache to ensure fresh data
     FeedService.clearCache();
-    await _loadInitialPosts();
+    await _loadInitialPostsUltraFast();
   }
 
   // Performance monitoring method (for debugging)
@@ -2800,8 +2942,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         standardRefresh: () async {
           // Simulate old refresh method
           await Future.wait([
-            _loadStories(),
-            _loadInitialPosts(),
+            _loadStoriesUltraFast(),
+            _loadInitialPostsUltraFast(),
           ]);
         },
       );

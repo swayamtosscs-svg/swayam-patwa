@@ -5,10 +5,13 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import '../models/baba_page_model.dart';
 import '../models/baba_page_post_model.dart';
 import '../services/baba_page_post_service.dart';
 import '../services/baba_page_service.dart';
+import '../services/feed_refresh_service.dart';
 import '../services/follow_state_service.dart';
 import '../services/media_upload_service.dart';
 import '../services/local_storage_service.dart';
@@ -115,21 +118,18 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
     final page = widget.babaPage;
     final hasRealData = page != null;
     
-    // Load posts when bound to real page - ensure posts load automatically
-    if (hasRealData && !_loadingPosts) {
-      // Always try to load posts if we don't have any or haven't loaded yet
-      if (_posts.isEmpty || !_postsLoaded) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _postsLoaded = true;
-            _fetchPosts(page!);
-          }
-        });
-      }
+    // Load posts when bound to real page - ensure posts load automatically (only once)
+    if (hasRealData && !_loadingPosts && !_postsLoaded && _posts.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _postsLoaded = true;
+          _fetchPosts(page!);
+        }
+      });
     }
     
     // Load videos when bound to real page (only once)
-    if (hasRealData && !_loadingVideos && !_videosLoaded) {
+    if (hasRealData && !_loadingVideos && !_videosLoaded && _videos.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _videosLoaded = true;
@@ -139,7 +139,7 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
     }
     
     // Load stories when bound to real page (only once)
-    if (hasRealData && !_loadingStories && !_storiesLoaded) {
+    if (hasRealData && !_loadingStories && !_storiesLoaded && _stories.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _storiesLoaded = true;
@@ -150,27 +150,13 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       extendBody: true,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openCreateBottomSheet(context),
-        backgroundColor: Colors.orange.shade400,
-        elevation: 6,
-        child: const Icon(Icons.add, size: 28),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(
         child: DefaultTextStyle.merge(
           style: GoogleFonts.poppins(),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight,
-                  ),
-                  child: IntrinsicHeight(
-                    child: Column(
-                      children: [
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
                 // Header (avatar, gradient background, name, tags)
                 Stack(
                   clipBehavior: Clip.none,
@@ -519,9 +505,15 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
             ),
           ),
         ),
-      );
-    },
-  );
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _openCreateBottomSheet(context),
+        backgroundColor: Colors.orange.shade400,
+        elevation: 6,
+        child: const Icon(Icons.add, size: 28),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
   }
 
   Widget _buildTag(String text, Color bg, Color textColor, {bool isSmall = false}) {
@@ -715,19 +707,17 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                     final isSelected = i == selectedSegment;
                     return GestureDetector(
                       onTap: () {
-                        setState(() => selectedSegment = i);
-                        // Auto-load posts when Posts tab is selected
-                        if (i == 0 && widget.babaPage != null) {
-                          _fetchPosts(widget.babaPage!);
-                        }
-                        // Auto-load videos when Videos tab is selected
-                        if (i == 1 && widget.babaPage != null) {
-                          _fetchVideos(widget.babaPage!);
-                        }
-                        // Auto-load stories when Stories tab is selected
-                        if (i == 2 && widget.babaPage != null) {
-                          _fetchStories(widget.babaPage!);
-                        }
+                         setState(() => selectedSegment = i);
+                         // Only load data if not already loaded
+                         if (i == 0 && widget.babaPage != null && !_postsLoaded && _posts.isEmpty) {
+                           _fetchPosts(widget.babaPage!);
+                         }
+                         if (i == 1 && widget.babaPage != null && !_videosLoaded && _videos.isEmpty) {
+                           _fetchVideos(widget.babaPage!);
+                         }
+                         if (i == 2 && widget.babaPage != null && !_storiesLoaded && _stories.isEmpty) {
+                           _fetchStories(widget.babaPage!);
+                         }
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -771,19 +761,17 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                     return Expanded(
                       child: GestureDetector(
                         onTap: () {
-                          setState(() => selectedSegment = i);
-                          // Auto-load posts when Posts tab is selected
-                          if (i == 0 && widget.babaPage != null) {
-                            _fetchPosts(widget.babaPage!);
-                          }
-                          // Auto-load videos when Videos tab is selected
-                          if (i == 1 && widget.babaPage != null) {
-                            _fetchVideos(widget.babaPage!);
-                          }
-                          // Auto-load stories when Stories tab is selected
-                          if (i == 2 && widget.babaPage != null) {
-                            _fetchStories(widget.babaPage!);
-                          }
+                         setState(() => selectedSegment = i);
+                         // Only load data if not already loaded
+                         if (i == 0 && widget.babaPage != null && !_postsLoaded && _posts.isEmpty) {
+                           _fetchPosts(widget.babaPage!);
+                         }
+                         if (i == 1 && widget.babaPage != null && !_videosLoaded && _videos.isEmpty) {
+                           _fetchVideos(widget.babaPage!);
+                         }
+                         if (i == 2 && widget.babaPage != null && !_storiesLoaded && _stories.isEmpty) {
+                           _fetchStories(widget.babaPage!);
+                         }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -828,19 +816,17 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
                     return Expanded(
                       child: GestureDetector(
                         onTap: () {
-                          setState(() => selectedSegment = i);
-                          // Auto-load posts when Posts tab is selected
-                          if (i == 0 && widget.babaPage != null) {
-                            _fetchPosts(widget.babaPage!);
-                          }
-                          // Auto-load videos when Videos tab is selected
-                          if (i == 1 && widget.babaPage != null) {
-                            _fetchVideos(widget.babaPage!);
-                          }
-                          // Auto-load stories when Stories tab is selected
-                          if (i == 2 && widget.babaPage != null) {
-                            _fetchStories(widget.babaPage!);
-                          }
+                         setState(() => selectedSegment = i);
+                         // Only load data if not already loaded
+                         if (i == 0 && widget.babaPage != null && !_postsLoaded && _posts.isEmpty) {
+                           _fetchPosts(widget.babaPage!);
+                         }
+                         if (i == 1 && widget.babaPage != null && !_videosLoaded && _videos.isEmpty) {
+                           _fetchVideos(widget.babaPage!);
+                         }
+                         if (i == 2 && widget.babaPage != null && !_storiesLoaded && _stories.isEmpty) {
+                           _fetchStories(widget.babaPage!);
+                         }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1149,12 +1135,20 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
         print('Error fetching server videos: $e');
       }
       
-      // Also get videos from local storage (reels) as backup
+      // Also get videos from local storage (reels) as backup - ONLY for this specific BabaPage
       try {
         final localReels = await LocalStorageService.getUserReels();
         
-        // Convert local reels to MediaData format for consistency
-        for (final reel in localReels) {
+        // Filter local reels to only include videos uploaded by this specific BabaPage
+        final filteredLocalReels = localReels.where((reel) {
+          // Only include videos that belong to this specific BabaPage
+          return reel.userId == page.id || reel.username == page.name;
+        }).toList();
+        
+        print('BabaProfileUiDemo: Filtered ${filteredLocalReels.length} local videos for page ${page.id} (${page.name})');
+        
+        // Convert filtered local reels to MediaData format for consistency
+        for (final reel in filteredLocalReels) {
           if (reel.videoUrl != null && reel.videoUrl!.isNotEmpty) {
             // Check if this video is already added from server
             final alreadyExists = videos.any((v) => v.secureUrl == reel.videoUrl);
@@ -1180,15 +1174,23 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
         print('Error fetching local reels: $e');
       }
       
-      // Update UI with videos
+      // Final filter to ensure only videos from this specific BabaPage are shown
+      final finalVideos = videos.where((video) {
+        // Only include videos that belong to this specific BabaPage
+        return video.uploadedBy == page.id || video.username == page.name;
+      }).toList();
+      
+      print('BabaProfileUiDemo: Final filtered videos for page ${page.id} (${page.name}): ${finalVideos.length}');
+      
+      // Update UI with filtered videos
       if (mounted) {
         setState(() {
-          _videos = videos;
+          _videos = finalVideos;
           _loadingVideos = false;
         });
       }
-      print('BabaProfileUiDemo: Loaded ${videos.length} videos');
-      print('BabaProfileUiDemo: Videos data: ${videos.map((v) => '${v.mediaId}: ${v.secureUrl}').join(', ')}');
+      print('BabaProfileUiDemo: Loaded ${finalVideos.length} videos for ${page.name}');
+      print('BabaProfileUiDemo: Videos data: ${finalVideos.map((v) => '${v.mediaId}: ${v.secureUrl} (${v.username})').join(', ')}');
       
     } catch (e) {
       print('Error fetching videos: $e');
@@ -1289,9 +1291,15 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
       );
     }
 
-    return ListView.builder(
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, // 3 columns for grid layout
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 0.8, // Balanced aspect ratio to match first image
+      ),
       itemCount: _videos.length,
       itemBuilder: (context, index) {
         return _buildVideoItem(_videos[index]);
@@ -1300,107 +1308,165 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   }
 
   Widget _buildVideoItem(MediaData video) {
-    print('BabaProfileUiDemo: Building video item for ${video.mediaId} with URL: ${video.secureUrl}');
     return Container(
       key: ValueKey('video_${video.mediaId}'),
-      margin: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min, // Minimize space usage
         children: [
-          // Video title/caption
-          if (video.fileName.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                video.fileName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          
-          // Video player container
+          // Video thumbnail container (balanced height)
           Container(
+            height: 80, // Balanced height for better appearance
             decoration: BoxDecoration(
               color: Colors.black,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
+                  blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 16 / 9, // Standard video aspect ratio
-                child: GestureDetector(
-                  onTap: () {
-                    print('BabaProfileUiDemo: Video tapped - ${video.fileName}');
-                  },
-                  child: VideoPlayerWidget(
-                    videoUrl: video.secureUrl,
-                    autoPlay: false, // Don't autoplay in profile view
-                    looping: false,
-                    muted: true, // Start muted for better UX
-                    showControls: true,
-                  ),
+              borderRadius: BorderRadius.circular(8),
+              child: GestureDetector(
+                onTap: () {
+                  _playVideoWithSound(video);
+                },
+                child: Stack(
+                  children: [
+                    // Static video thumbnail
+                    Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: double.infinity,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            children: [
+                              // Video thumbnail placeholder with gradient
+                              Container(
+                                width: double.infinity,
+                                height: double.infinity,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.grey.shade300,
+                                      Colors.grey.shade400,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              // Video file icon
+                              Center(
+                                child: Icon(
+                                  Icons.video_file,
+                                  color: Colors.grey.shade600,
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Play button overlay
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
           
-          // Video info bar
+          // Video info bar (balanced for grid) - Balanced height for better appearance
           Container(
-            margin: const EdgeInsets.only(top: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            height: 16, // Balanced height for better appearance
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.video_file,
-                  size: 16,
+                  size: 8,
                   color: Colors.grey.shade600,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Uploaded ${_formatDate(video.uploadedAt)}',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
+                const SizedBox(width: 4),
+                // Use Flexible instead of Expanded to prevent ParentDataWidget error
+                Flexible(
+                  child: Text(
+                    'Uploaded ${_formatDate(video.uploadedAt)}',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 7, // Balanced font size for better readability
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 4),
                 // Delete button
                 GestureDetector(
                   onTap: () {
                     _deleteVideoDirectly(video);
                   },
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Icon(
-                      Icons.delete_outline,
-                      color: Colors.red.shade600,
-                      size: 16,
-                    ),
+                  child: Icon(
+                    Icons.delete_outline,
+                    size: 8, // Balanced icon size for better visibility
+                    color: Colors.red.shade600,
                   ),
                 ),
               ],
             ),
           ),
+          
+          // Video title (balanced) - Balanced height
+          if (video.fileName.isNotEmpty)
+            Container(
+              height: 12, // Balanced height
+              padding: const EdgeInsets.only(top: 1),
+              child: Text(
+                video.fileName,
+                style: const TextStyle(
+                  fontSize: 8, // Balanced font size
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
         ],
       ),
     );
@@ -1535,9 +1601,15 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
       );
     }
 
-    return ListView.builder(
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, // 3 columns for grid layout
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 0.8, // Balanced aspect ratio for stories
+      ),
       itemCount: _stories.length,
       itemBuilder: (context, index) {
         return _buildStoryItem(_stories[index]);
@@ -1546,150 +1618,173 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
   }
 
   Widget _buildStoryItem(BabaPageStory story) {
-    return GestureDetector(
-      onTap: () => _openStoryViewer(story),
-      child: Container(
-        key: ValueKey('story_${story.id}'),
-        margin: const EdgeInsets.only(bottom: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Story content
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Story media
-                  if (story.media.url.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: story.media.type == 'image'
-                          ? Image.network(
-                              story.media.url,
-                              width: double.infinity,
-                              height: 200,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Container(
-                                  height: 200,
-                                  color: Colors.grey.shade200,
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+    return Container(
+      key: ValueKey('story_${story.id}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min, // Minimize space usage
+        children: [
+          // Story thumbnail container (balanced height)
+          Container(
+            height: 80, // Balanced height for better appearance
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: GestureDetector(
+                onTap: () => _openStoryViewer(story),
+                child: Stack(
+                  children: [
+                    // Story media thumbnail
+                    Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: story.media.url.isNotEmpty
+                            ? Image.network(
+                                story.media.url,
+                                width: double.infinity,
+                                height: double.infinity,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    color: Colors.grey.shade300,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  height: 200,
-                                  color: Colors.grey.shade200,
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.image_not_supported,
-                                      color: Colors.grey,
-                                      size: 32,
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    color: Colors.grey.shade300,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.auto_stories,
+                                        color: Colors.grey,
+                                        size: 32,
+                                      ),
                                     ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                width: double.infinity,
+                                height: double.infinity,
+                                color: Colors.grey.shade300,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.auto_stories,
+                                    color: Colors.grey,
+                                    size: 32,
                                   ),
-                                );
-                              },
-                            )
-                          : Container(
-                              height: 200,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.videocam, size: 48, color: Colors.grey),
-                                    SizedBox(height: 8),
-                                    Text('Video Story'),
-                                  ],
                                 ),
                               ),
-                            ),
+                      ),
                     ),
-                  const SizedBox(height: 12),
-                  // Story content text
-                  Text(
-                    story.content,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      height: 1.4,
+                    // Story icon overlay
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.auto_stories,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Story stats and actions
-                  Row(
-                    children: [
-                      Icon(Icons.visibility, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${story.viewsCount}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Icon(Icons.favorite, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${story.likesCount}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const Spacer(),
-                      // Delete button for Babaji stories
-                      GestureDetector(
-                        onTap: () => _showDeleteStoryConfirmation(story),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Icon(
-                            Icons.delete_outline,
-                            size: 16,
-                            color: Colors.red.shade600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatDate(story.createdAt),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          
+          // Story info bar (balanced for grid) - Balanced height for better appearance
+          Container(
+            height: 16, // Balanced height for better appearance
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_stories,
+                  size: 8,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 4),
+                // Use Flexible instead of Expanded to prevent ParentDataWidget error
+                Flexible(
+                  child: Text(
+                    'Views ${story.viewsCount}',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 7, // Balanced font size for better readability
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Delete button
+                GestureDetector(
+                  onTap: () => _showDeleteStoryConfirmation(story),
+                  child: Icon(
+                    Icons.delete_outline,
+                    size: 8, // Balanced icon size for better visibility
+                    color: Colors.red.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Story title (balanced) - Balanced height
+          if (story.content.isNotEmpty)
+            Container(
+              height: 12, // Balanced height
+              padding: const EdgeInsets.only(top: 1),
+              child: Text(
+                story.content,
+                style: const TextStyle(
+                  fontSize: 8, // Balanced font size
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1880,6 +1975,42 @@ class _BabaProfileUiDemoScreenState extends State<BabaProfileUiDemoScreen> with 
     // Use video ID to consistently pick the same caption for the same video
     final index = video.mediaId.hashCode.abs() % captions.length;
     return captions[index];
+  }
+
+
+  /// Play video with sound in full screen
+  void _playVideoWithSound(MediaData video) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            iconTheme: const IconThemeData(color: Colors.white),
+            title: Text(
+              video.fileName.isNotEmpty ? video.fileName : 'Video',
+              style: const TextStyle(color: Colors.white),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _deleteVideoDirectly(video);
+                },
+              ),
+            ],
+          ),
+          body: Center(
+            child: _SimpleVideoPlayer(
+              videoUrl: video.secureUrl,
+              videoTitle: video.fileName.isNotEmpty ? video.fileName : 'Video',
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showDeleteVideoDialog(MediaData video) {
@@ -2870,6 +3001,9 @@ class _FollowButtonState extends State<_FollowButton> {
                 duration: const Duration(seconds: 2),
               ),
             );
+            
+            // Trigger feed refresh to update home screen content
+            FeedRefreshService().refreshFeed();
           }
         } else {
           // Handle specific error cases
@@ -2917,6 +3051,9 @@ class _FollowButtonState extends State<_FollowButton> {
                 duration: const Duration(seconds: 2),
               ),
             );
+            
+            // Trigger feed refresh to update home screen content
+            FeedRefreshService().refreshFeed();
           }
         } else {
           // Handle specific error cases
@@ -2957,6 +3094,221 @@ class _FollowButtonState extends State<_FollowButton> {
     }
   }
 
+}
+
+/// Simple video player widget with minimal controls (like the second image)
+class _SimpleVideoPlayer extends StatefulWidget {
+  final String videoUrl;
+  final String videoTitle;
+
+  const _SimpleVideoPlayer({
+    required this.videoUrl,
+    required this.videoTitle,
+  });
+
+  @override
+  State<_SimpleVideoPlayer> createState() => _SimpleVideoPlayerState();
+}
+
+class _SimpleVideoPlayerState extends State<_SimpleVideoPlayer> {
+  late final Player player;
+  late final VideoController videoController;
+  bool _isInitialized = false;
+  bool _isPlaying = false;
+  bool _isDisposed = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+  bool _showControls = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePlayer();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    if (_isInitialized) {
+      player.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _initializePlayer() async {
+    try {
+      MediaKit.ensureInitialized();
+      player = Player();
+      videoController = VideoController(player);
+
+      // Set up event listeners
+      player.stream.playing.listen((playing) {
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _isPlaying = playing;
+          });
+        }
+      });
+
+      player.stream.duration.listen((duration) {
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _duration = duration;
+          });
+        }
+      });
+
+      player.stream.position.listen((position) {
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _position = position;
+          });
+        }
+      });
+
+      await player.open(Media(widget.videoUrl));
+      
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _isInitialized = true;
+        });
+        // Auto-play the video
+        player.play();
+      }
+    } catch (e) {
+      print('SimpleVideoPlayer: Error initializing: $e');
+    }
+  }
+
+  void _togglePlayPause() {
+    if (!_isInitialized) return;
+    
+    if (_isPlaying) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _showControls = !_showControls;
+        });
+      },
+      child: Stack(
+        children: [
+          // Video player
+          if (_isInitialized)
+            Video(
+              controller: videoController,
+              controls: NoVideoControls, // No built-in controls
+            )
+          else
+            Container(
+              color: Colors.black,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+              ),
+            ),
+
+          // Simple custom controls overlay
+          if (_showControls)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+                child: Column(
+                  children: [
+                    // Spacer to push controls to bottom
+                    const Spacer(),
+                    
+                    // Play/Pause button in center
+                    GestureDetector(
+                      onTap: _togglePlayPause,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Progress bar at bottom
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          Text(
+                            _formatDuration(_position),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: Colors.white,
+                                inactiveTrackColor: Colors.white.withOpacity(0.3),
+                                thumbColor: Colors.white,
+                                overlayColor: Colors.white.withOpacity(0.2),
+                                trackHeight: 2,
+                              ),
+                              child: Slider(
+                                value: _duration.inMilliseconds > 0
+                                    ? _position.inMilliseconds / _duration.inMilliseconds
+                                    : 0.0,
+                                onChanged: (value) {
+                                  if (_isInitialized) {
+                                    final newPosition = Duration(
+                                      milliseconds: (value * _duration.inMilliseconds).round(),
+                                    );
+                                    player.seek(newPosition);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _formatDuration(_duration),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 

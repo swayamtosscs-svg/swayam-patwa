@@ -42,14 +42,23 @@ class _ProfileUIState extends State<ProfileUI> {
   void initState() {
     super.initState();
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    _mediaFuture = UserMediaService.getUserMedia(userId: auth.userProfile?.id ?? '');
+    _mediaFuture = UserMediaService.forceRefreshUserMedia(userId: auth.userProfile?.id ?? '');
+    
+    // Listen for media updates to refresh post counts automatically
+    UserMediaService.onMediaUpdated = (String userId) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (userId == auth.userProfile?.id && mounted) {
+        print('ProfileUI: Media updated for current user, refreshing...');
+        _refreshMedia();
+      }
+    };
   }
 
   void _refreshMedia() {
     setState(() {
       // Don't clear deleted items - keep them hidden permanently
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      _mediaFuture = UserMediaService.getUserMedia(userId: auth.userProfile?.id ?? '');
+      _mediaFuture = UserMediaService.forceRefreshUserMedia(userId: auth.userProfile?.id ?? '');
     });
   }
 
@@ -317,6 +326,7 @@ class _ProfileUIState extends State<ProfileUI> {
                                         if (snapshot.hasData && snapshot.data!.success) {
                                           postsCount = snapshot.data!.posts.length;
                                           reelsCount = snapshot.data!.reels.length;
+                                          print('ProfileUI: REAL post count: $postsCount, REAL reel count: $reelsCount for ${auth.userProfile?.username}');
                                         }
                                         
                                         return Row(

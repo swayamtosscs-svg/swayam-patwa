@@ -6,6 +6,7 @@ import '../models/post_model.dart';
 import '../screens/followers_screen.dart';
 import '../screens/following_screen.dart';
 import '../services/user_media_service.dart';
+import '../services/feed_refresh_service.dart';
 import '../services/chat_service.dart';
 import '../screens/chat_screen.dart';
 import '../screens/post_full_view_screen.dart';
@@ -70,6 +71,14 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     _loadUserMedia();
     _checkFollowingStatus();
     _loadRealCounts();
+    
+    // Listen for media updates to refresh post counts automatically
+    UserMediaService.onMediaUpdated = (String userId) {
+      if (userId == widget.userId && mounted) {
+        print('UserProfileScreen: Media updated for ${widget.username}, refreshing...');
+        _loadUserMedia();
+      }
+    };
   }
 
   @override
@@ -135,10 +144,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     });
 
     try {
-      print('Loading media for user: ${widget.username}');
+      print('Loading REAL media data for user: ${widget.username} (${widget.userId})');
       
-      // Use UserMediaService to get posts and reels from API
-      final userMedia = await UserMediaService.getUserMedia(userId: widget.userId);
+      // Use force refresh to ensure we get the latest post counts from API
+      final userMedia = await UserMediaService.forceRefreshUserMedia(userId: widget.userId);
       
       if (mounted) {
         setState(() {
@@ -148,7 +157,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           _isLoadingReels = false;
         });
         
-        print('Loaded ${_userPosts.length} posts and ${_userReels.length} reels for user ${widget.username}');
+        print('Loaded REAL data: ${_userPosts.length} posts and ${_userReels.length} reels for user ${widget.username}');
+        print('Total media count: ${_userPosts.length + _userReels.length}');
       }
     } catch (e) {
       print('Error loading user media: $e');
@@ -206,8 +216,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             // Main content
             RefreshIndicator(
               onRefresh: () async {
+                print('Profile refresh triggered - loading latest data');
                 await _checkFollowingStatus();
                 await _loadUserMedia();
+                await _loadRealCounts(); // Also refresh followers/following counts
               },
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -252,14 +264,16 @@ class _UserProfileScreenState extends State<UserProfileScreen>
       actions: [
         IconButton(
           onPressed: () async {
-            // Refresh following status and posts
+            print('Manual refresh triggered - loading latest post counts');
+            // Refresh following status, posts, and counts
             await _checkFollowingStatus();
             await _loadUserMedia();
+            await _loadRealCounts();
             
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Profile refreshed'),
+                  content: Text('Profile refreshed with latest data'),
                   backgroundColor: Color(0xFF6366F1),
                 ),
               );
@@ -678,6 +692,9 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         // Refresh the following status when follow state changes
         _checkFollowingStatus();
         _loadRealCounts();
+        
+        // Trigger feed refresh to update home screen content
+        FeedRefreshService().refreshFeed();
       },
     );
   }

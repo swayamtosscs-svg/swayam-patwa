@@ -167,7 +167,7 @@ class BabaPageDPService {
       // Send the request
       print('BabaPageDPService: Sending request...');
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 20), // Reduced timeout
         onTimeout: () {
           throw TimeoutException('Upload request timed out');
         },
@@ -621,17 +621,19 @@ class BabaPageDPService {
       final url = '$baseUrl/$babaPageId/dp/upload';
       print('BabaPageDPService: Alternative upload URL: $url');
       
-      var request = http.MultipartRequest('POST', Uri.parse(url));
-      
-      // Add headers
-      request.headers['Authorization'] = 'Bearer $token';
-      request.headers['Accept'] = 'application/json';
-      
-      // Try different field names that servers might expect
+      // Try different field names that servers might expect - but only one at a time
       final fieldNames = ['image', 'avatar', 'photo', 'picture', 'dp'];
       
+      // Try each field name individually instead of adding all at once
       for (String fieldName in fieldNames) {
         try {
+          print('BabaPageDPService: Trying field name: $fieldName');
+          
+          // Create a new request for each field name
+          var testRequest = http.MultipartRequest('POST', Uri.parse(url));
+          testRequest.headers['Authorization'] = 'Bearer $token';
+          testRequest.headers['Accept'] = 'application/json';
+          
           final fileBytes = await imageFile.readAsBytes();
           final multipartFile = http.MultipartFile.fromBytes(
             fieldName,
@@ -639,87 +641,70 @@ class BabaPageDPService {
             contentType: MediaType('image', extension),
             filename: fileName,
           );
-          request.files.add(multipartFile);
-          print('BabaPageDPService: Added file with field name: $fieldName');
-        } catch (e) {
-          print('BabaPageDPService: Error adding file with field $fieldName: $e');
-        }
-      }
-      
-      // Add fields
-      request.fields['babaPageId'] = babaPageId;
-      request.fields['filename'] = fileName;
-      request.fields['fileType'] = 'image';
-      
-      print('BabaPageDPService: Alternative request - Files: ${request.files.length}, Fields: ${request.fields}');
-      
-      // Send the request
-      final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('Upload request timed out');
-        },
-      );
-      
-      final response = await http.Response.fromStream(streamedResponse);
-      print('BabaPageDPService: Alternative response status: ${response.statusCode}');
-      print('BabaPageDPService: Alternative response body: ${response.body}');
-
-      Map<String, dynamic> jsonResponse;
-      try {
-        jsonResponse = jsonDecode(response.body);
-      } catch (e) {
-        print('BabaPageDPService: Failed to parse JSON response: $e');
-        return {
-          'success': false,
-          'message': 'Invalid response format from server',
-          'error': 'JSON Parse Error',
-        };
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
-          final data = jsonResponse['data'];
+          testRequest.files.add(multipartFile);
           
-          // Extract data from the response
-          final avatarUrl = data['avatar'] as String? ?? data['avatarUrl'] as String?;
-          final publicId = data['publicId'] as String? ?? '';
-          final format = data['format'] as String? ?? 'unknown';
-          final width = data['width'] as int? ?? 0;
-          final height = data['height'] as int? ?? 0;
-          final size = data['size'] as int? ?? 0;
+          // Add fields
+          testRequest.fields['babaPageId'] = babaPageId;
+          testRequest.fields['filename'] = fileName;
+          testRequest.fields['fileType'] = 'image';
           
-          print('BabaPageDPService: Alternative upload successful');
-          print('BabaPageDPService: Avatar URL: $avatarUrl');
+          print('BabaPageDPService: Testing with field name: $fieldName');
           
-          if (avatarUrl != null && avatarUrl.isNotEmpty) {
-            // Convert relative URL to absolute URL
-            String fullAvatarUrl = avatarUrl;
-            if (avatarUrl.startsWith('/')) {
-              // If it's a relative path, prepend the base URL
-              fullAvatarUrl = 'http://103.14.120.163:8081$avatarUrl';
+          // Send the test request with shorter timeout
+          final testStreamedResponse = await testRequest.send().timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw TimeoutException('Test upload request timed out');
+            },
+          );
+          
+          final testResponse = await http.Response.fromStream(testStreamedResponse);
+          print('BabaPageDPService: Test response status: ${testResponse.statusCode}');
+          print('BabaPageDPService: Test response body: ${testResponse.body}');
+          
+          if (testResponse.statusCode == 200 || testResponse.statusCode == 201) {
+            // This field name worked, return the success response
+            Map<String, dynamic> jsonResponse;
+            try {
+              jsonResponse = jsonDecode(testResponse.body);
+            } catch (e) {
+              continue; // Try next field name
             }
             
-            return {
-              'success': true,
-              'message': 'Baba Ji page display picture uploaded successfully',
-              'data': {
-                'avatarUrl': fullAvatarUrl,
-                'publicId': publicId,
-                'format': format,
-                'width': width,
-                'height': height,
-                'size': size,
-              },
-            };
+            if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+              final data = jsonResponse['data'];
+              final avatarUrl = data['avatar'] as String? ?? data['avatarUrl'] as String?;
+              
+              if (avatarUrl != null && avatarUrl.isNotEmpty) {
+                String fullAvatarUrl = avatarUrl;
+                if (avatarUrl.startsWith('/')) {
+                  fullAvatarUrl = 'http://103.14.120.163:8081$avatarUrl';
+                }
+                
+                print('BabaPageDPService: Upload successful with field name: $fieldName');
+                return {
+                  'success': true,
+                  'message': 'Baba Ji page display picture uploaded successfully',
+                  'data': {
+                    'avatarUrl': fullAvatarUrl,
+                    'fieldName': fieldName,
+                  },
+                };
+              }
+            }
           }
+          
+        } catch (e) {
+          print('BabaPageDPService: Error with field $fieldName: $e');
+          continue; // Try next field name
         }
       }
       
+      // If all field names failed, return error
       return {
         'success': false,
-        'message': jsonResponse['message'] ?? 'Upload failed with alternative method',
-        'error': 'Upload Failed',
+        'message': 'Upload failed with all field name attempts',
+        'error': 'All Field Names Failed',
       };
     } catch (e) {
       print('BabaPageDPService: Alternative upload error: $e');

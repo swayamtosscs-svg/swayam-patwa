@@ -4,16 +4,24 @@ import 'media_upload_service.dart';
 import 'local_storage_service.dart';
 
 class UserMediaService {
-  /// Fetch all media for a specific user
+  // Static callback to notify when media is updated
+  static Function(String userId)? onMediaUpdated;
+  
+  /// Notify that media has been updated for a specific user
+  static void notifyMediaUpdated(String userId) {
+    print('UserMediaService: Notifying media updated for user: $userId');
+    onMediaUpdated?.call(userId);
+  }
+  /// Fetch all media for a specific user - ALWAYS returns real data from API
   static Future<UserMediaResponse> getUserMedia({
     required String userId,
     String? token,
   }) async {
     try {
-      print('UserMediaService: Fetching media for userId: $userId');
-      print('UserMediaService: API URL will be: http://103.14.120.163:8081/api/media/upload?userId=$userId');
+      print('UserMediaService: Fetching REAL media data for userId: $userId');
+      print('UserMediaService: API URL: http://103.14.120.163:8081/api/media/upload?userId=$userId');
       
-      // Try to get media from API first
+      // Always fetch fresh data from API - no caching to ensure accuracy
       print('UserMediaService: Calling retrieveMediaByUserId for userId: $userId');
       final apiResponse = await MediaUploadService.retrieveMediaByUserId(userId: userId);
       
@@ -21,6 +29,7 @@ class UserMediaService {
       if (apiResponse.data.isNotEmpty) {
         print('UserMediaService: First item data: ${apiResponse.data.first.mediaId} - ${apiResponse.data.first.secureUrl}');
         print('UserMediaService: First item fileType: ${apiResponse.data.first.fileType}');
+        print('UserMediaService: REAL POST COUNT: ${apiResponse.data.length} total media items');
       } else {
         print('UserMediaService: No media data returned for userId: $userId');
         print('UserMediaService: This means either:');
@@ -28,6 +37,7 @@ class UserMediaService {
         print('  2. API returned empty data');
         print('  3. User ID mismatch (check if you uploaded posts with different user ID)');
         print('  4. Media API endpoint might not exist or be working');
+        print('UserMediaService: REAL POST COUNT: 0 (no posts found)');
       }
       
       if (apiResponse.success && apiResponse.data.isNotEmpty) {
@@ -154,28 +164,53 @@ class UserMediaService {
         );
       } else {
         print('UserMediaService: API returned no media or failed for userId: $userId');
+        print('UserMediaService: API success: ${apiResponse.success}, Data length: ${apiResponse.data.length}');
         
-        // Try alternative approach - check if there are separate post/reel APIs
-        print('UserMediaService: Trying alternative approach - checking for separate post/reel APIs');
+        // Enhanced error handling - provide more specific error information
+        if (!apiResponse.success) {
+          print('UserMediaService: API call failed - this might indicate:');
+          print('  1. Server is down or unreachable');
+          print('  2. Invalid user ID format');
+          print('  3. Authentication issues');
+          print('  4. API endpoint not implemented');
+        } else if (apiResponse.data.isEmpty) {
+          print('UserMediaService: API call succeeded but returned empty data - this means:');
+          print('  1. User has no posts uploaded');
+          print('  2. User ID is correct but no media exists');
+          print('  3. This is normal for new users');
+        }
         
-        // For now, return empty results with a note about the issue
-        print('UserMediaService: Returning empty results - media API might not be implemented yet');
+        // Return empty results with success=true to avoid breaking the UI
+        // The UI will show 0 posts/reels which is correct behavior
         return UserMediaResponse(
           stories: [],
           posts: [],
           reels: [],
-          success: true, // Still return success to avoid breaking the UI
+          success: true, // Return success to avoid breaking the UI
         );
       }
     } catch (e) {
       print('UserMediaService: Error fetching user media: $e');
-      print('UserMediaService: This might indicate that the media API endpoint is not available');
+      print('UserMediaService: Exception type: ${e.runtimeType}');
       
+      // Enhanced error handling for different types of exceptions
+      if (e.toString().contains('SocketException') || e.toString().contains('Connection')) {
+        print('UserMediaService: Network connection error - server might be unreachable');
+      } else if (e.toString().contains('TimeoutException')) {
+        print('UserMediaService: Request timeout - server is slow or overloaded');
+      } else if (e.toString().contains('FormatException')) {
+        print('UserMediaService: Data format error - API response is malformed');
+      } else {
+        print('UserMediaService: Unknown error occurred');
+      }
+      
+      // Return empty results with success=false to indicate error
+      // But still return empty arrays to prevent UI crashes
       return UserMediaResponse(
         stories: [],
         posts: [],
         reels: [],
-        success: false,
+        success: false, // Indicate error occurred
       );
     }
   }
@@ -205,6 +240,63 @@ class UserMediaService {
   }) async {
     final response = await getUserMedia(userId: userId, token: token);
     return response.reels;
+  }
+
+  /// Force refresh user media data - ensures latest post counts are shown
+  static Future<UserMediaResponse> forceRefreshUserMedia({
+    required String userId,
+    String? token,
+  }) async {
+    print('UserMediaService: Force refreshing media data for userId: $userId');
+    // Clear any potential cache and fetch fresh data
+    return await getUserMedia(userId: userId, token: token);
+  }
+
+  /// Get real-time post count for a user (posts only, not reels)
+  static Future<int> getRealPostCount({
+    required String userId,
+    String? token,
+  }) async {
+    try {
+      final response = await getUserMedia(userId: userId, token: token);
+      final postCount = response.posts.length;
+      print('UserMediaService: Real post count for $userId: $postCount');
+      return postCount;
+    } catch (e) {
+      print('UserMediaService: Error getting real post count: $e');
+      return 0;
+    }
+  }
+
+  /// Get real-time reel count for a user (videos only, not posts)
+  static Future<int> getRealReelCount({
+    required String userId,
+    String? token,
+  }) async {
+    try {
+      final response = await getUserMedia(userId: userId, token: token);
+      final reelCount = response.reels.length;
+      print('UserMediaService: Real reel count for $userId: $reelCount');
+      return reelCount;
+    } catch (e) {
+      print('UserMediaService: Error getting real reel count: $e');
+      return 0;
+    }
+  }
+
+  /// Clear any cached data for a specific user (useful when posts are uploaded/deleted)
+  static void clearUserCache(String userId) {
+    print('UserMediaService: Clearing cache for user: $userId');
+    // Since we're using force refresh, we don't have persistent cache
+    // But we can notify listeners that data should be refreshed
+    notifyMediaUpdated(userId);
+  }
+
+  /// Clear all cached data (useful for logout or major changes)
+  static void clearAllCache() {
+    print('UserMediaService: Clearing all cached data');
+    // Reset the callback
+    onMediaUpdated = null;
   }
 
   /// Search for users (mock implementation for now)

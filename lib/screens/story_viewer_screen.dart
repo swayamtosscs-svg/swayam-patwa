@@ -384,6 +384,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             Builder(
               builder: (context) {
                 final story = widget.allStories[_currentIndex];
+                print('StoryViewerScreen: Displaying story for ${story.authorName}');
+                print('StoryViewerScreen: Author Avatar URL: ${story.authorAvatar}');
                 return Expanded(
                   child: Row(
                     children: [
@@ -392,18 +394,39 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                         child: CircleAvatar(
                           radius: 18,
                           backgroundColor: Colors.white,
-                          child: story.authorAvatar != null
+                          child: story.authorAvatar != null && story.authorAvatar!.isNotEmpty && story.authorAvatar != 'null'
                               ? ClipOval(
                                   child: Image.network(
                                     story.authorAvatar!,
                                     width: 36,
                                     height: 36,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => Icon(
-                                      Icons.person,
-                                      color: Colors.grey[600],
-                                      size: 18,
-                                    ),
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        width: 36,
+                                        height: 36,
+                                        child: Center(
+                                          child: SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      print('StoryViewerScreen: Error loading DP for ${story.authorName}: $error');
+                                      print('StoryViewerScreen: DP URL: ${story.authorAvatar}');
+                                      return Icon(
+                                        Icons.person,
+                                        color: Colors.grey[600],
+                                        size: 18,
+                                      );
+                                    },
                                   ),
                                 )
                               : Icon(

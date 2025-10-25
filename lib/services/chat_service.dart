@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/chat_response_model.dart';
 import '../models/message_model.dart';
 import '../models/chat_thread_model.dart';
 
@@ -176,7 +175,8 @@ class ChatService {
     try {
       print('ChatService: Fetching conversations from API for user: $currentUserId');
       
-      // Get all messages for the user using the enhanced-message endpoint
+      // Try different API endpoints to get conversations
+      // First try the enhanced-message endpoint without threadId
       final response = await http.get(
         Uri.parse('$baseUrl/enhanced-message?userId=$currentUserId&limit=100'),
         headers: {
@@ -281,10 +281,154 @@ class ChatService {
         }
       } else {
         print('ChatService: API request failed: ${response.statusCode} - ${response.body}');
-        return [];
+        // If API fails, try alternative endpoints
+        return await _tryAlternativeConversationEndpoints(token, currentUserId);
       }
     } catch (e) {
       print('ChatService: Error fetching conversations from API: $e');
+      return [];
+    }
+  }
+
+  /// Try alternative API endpoints to get conversations
+  static Future<List<ChatThread>> _tryAlternativeConversationEndpoints(
+    String token,
+    String currentUserId,
+  ) async {
+    try {
+      print('ChatService: Trying alternative conversation endpoints');
+      
+      // Try different endpoints that might work
+      final endpoints = [
+        '$baseUrl/messages?userId=$currentUserId&limit=100',
+        '$baseUrl/conversations?userId=$currentUserId',
+        '$baseUrl/chat-threads?userId=$currentUserId',
+      ];
+      
+      for (final endpoint in endpoints) {
+        try {
+          print('ChatService: Trying endpoint: $endpoint');
+          final response = await http.get(
+            Uri.parse(endpoint),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          );
+          
+          if (response.statusCode == 200) {
+            print('ChatService: Alternative endpoint succeeded: $endpoint');
+            final jsonResponse = jsonDecode(response.body);
+            
+            if (jsonResponse['success'] == true && jsonResponse['data'] != null) {
+              // Process the response similar to the main method
+              final messagesData = jsonResponse['data'] as List;
+              return await _processMessagesIntoConversations(messagesData, currentUserId);
+            }
+          } else {
+            print('ChatService: Alternative endpoint failed: $endpoint - ${response.statusCode}');
+          }
+        } catch (e) {
+          print('ChatService: Error with alternative endpoint $endpoint: $e');
+        }
+      }
+      
+      print('ChatService: All alternative endpoints failed, returning empty list');
+      return [];
+    } catch (e) {
+      print('ChatService: Error trying alternative endpoints: $e');
+      return [];
+    }
+  }
+
+  /// Process messages data into conversations
+  static Future<List<ChatThread>> _processMessagesIntoConversations(
+    List<dynamic> messagesData,
+    String currentUserId,
+  ) async {
+    try {
+      print('ChatService: Processing ${messagesData.length} messages into conversations');
+      
+      // Group messages by thread and create conversations
+      final threadMap = <String, List<Map<String, dynamic>>>{};
+      
+      for (final messageData in messagesData) {
+        final threadId = messageData['threadId'] ?? messageData['thread'] ?? '';
+        if (threadId.isNotEmpty) {
+          if (!threadMap.containsKey(threadId)) {
+            threadMap[threadId] = [];
+          }
+          threadMap[threadId]!.add(messageData);
+        }
+      }
+      
+      // Create ChatThread objects from grouped messages
+      final conversations = <ChatThread>[];
+      
+      for (final entry in threadMap.entries) {
+        final threadId = entry.key;
+        final messages = entry.value;
+        
+        if (messages.isNotEmpty) {
+          // Sort messages by creation time to get the latest
+          messages.sort((a, b) {
+            final timeA = DateTime.parse(a['createdAt'] ?? DateTime.now().toIso8601String());
+            final timeB = DateTime.parse(b['createdAt'] ?? DateTime.now().toIso8601String());
+            return timeB.compareTo(timeA);
+          });
+          
+          final latestMessage = messages.first;
+          final sender = latestMessage['sender'];
+          final recipient = latestMessage['recipient'];
+          
+          // Determine the other user in the conversation
+          String otherUserId;
+          String otherUsername;
+          String otherFullName;
+          String otherAvatar;
+          
+          if (sender['_id'] == currentUserId) {
+            // Current user is sender, other user is recipient
+            otherUserId = recipient;
+            otherUsername = 'User';
+            otherFullName = 'User';
+            otherAvatar = '';
+          } else {
+            // Current user is recipient, other user is sender
+            otherUserId = sender['_id'] ?? '';
+            otherUsername = sender['username'] ?? 'User';
+            otherFullName = sender['fullName'] ?? 'User';
+            otherAvatar = sender['avatar'] ?? '';
+          }
+          
+          // Count unread messages
+          int unreadCount = 0;
+          for (final message in messages) {
+            if (message['recipient'] == currentUserId && 
+                (message['isRead'] == false || message['isRead'] == null)) {
+              unreadCount++;
+            }
+          }
+          
+          final conversation = ChatThread(
+            id: threadId,
+            userId: otherUserId,
+            username: otherUsername,
+            fullName: otherFullName,
+            avatar: otherAvatar,
+            lastMessage: latestMessage['content'] ?? '',
+            lastMessageTime: DateTime.parse(latestMessage['createdAt'] ?? DateTime.now().toIso8601String()),
+            unreadCount: unreadCount,
+          );
+          
+          conversations.add(conversation);
+        }
+      }
+      
+      print('ChatService: Created ${conversations.length} conversations from messages');
+      return conversations;
+    } catch (e) {
+      print('ChatService: Error processing messages into conversations: $e');
       return [];
     }
   }
@@ -477,7 +621,9 @@ class ChatService {
             fullName: threadData['fullName'] ?? '',
             avatar: threadData['avatar'] ?? '',
             lastMessage: threadData['lastMessage'] ?? '',
-            lastMessageTime: DateTime.parse(threadData['lastMessageTime']),
+            lastMessageTime: threadData['lastMessageTime'] != null 
+                ? DateTime.parse(threadData['lastMessageTime'])
+                : DateTime.now(),
             unreadCount: threadData['unreadCount'] ?? 0,
           );
           conversations.add(thread);
@@ -653,6 +799,111 @@ class ChatService {
       print('ChatService: Cleared ${keys.length} conversations');
     } catch (e) {
       print('ChatService: Error clearing conversations: $e');
+    }
+  }
+
+  /// Clear corrupted conversation data and start fresh
+  static Future<void> clearCorruptedConversations(String currentUserId) async {
+    try {
+      print('ChatService: Clearing corrupted conversations for user: $currentUserId');
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((key) => key.startsWith('conversation_${currentUserId}_')).toList();
+      
+      int corruptedCount = 0;
+      for (final key in keys) {
+        try {
+          final threadJson = prefs.getString(key);
+          if (threadJson != null) {
+            final threadData = jsonDecode(threadJson);
+            // Check if any required fields are null
+            if (threadData['lastMessageTime'] == null || 
+                threadData['userId'] == null ||
+                threadData['username'] == null) {
+              await prefs.remove(key);
+              corruptedCount++;
+              print('ChatService: Removed corrupted conversation: $key');
+            }
+          }
+        } catch (e) {
+          // If we can't parse the data, it's corrupted
+          await prefs.remove(key);
+          corruptedCount++;
+          print('ChatService: Removed corrupted conversation (parse error): $key');
+        }
+      }
+      
+      print('ChatService: Cleared $corruptedCount corrupted conversations');
+    } catch (e) {
+      print('ChatService: Error clearing corrupted conversations: $e');
+    }
+  }
+
+  /// Ensure all conversations are permanently stored and never lost
+  /// This method provides additional safety to prevent conversation loss
+  static Future<void> ensureConversationPersistence(String currentUserId) async {
+    try {
+      print('ChatService: Ensuring conversation persistence for user: $currentUserId');
+      
+      // Get all local conversations
+      final localConversations = await _getLocalConversations(currentUserId);
+      print('ChatService: Found ${localConversations.length} local conversations to ensure persistence');
+      
+      // Re-store each conversation to ensure it's properly saved
+      for (final conversation in localConversations) {
+        await _storeConversation(currentUserId, conversation);
+        print('ChatService: Re-stored conversation with ${conversation.fullName} to ensure persistence');
+      }
+      
+      // Also ensure thread IDs are cached
+      for (final conversation in localConversations) {
+        if (conversation.id.isNotEmpty && !conversation.id.startsWith('temp_')) {
+          await _cacheThreadId(currentUserId, conversation.userId, conversation.id);
+        }
+      }
+      
+      print('ChatService: Conversation persistence ensured for ${localConversations.length} conversations');
+    } catch (e) {
+      print('ChatService: Error ensuring conversation persistence: $e');
+    }
+  }
+
+  /// Get conversation count for debugging
+  static Future<int> getConversationCount(String currentUserId) async {
+    try {
+      final conversations = await _getLocalConversations(currentUserId);
+      return conversations.length;
+    } catch (e) {
+      print('ChatService: Error getting conversation count: $e');
+      return 0;
+    }
+  }
+
+  /// Backup all conversations to ensure they're never lost
+  static Future<void> backupConversations(String currentUserId) async {
+    try {
+      final conversations = await _getLocalConversations(currentUserId);
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Create a backup key
+      final backupKey = 'conversation_backup_${currentUserId}_${DateTime.now().millisecondsSinceEpoch}';
+      final backupData = {
+        'timestamp': DateTime.now().toIso8601String(),
+        'conversations': conversations.map((conv) => {
+          'id': conv.id,
+          'userId': conv.userId,
+          'username': conv.username,
+          'fullName': conv.fullName,
+          'avatar': conv.avatar,
+          'lastMessage': conv.lastMessage,
+          'lastMessageTime': conv.lastMessageTime.toIso8601String(),
+          'unreadCount': conv.unreadCount,
+        }).toList(),
+      };
+      
+      await prefs.setString(backupKey, jsonEncode(backupData));
+      print('ChatService: Backed up ${conversations.length} conversations to key: $backupKey');
+    } catch (e) {
+      print('ChatService: Error backing up conversations: $e');
     }
   }
 

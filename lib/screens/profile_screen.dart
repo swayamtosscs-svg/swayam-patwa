@@ -49,6 +49,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
       });
     });
     _checkVerificationStatus();
+    
+    // Listen for media updates to refresh post counts automatically
+    UserMediaService.onMediaUpdated = (String userId) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (userId == authProvider.userProfile?.id && mounted) {
+        print('ProfileScreen: Media updated for current user, refreshing...');
+        setState(() {}); // Trigger rebuild to refresh FutureBuilder
+      }
+    };
   }
 
   Future<void> _checkVerificationStatus() async {
@@ -309,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               ),
               SizedBox(height: isMobile ? 8 : 14),
               FutureBuilder<UserMediaResponse>(
-                future: UserMediaService.getUserMedia(userId: user.id),
+                future: UserMediaService.forceRefreshUserMedia(userId: user.id),
                 builder: (context, snapshot) {
                   int postsCount = user.postsCount;
                   int reelsCount = 0;
@@ -317,6 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   if (snapshot.hasData && snapshot.data!.success) {
                     postsCount = snapshot.data!.posts.length;
                     reelsCount = snapshot.data!.reels.length;
+                    print('ProfileScreen: REAL post count: $postsCount, REAL reel count: $reelsCount for ${user.username}');
                   }
                   
                   return Row(
@@ -909,7 +919,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     }
 
             return FutureBuilder<UserMediaResponse>(
-          future: UserMediaService.getUserMedia(userId: user.id),
+          future: UserMediaService.forceRefreshUserMedia(userId: user.id),
           builder: (context, snapshot) {
             // Debug: Log the user ID being used
             print('ProfileScreen Stats: Using user ID: ${user.id} for ${user.username}');
@@ -922,7 +932,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           reelsCount = snapshot.data!.reels.length;
           
           // Debug logging
-          print('Profile Stats: Total posts: ${snapshot.data!.posts.length}, Image posts: $postsCount, Reels: $reelsCount');
+          print('Profile Stats: REAL data - Total posts: ${snapshot.data!.posts.length}, Image posts: $postsCount, Reels: $reelsCount');
           for (final post in snapshot.data!.posts) {
             print('Profile Stats Post: ${post.id} - Type: ${post.type} - Caption: ${post.caption}');
           }
@@ -1171,7 +1181,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
     }
     
             return FutureBuilder<UserMediaResponse>(
-          future: UserMediaService.getUserMedia(userId: user.id),
+          future: UserMediaService.forceRefreshUserMedia(userId: user.id),
           builder: (context, snapshot) {
             // Debug: Log the user ID being used for posts tab
             print('ProfileScreen Posts Tab: Using user ID: ${user.id} for ${user.username}');
@@ -1213,7 +1223,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         final posts = userMedia.posts;
         
         // Debug logging
-        print('ProfileScreen Posts Tab: Found ${posts.length} posts from API for user ${user.id}');
+        print('ProfileScreen Posts Tab: Found ${posts.length} REAL posts from API for user ${user.id}');
         for (final post in posts) {
           print('ProfileScreen Posts Tab Post: ${post.id} - ${post.caption} - ${post.imageUrl} - Type: ${post.type}');
         }

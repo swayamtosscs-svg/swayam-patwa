@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
 import '../providers/auth_provider.dart';
-import '../models/message_model.dart';
-import '../models/user_model.dart';
 import '../models/chat_thread_model.dart';
 import '../services/chat_service.dart';
-import '../widgets/user_avatar_widget.dart';
 import '../widgets/dp_widget.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
@@ -65,11 +62,24 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       if (authProvider.authToken != null && authProvider.userProfile != null) {
         print('ChatListScreen: Loading chat threads for user: ${authProvider.userProfile!.id}');
         
+        // Clear any corrupted conversation data first
+        await ChatService.clearCorruptedConversations(authProvider.userProfile!.id);
+        
         // Use the new initialization method that handles both local and API conversations
         final threads = await ChatService.initializeConversations(
           currentUserId: authProvider.userProfile!.id,
           token: authProvider.authToken!,
         );
+        
+        // Ensure conversation persistence to prevent any loss
+        await ChatService.ensureConversationPersistence(authProvider.userProfile!.id);
+        
+        // Get the final conversation count for debugging
+        final conversationCount = await ChatService.getConversationCount(authProvider.userProfile!.id);
+        print('ChatListScreen: Final conversation count: $conversationCount');
+        
+        // Create a backup of conversations to ensure they're never lost
+        await ChatService.backupConversations(authProvider.userProfile!.id);
         
         if (mounted) {
           setState(() {

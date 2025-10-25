@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../services/reel_service.dart';
 import '../services/media_upload_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/user_media_service.dart';
 import '../models/reel_model.dart';
 import '../models/post_model.dart';
 import '../providers/auth_provider.dart';
@@ -229,6 +230,15 @@ class _ReelUploadScreenState extends State<ReelUploadScreen> {
           
           // Show success message
           _showSuccessSnackBar('Reel uploaded successfully! Check your profile.');
+          
+          // Notify that media has been updated for this user
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          final currentUserId = authProvider.userProfile?.id;
+          if (currentUserId != null) {
+            UserMediaService.notifyMediaUpdated(currentUserId);
+            // Also clear any cached data
+            UserMediaService.clearUserCache(currentUserId);
+          }
           
         } else {
           // Even if reel service fails, we still have the video uploaded

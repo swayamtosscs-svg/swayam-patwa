@@ -212,6 +212,7 @@ class StoryWidget extends StatelessWidget {
   }
 
   Widget _buildUserDP(String dpUrl) {
+    print('StoryWidget: Loading user DP from URL: $dpUrl');
     return CachedNetworkImage(
       imageUrl: dpUrl,
       fit: BoxFit.cover,

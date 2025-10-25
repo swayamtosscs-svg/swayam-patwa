@@ -12,6 +12,8 @@ import '../services/baba_page_reel_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/dp_service.dart';
 import '../services/user_media_service.dart';
+import '../services/feed_refresh_service.dart';
+import '../services/follow_state_service.dart';
 import '../widgets/user_comment_dialog.dart';
 import '../widgets/video_player_widget.dart';
 import '../screens/user_profile_screen.dart';
@@ -973,9 +975,22 @@ class _ReelsScreenState extends State<ReelsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isCurrentlyFollowing ? 'Unfollowed ${reel.username}' : 'Following ${reel.username}'),
-            backgroundColor: const Color(0xFF6366F1),
+            backgroundColor: isCurrentlyFollowing ? Colors.orange : Colors.green,
+            duration: const Duration(seconds: 2),
           ),
         );
+        
+        // Update follow state service
+        await FollowStateService.saveFollowState(
+          userId: Provider.of<AuthProvider>(context, listen: false).userProfile?.id ?? '',
+          pageId: reel.userId,
+          isFollowing: !isCurrentlyFollowing,
+        );
+        
+        // Trigger feed refresh to update home screen content
+        FeedRefreshService().refreshFeed();
+        
+        print('ReelsScreen: Follow state updated successfully and feed refresh triggered');
       }
     } catch (e) {
       print('ReelsScreen: Error toggling follow: $e');

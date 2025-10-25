@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../services/media_upload_service.dart';
 import '../services/post_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/user_media_service.dart';
 import '../models/post_model.dart';
 
 class PostUploadScreen extends StatefulWidget {
@@ -137,6 +138,12 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
           }
           
           _showSuccessSnackBar('Post created successfully!');
+          
+          // Notify that media has been updated for this user
+          UserMediaService.notifyMediaUpdated(currentUserId);
+          // Also clear any cached data
+          UserMediaService.clearUserCache(currentUserId);
+          
           // Navigate back
           Navigator.pop(context);
         } else {
