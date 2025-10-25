@@ -72,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Story> _stories = [];
   Map<String, List<Story>> _groupedStories = {}; // Grouped stories by user
   List<String> _followedUserIds = []; // Store followed user IDs for story filtering
+  bool _isFollowingBabaJi = false; // Cache Baba Ji follow status
   List<Post> _posts = []; // Cache posts to avoid regeneration
   bool _isLoading = false; // Single unified loading state for both stories and posts
   bool _isRefreshing = false; // Single loading state for refresh operations
@@ -635,20 +636,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Load all stories in parallel for maximum speed
           final futures = <Future<List<Story>>>[];
           
-          // Get current user's stories first (limit to 3 for speed)
+          // Get current user's stories first
           if (authProvider.userProfile != null) {
             futures.add(StoryService.getUserStories(
               authProvider.userProfile!.id,
               token: authProvider.authToken,
               page: 1,
-              limit: 3, // Further reduced limit for faster loading
+              limit: 10, // Increased limit to show more user stories
             ));
           }
           
-          // Get stories from followed users only (limit to 2 users for speed)
+          // Get stories from followed users
           // First ensure followed users list is populated
           await _getFollowedUsers(authProvider.authToken!);
           futures.add(_getFollowedUsersStories(authProvider.authToken!));
+          
+          // Check and cache Baba Ji follow status
+          _isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
+          print('HomeScreen: Cached Baba Ji follow status: $_isFollowingBabaJi');
           
           // Load Babaji stories only if user is following Baba Ji
           futures.add(_getBabajiStoriesIfFollowing(authProvider.authToken!, authProvider.userProfile?.id));
@@ -656,10 +661,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Wait for all story loading operations to complete in parallel
           final results = await Future.wait(futures);
           
-          // Combine all stories
-          for (final storyList in results) {
+          // Combine all stories with debug logging
+          for (int i = 0; i < results.length; i++) {
+            final storyList = results[i];
+            print('Story loading result $i: ${storyList.length} stories');
             allStories.addAll(storyList);
           }
+          
+          print('Total stories loaded: ${allStories.length}');
         } catch (e) {
           print('Error loading stories from story API: $e');
         }
@@ -667,10 +676,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       // Sort stories by creation date (newest first) - only if we have stories
       if (allStories.isNotEmpty) {
+        print('=== STORY PROCESSING ===');
+        print('Total stories before sorting: ${allStories.length}');
+        
         allStories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        print('Stories sorted by creation date');
         
         // Group stories by user
         _groupedStories = StoryService.groupStoriesByUser(allStories);
+        print('Stories grouped into ${_groupedStories.length} user sections');
         
         // Ensure all stories have DPs by fetching missing ones
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -739,29 +753,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final followedUsers = await _getFollowedUsers(token);
       if (followedUsers.isEmpty) {
+        print('No followed users found, returning empty stories list');
         return [];
       }
       
-      // Limit to first 2 followed users for faster loading
-      final limitedFollowedUsers = followedUsers.take(2).toList();
+      print('Loading stories from ${followedUsers.length} followed users');
+      
+      // Load stories from all followed users (increased limit)
       final futures = <Future<List<Story>>>[];
       
-      for (final userId in limitedFollowedUsers) {
+      for (final userId in followedUsers) {
         futures.add(StoryService.getUserStories(
           userId, // userId is already a String
           token: token,
           page: 1,
-          limit: 2, // Reduced limit for faster loading
+          limit: 10, // Increased limit to show more stories per user
         ));
       }
       
       final results = await Future.wait(futures);
       final allStories = <Story>[];
       
-      for (final storyList in results) {
+      for (int i = 0; i < results.length; i++) {
+        final storyList = results[i];
+        final userId = followedUsers[i];
+        print('Loaded ${storyList.length} stories from followed user $userId');
         allStories.addAll(storyList);
       }
       
+      print('Total stories loaded from followed users: ${allStories.length}');
       return allStories;
     } catch (e) {
       print('Error loading followed users stories: $e');
@@ -774,14 +794,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final isFollowingBabaJi = await _isUserFollowingBabaJi(token, userId);
       if (!isFollowingBabaJi) {
+        print('User is not following Baba Ji, skipping Baba Ji stories');
         return [];
       }
       
-      return await BabaPageStoryService.getAllBabajiStoriesAsStories(
+      print('User is following Baba Ji, loading Baba Ji stories...');
+      final babajiStories = await BabaPageStoryService.getAllBabajiStoriesAsStories(
         token: token,
         page: 1,
-        limit: 3, // Reduced limit for faster loading
+        limit: 10, // Increased limit to show more Baba Ji stories
       );
+      
+      print('Loaded ${babajiStories.length} Baba Ji stories');
+      return babajiStories;
     } catch (e) {
       print('Error loading Babaji stories: $e');
       return [];
@@ -855,11 +880,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Load Babaji stories for home page - only if user is following Baba Ji
           try {
             print('Checking if user is following Baba Ji...');
-            final isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
-            print('User is following Baba Ji: $isFollowingBabaJi');
+            _isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
+            print('User is following Baba Ji: $_isFollowingBabaJi');
             
             // Only load Baba Ji stories if user is following Baba Ji
-            if (isFollowingBabaJi) {
+            if (_isFollowingBabaJi) {
               print('=== LOADING BABA JI STORIES (USER IS FOLLOWING) ===');
               print('Token available: ${authProvider.authToken != null}');
               if (authProvider.authToken != null) {
@@ -1341,6 +1366,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       print('HomeScreen: Error getting followed users: $e');
       return [];
+    }
+  }
+
+  // Method to refresh Baba Ji follow status
+  Future<void> _refreshBabaJiFollowStatus() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.authToken != null && authProvider.userProfile != null) {
+        _isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile!.id);
+        print('HomeScreen: Refreshed Baba Ji follow status: $_isFollowingBabaJi');
+      }
+    } catch (e) {
+      print('HomeScreen: Error refreshing Baba Ji follow status: $e');
     }
   }
 
@@ -2183,15 +2221,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     // Filter: show only followed users' stories; exclude current user
                     print('HomeScreen: Debug - _followedUserIds: $_followedUserIds');
                     print('HomeScreen: Debug - _groupedStories keys: ${_groupedStories.keys.toList()}');
+                    print('HomeScreen: Debug - Total grouped stories: ${_groupedStories.length}');
+                    print('HomeScreen: Debug - _isFollowingBabaJi: $_isFollowingBabaJi');
                     
                     final List<String> displayUserIds = _groupedStories.keys.where((userId) {
                       final stories = _groupedStories[userId]!;
-                      if (stories.isEmpty) return false;
-                      if (stories.first.authorId == currentUserId) return false;
-                      // at least one valid media story
-                      if (!stories.any((s) => (s.media.isNotEmpty && s.media != 'null'))) return false;
+                      print('HomeScreen: Debug - Checking user $userId with ${stories.length} stories');
                       
-                      // Check if this is Baba Ji content (always show if user is following Baba Ji)
+                      if (stories.isEmpty) {
+                        print('HomeScreen: Debug - User $userId has no stories, skipping');
+                        return false;
+                      }
+                      if (stories.first.authorId == currentUserId) {
+                        print('HomeScreen: Debug - User $userId is current user, skipping');
+                        return false;
+                      }
+                      // at least one valid media story
+                      if (!stories.any((s) => (s.media.isNotEmpty && s.media != 'null'))) {
+                        print('HomeScreen: Debug - User $userId has no valid media stories, skipping');
+                        return false;
+                      }
+                      
+                      // Check if this is Baba Ji content - only show if user is following Baba Ji
                       final isBabaJiContent = stories.any((story) => 
                         story.authorName.toLowerCase().contains('baba') || 
                         story.authorUsername.toLowerCase().contains('babaji') ||
@@ -2200,17 +2251,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       );
                       
                       if (isBabaJiContent) {
-                        print('HomeScreen: Debug - Baba Ji content detected for user $userId (${stories.first.authorUsername}) - Always showing');
-                        return true; // Always show Baba Ji content
+                        // Only show Baba Ji content if user is following Baba Ji
+                        // Use cached Baba Ji follow status
+                        print('HomeScreen: Debug - Baba Ji content detected for user $userId (${stories.first.authorUsername}) - isFollowingBabji: $_isFollowingBabaJi');
+                        return _isFollowingBabaJi; // Only show if following Baba Ji
                       }
                       
                       // Only show stories from users that current user is following
                       final isFollowing = _followedUserIds.contains(userId);
                       print('HomeScreen: Debug - User $userId (${stories.first.authorUsername}) - isFollowing: $isFollowing');
                       return isFollowing;
-                    }).toList()
+                    }).toList();
+                    
+                    print('HomeScreen: Debug - Final displayUserIds count: ${displayUserIds.length}');
+                    print('HomeScreen: Debug - Display user IDs: $displayUserIds');
+                    
                     // Sort by most recent story time desc
-                    ..sort((a, b) {
+                    displayUserIds.sort((a, b) {
                       final aLatest = _groupedStories[a]!
                           .map((s) => s.createdAt)
                           .fold<DateTime>(DateTime.fromMillisecondsSinceEpoch(0), (prev, dt) => dt.isAfter(prev) ? dt : prev);

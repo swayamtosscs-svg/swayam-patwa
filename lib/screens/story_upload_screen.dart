@@ -63,12 +63,13 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
         _showPermissionDialog();
         return false;
       } else {
-        _showErrorSnackBar('Camera permission denied. Please enable camera access to take photos.');
+        // Don't show error message immediately, let the calling method handle it
+        print('StoryUploadScreen: Camera permission denied');
         return false;
       }
     } catch (e) {
       print('StoryUploadScreen: Error checking camera permission: $e');
-      _showErrorSnackBar('Error checking camera permission: $e');
+      // Don't show error message here, let the calling method handle it
       return false;
     }
   }
@@ -178,22 +179,39 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
 
       if (photo != null) {
         print('StoryUploadScreen: Photo captured successfully: ${photo.path}');
-        setState(() {
-          if (kIsWeb) {
-            // On web, use the photo object directly
-            _selectedMedia = photo;
-          } else {
-            // On mobile, convert to File
-            _selectedMedia = File(photo.path);
-          }
-          _mediaType = 'image';
-        });
         
-        // Show success message
-        _showSuccessSnackBar('Photo captured successfully!');
+        // Validate the captured photo
+        try {
+          final fileSize = await photo.length();
+          if (fileSize == 0) {
+            print('StoryUploadScreen: Captured photo is empty');
+            _showErrorSnackBar('Photo capture failed. Please try again.');
+            return;
+          }
+          
+          print('StoryUploadScreen: Photo size: $fileSize bytes');
+          
+          setState(() {
+            if (kIsWeb) {
+              // On web, use the photo object directly
+              _selectedMedia = photo;
+            } else {
+              // On mobile, convert to File
+              _selectedMedia = File(photo.path);
+            }
+            _mediaType = 'image';
+          });
+          
+          // Show success message
+          _showSuccessSnackBar('Photo captured successfully!');
+        } catch (validationError) {
+          print('StoryUploadScreen: Error validating captured photo: $validationError');
+          _showErrorSnackBar('Photo validation failed. Please try again.');
+        }
       } else {
         print('StoryUploadScreen: No photo captured (user cancelled)');
-        _showErrorSnackBar('No photo captured. Please try again.');
+        // Don't show error message for user cancellation
+        // _showErrorSnackBar('No photo captured. Please try again.');
       }
     } catch (e) {
       print('StoryUploadScreen: Error taking photo: $e');
@@ -206,6 +224,10 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
         errorMessage = 'Camera permission required. Please enable camera access in settings.';
       } else if (e.toString().contains('not available')) {
         errorMessage = 'Camera not available on this device.';
+      } else if (e.toString().contains('OutOfMemory')) {
+        errorMessage = 'Camera memory error. Please restart the app and try again.';
+      } else if (e.toString().contains('IOException')) {
+        errorMessage = 'Storage error. Please check device storage.';
       }
       
       _showErrorSnackBar(errorMessage);
@@ -310,6 +332,33 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
         return;
       }
 
+      // Validate media file
+      if (kIsWeb) {
+        // For web, validate XFile
+        if (_selectedMedia is XFile) {
+          final xFile = _selectedMedia as XFile;
+          final fileSize = await xFile.length();
+          if (fileSize == 0) {
+            _showErrorSnackBar('Selected media file is empty');
+            return;
+          }
+        }
+      } else {
+        // For mobile, validate File
+        if (_selectedMedia is File) {
+          final file = _selectedMedia as File;
+          if (!await file.exists()) {
+            _showErrorSnackBar('Selected media file not found');
+            return;
+          }
+          final fileSize = await file.length();
+          if (fileSize == 0) {
+            _showErrorSnackBar('Selected media file is empty');
+            return;
+          }
+        }
+      }
+
       // Upload story directly using the story service
       final result = await StoryService.uploadStoryFromFile(
         file: _selectedMedia!,
@@ -335,11 +384,29 @@ class _StoryUploadScreenState extends State<StoryUploadScreen> {
       }
     } catch (e) {
       print('StoryUploadScreen: Exception during upload: $e');
-      _showErrorSnackBar('Error uploading story: $e');
+      print('StoryUploadScreen: Exception type: ${e.runtimeType}');
+      
+      // Provide more specific error messages
+      String errorMessage = 'Error uploading story';
+      if (e.toString().contains('SocketException')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Upload timeout. Please try again.';
+      } else if (e.toString().contains('FormatException')) {
+        errorMessage = 'Invalid media format. Please choose a different file.';
+      } else if (e.toString().contains('Permission')) {
+        errorMessage = 'Permission denied. Please check app permissions.';
+      } else if (e.toString().contains('OutOfMemory')) {
+        errorMessage = 'File too large. Please choose a smaller file.';
+      }
+      
+      _showErrorSnackBar(errorMessage);
     } finally {
-      setState(() {
-        _isUploading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 

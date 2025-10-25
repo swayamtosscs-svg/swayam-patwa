@@ -336,7 +336,24 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     try {
       print('DPWidget: Starting image cropping');
       
-      // Show cropping dialog
+      // Validate file exists and is readable
+      if (!await imageFile.exists()) {
+        print('DPWidget: Image file does not exist: ${imageFile.path}');
+        _showSnackBar('Selected image file not found', Colors.red);
+        return;
+      }
+      
+      // Check file size to prevent crashes
+      final fileSize = await imageFile.length();
+      if (fileSize == 0) {
+        print('DPWidget: Image file is empty');
+        _showSnackBar('Selected image file is empty', Colors.red);
+        return;
+      }
+      
+      print('DPWidget: Image file size: $fileSize bytes');
+      
+      // Show cropping dialog with proper error handling
       final CroppedFile? croppedFile = await ImageCropper().cropImage(
         sourcePath: imageFile.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1), // Square crop for profile picture
@@ -379,16 +396,45 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       if (croppedFile != null) {
         print('DPWidget: Image cropped successfully: ${croppedFile.path}');
         final croppedImageFile = File(croppedFile.path);
-        await _uploadImage(croppedImageFile);
+        
+        // Validate cropped file
+        if (await croppedImageFile.exists()) {
+          await _uploadImage(croppedImageFile);
+        } else {
+          print('DPWidget: Cropped file does not exist');
+          _showSnackBar('Cropping failed, please try again', Colors.red);
+        }
       } else {
         print('DPWidget: Image cropping cancelled');
         _showSnackBar('Image cropping cancelled', Colors.orange);
       }
     } catch (e) {
       print('DPWidget: Error cropping image: $e');
-      // If cropping fails, upload original image
-      _showSnackBar('Cropping failed, uploading original image', Colors.orange);
-      await _uploadImage(imageFile);
+      print('DPWidget: Error type: ${e.runtimeType}');
+      
+      // Provide more specific error messages
+      String errorMessage = 'Cropping failed, uploading original image';
+      if (e.toString().contains('Permission')) {
+        errorMessage = 'Permission denied. Please check app permissions.';
+      } else if (e.toString().contains('No such file')) {
+        errorMessage = 'Image file not found. Please try again.';
+      } else if (e.toString().contains('OutOfMemory')) {
+        errorMessage = 'Image too large. Please choose a smaller image.';
+      }
+      
+      _showSnackBar(errorMessage, Colors.orange);
+      
+      // If cropping fails, try to upload original image with validation
+      try {
+        if (await imageFile.exists()) {
+          await _uploadImage(imageFile);
+        } else {
+          _showSnackBar('Original image file not found', Colors.red);
+        }
+      } catch (uploadError) {
+        print('DPWidget: Error uploading original image: $uploadError');
+        _showSnackBar('Failed to upload image. Please try again.', Colors.red);
+      }
     }
   }
 
@@ -397,6 +443,34 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     print('DPWidget: User ID: ${widget.userId}');
     print('DPWidget: Token available: ${widget.token.isNotEmpty}');
     print('DPWidget: Image file path: ${imageFile.path}');
+    
+    // Validate inputs before starting upload
+    if (widget.userId.isEmpty) {
+      _showSnackBar('User ID is required', Colors.red);
+      return;
+    }
+    
+    if (widget.token.isEmpty) {
+      _showSnackBar('Authentication token is required', Colors.red);
+      return;
+    }
+    
+    if (!await imageFile.exists()) {
+      _showSnackBar('Image file not found', Colors.red);
+      return;
+    }
+    
+    final fileSize = await imageFile.length();
+    if (fileSize == 0) {
+      _showSnackBar('Image file is empty', Colors.red);
+      return;
+    }
+    
+    // Check file size limit (10MB)
+    if (fileSize > 10 * 1024 * 1024) {
+      _showSnackBar('Image file is too large. Please choose a smaller image.', Colors.red);
+      return;
+    }
     
     setState(() {
       _isLoading = true;
@@ -416,33 +490,73 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         final data = response['data'];
         print('DPWidget: Upload successful, data: $data');
         
-        setState(() {
-          _localImageUrl = data['dpUrl'];
-          _fileName = data['fileName'];
-          _filePath = data['publicUrl']; // Store the publicUrl as filePath
-          _isLoading = false;
-        });
+        // Validate response data
+        if (data != null && data['dpUrl'] != null && data['dpUrl'].toString().isNotEmpty) {
+          setState(() {
+            _localImageUrl = data['dpUrl'];
+            _fileName = data['fileName'];
+            _filePath = data['publicUrl']; // Store the publicUrl as filePath
+            _isLoading = false;
+          });
 
-        // Notify parent about the change
-        widget.onImageChanged(data['dpUrl']);
+          // Notify parent about the change
+          widget.onImageChanged(data['dpUrl']);
 
-        _showSnackBar('Display picture uploaded successfully!', Colors.green);
+          _showSnackBar('Display picture uploaded successfully!', Colors.green);
+        } else {
+          print('DPWidget: Invalid response data');
+          setState(() {
+            _isLoading = false;
+          });
+          _showSnackBar('Upload successful but invalid response data', Colors.orange);
+        }
       } else {
         print('DPWidget: Upload failed: ${response['message']}');
         setState(() {
           _isLoading = false;
         });
-        _showSnackBar(
-          response['message'] ?? 'Failed to upload display picture',
-          Colors.red,
-        );
+        
+        // Provide more specific error messages
+        String errorMessage = response['message'] ?? 'Failed to upload display picture';
+        if (response['error'] != null) {
+          switch (response['error']) {
+            case 'Unauthorized':
+              errorMessage = 'Authentication failed. Please login again.';
+              break;
+            case 'File Too Large':
+              errorMessage = 'Image file is too large. Please choose a smaller image.';
+              break;
+            case 'Upload Error':
+              errorMessage = 'Network error. Please check your internet connection.';
+              break;
+          }
+        }
+        
+        _showSnackBar(errorMessage, Colors.red);
       }
     } catch (e) {
       print('DPWidget: Error uploading image: $e');
+      print('DPWidget: Error type: ${e.runtimeType}');
+      
       setState(() {
         _isLoading = false;
       });
-      _showSnackBar('Error uploading image: $e', Colors.red);
+      
+      // Provide more specific error messages
+      String errorMessage = 'Error uploading image';
+      if (e.toString().contains('SocketException')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMessage = 'Upload timeout. Please try again.';
+      } else if (e.toString().contains('FormatException')) {
+        errorMessage = 'Invalid image format. Please choose a different image.';
+      } else if (e.toString().contains('Permission')) {
+        errorMessage = 'Permission denied. Please check app permissions.';
+      } else {
+        errorMessage = 'Upload failed. Please try again.';
+      }
+      
+      _showSnackBar(errorMessage, Colors.red);
     }
   }
 
