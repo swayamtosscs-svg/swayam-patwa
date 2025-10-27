@@ -374,7 +374,22 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               ),
             ),
             if (thread.unreadCount > 0) ...[
-              const SizedBox(width: 8),
+              // Dot indicator for new messages
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(left: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Number badge (optional, can be removed if only dot needed)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(

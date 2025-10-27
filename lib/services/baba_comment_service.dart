@@ -202,7 +202,7 @@ class BabaCommentService {
     required String postId,
     required String babaPageId,
     int page = 1,
-    int limit = 50, // Increased limit for better performance
+    int limit = 1000, // Increased to show all comments including old ones
     String? token,
   }) async {
     try {
@@ -214,9 +214,9 @@ class BabaCommentService {
         'Cache-Control': 'no-cache', // Ensure fresh data
       };
       
-      if (token != null) {
-        headers['Authorization'] = 'Bearer $token';
-      }
+      // DON'T pass Authorization header when fetching comments
+      // The server filters by userId from the token, which only returns current user's comments
+      // We want ALL comments for the post, not just the current user's
       
       // Add timeout for faster failure detection
       final response = await http.get(
@@ -294,7 +294,7 @@ class BabaCommentService {
     required String reelId,
     required String babaPageId,
     int page = 1,
-    int limit = 50, // Increased limit for better performance
+    int limit = 1000, // Increased to show all comments including old ones
     String? token,
   }) async {
     try {
@@ -306,9 +306,9 @@ class BabaCommentService {
         'Cache-Control': 'no-cache', // Ensure fresh data
       };
       
-      if (token != null) {
-        headers['Authorization'] = 'Bearer $token';
-      }
+      // DON'T pass Authorization header when fetching comments
+      // The server filters by userId from the token, which only returns current user's comments
+      // We want ALL comments for the post, not just the current user's
       
       // Add timeout for faster failure detection
       final response = await http.get(

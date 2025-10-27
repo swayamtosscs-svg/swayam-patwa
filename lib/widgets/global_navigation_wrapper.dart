@@ -24,33 +24,25 @@ class GlobalNavigationWrapper extends StatefulWidget {
 
 class _GlobalNavigationWrapperState extends State<GlobalNavigationWrapper> {
   int _currentIndex = 0;
-  late PageController _pageController;
+  // Lazy load pages - only create them when needed
+  final Map<int, Widget> _initializedPages = {};
+  
+  // Store initial index to load only that screen first
+  int get _initialScreenIndex => widget.initialIndex ?? 0;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex ?? 0;
-    _pageController = PageController(initialPage: _currentIndex);
+    _currentIndex = _initialScreenIndex;
+    
+    // Only initialize the initial screen immediately
+    if (_initializedPages[_initialScreenIndex] == null) {
+      _initializedPages[_initialScreenIndex] = _createPage(_initialScreenIndex);
+      print('GlobalNavigation: Initialized only screen $_initialScreenIndex');
+    }
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  Widget _getPageForIndex(int index) {
+  Widget _createPage(int index) {
     switch (index) {
       case 0:
         return const HomeScreen();
@@ -64,9 +56,21 @@ class _GlobalNavigationWrapperState extends State<GlobalNavigationWrapper> {
         return const LiveStreamScreen();
       case 5:
         return const ProfileUI();
-default:
+      default:
         return const HomeScreen();
     }
+  }
+
+  void _onTabTapped(int index) {
+    // Only initialize the page if it hasn't been initialized yet
+    if (_initializedPages[index] == null) {
+      print('GlobalNavigation: Lazy loading screen $index');
+      _initializedPages[index] = _createPage(index);
+    }
+    
+    setState(() {
+      _currentIndex = index;
+    });
   }
 
   @override
@@ -74,21 +78,12 @@ default:
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return Scaffold(
-          body: PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
-            children: [
-              _getPageForIndex(0), // Home
-              _getPageForIndex(1), // Reels
-              _getPageForIndex(2), // Add
-              _getPageForIndex(3), // Baba Ji
-              _getPageForIndex(4), // Live Darshan
-              _getPageForIndex(5), // Account
-            ],
+          body: IndexedStack(
+            index: _currentIndex,
+            children: List.generate(6, (index) {
+              // Return the initialized page, or empty container if not loaded yet
+              return _initializedPages[index] ?? Container();
+            }),
           ),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(

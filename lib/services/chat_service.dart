@@ -1607,12 +1607,68 @@ class ChatService {
     try {
       print('ChatService: Marking messages as read for thread: $threadId');
       
-      // This API endpoint might not exist yet, so we'll just return true
-      // In a real implementation, you would call the appropriate API
-      return true;
+      // Call the API to mark messages as read
+      final response = await http.post(
+        Uri.parse('$baseUrl/mark-read'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'threadId': threadId,
+        }),
+      );
+      
+      print('ChatService: Mark as read response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['success'] == true) {
+          print('ChatService: Successfully marked messages as read');
+          
+          // Update local conversation unread count to 0
+          await _clearUnreadCount(threadId);
+          
+          return true;
+        } else {
+          print('ChatService: Mark as read failed: ${jsonResponse['message']}');
+          return false;
+        }
+      } else {
+        print('ChatService: Mark as read failed: ${response.statusCode}');
+        return false;
+      }
     } catch (e) {
       print('ChatService: Error marking messages as read: $e');
       return false;
+    }
+  }
+  
+  /// Clear unread count for a conversation thread
+  static Future<void> _clearUnreadCount(String threadId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().where((key) => key.startsWith('conversation_')).toList();
+      
+      for (final key in keys) {
+        try {
+          final conversationJson = prefs.getString(key);
+          if (conversationJson != null) {
+            final conversationData = jsonDecode(conversationJson);
+            if (conversationData['id'] == threadId) {
+              // Update unread count to 0
+              conversationData['unreadCount'] = 0;
+              await prefs.setString(key, jsonEncode(conversationData));
+              print('ChatService: Cleared unread count for thread: $threadId');
+              break;
+            }
+          }
+        } catch (e) {
+          print('ChatService: Error clearing unread count for key $key: $e');
+        }
+      }
+    } catch (e) {
+      print('ChatService: Error clearing unread count: $e');
     }
   }
 

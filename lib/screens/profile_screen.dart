@@ -1146,21 +1146,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
   }
 
   Widget _buildTabContent(UserModel user) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final isMobile = MediaQuery.of(context).size.width < 600;
-    
-    // Calculate available height more intelligently for mobile
-    double availableHeight;
-    if (isMobile) {
-      // For mobile: Use remaining space after header, tabs, and bottom navigation
-      availableHeight = screenHeight * 0.45; // Reduced from 0.6 to 0.45
-    } else {
-      // For desktop: Use original calculation
-      availableHeight = screenHeight * 0.6;
-    }
-    
-    return Container(
-        height: availableHeight,
+    // Remove fixed height to make it scrollable
+    return SizedBox(
+        height: MediaQuery.of(context).size.height * 2, // Make it very lengthy
         child: TabBarView(
           controller: _tabController,
           children: [
@@ -1244,21 +1232,20 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         
         return LayoutBuilder(
           builder: (context, constraints) {
-            final maxHeight = constraints.maxHeight;
-            final isSmallScreen = maxHeight < 600;
+            final isSmallScreen = constraints.maxHeight < 600;
             
-            return Container(
-              height: maxHeight,
-              child: GridView.builder(
-                padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.95,
-                ),
-                itemCount: posts.length,
-                itemBuilder: (context, index) {
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(), // Disable GridView scroll to allow parent scroll
+              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.95,
+              ),
+              itemCount: posts.length,
+              itemBuilder: (context, index) {
                   final post = posts[index];
                   return GestureDetector(
                     onTap: () {
@@ -1316,7 +1303,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     ),
                   );
                 },
-              ),
             );
           },
         );
@@ -1396,21 +1382,20 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
         
         return LayoutBuilder(
           builder: (context, constraints) {
-            final maxHeight = constraints.maxHeight;
-            final isSmallScreen = maxHeight < 600;
+            final isSmallScreen = constraints.maxHeight < 600;
             
-            return Container(
-              height: maxHeight,
-              child: GridView.builder(
-                padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 0.75,
-                ),
-                itemCount: reels.length,
-                itemBuilder: (context, index) {
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(), // Disable GridView scroll to allow parent scroll
+              padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.75,
+              ),
+              itemCount: reels.length,
+              itemBuilder: (context, index) {
                   final reel = reels[index];
                   return GestureDetector(
                     onTap: () {
@@ -1456,7 +1441,6 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                     ),
                   );
                 },
-              ),
             );
           },
         );
@@ -1503,35 +1487,34 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
           );
         }
         
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.5, // Fixed height
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: postsData.length,
-            itemBuilder: (context, index) {
-              final postData = postsData[index];
-              final post = _createPostFromData(postData);
-              return PostWidget(
-                post: post,
-                onComment: () {
-                  // Handle comment
-                },
-                onShare: () {
-                  // Handle share
-                },
-                onUserTap: () {
-                  _navigateToUserProfile(post);
-                },
-                onDelete: () {
-                  // Remove the deleted post from the list and refresh
-                  setState(() {
-                    postsData.removeWhere((p) => p['id'] == post.id || p['_id'] == post.id);
-                  });
-                  print('Post deleted: ${post.id}');
-                },
-              );
-            },
-          ),
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(), // Disable ListView scroll to allow parent scroll
+          padding: const EdgeInsets.all(16),
+          itemCount: postsData.length,
+          itemBuilder: (context, index) {
+            final postData = postsData[index];
+            final post = _createPostFromData(postData);
+            return PostWidget(
+              post: post,
+              onComment: () {
+                // Handle comment
+              },
+              onShare: () {
+                // Handle share
+              },
+              onUserTap: () {
+                _navigateToUserProfile(post);
+              },
+              onDelete: () {
+                // Remove the deleted post from the list and refresh
+                setState(() {
+                  postsData.removeWhere((p) => p['id'] == post.id || p['_id'] == post.id);
+                });
+                print('Post deleted: ${post.id}');
+              },
+            );
+          },
         );
       },
     );

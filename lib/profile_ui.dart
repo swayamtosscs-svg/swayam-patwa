@@ -670,8 +670,8 @@ class _ProfileUIState extends State<ProfileUI> {
 
       print('ProfileUI: Starting permanent deletion for post ID: ${post.id}');
 
-      // Call enhanced deletion API with verification
-      final resp = await ApiService.deleteMediaWithVerification(mediaId: post.id, token: token);
+      // Call deletion API directly
+      final resp = await ApiService.deleteMedia(mediaId: post.id, token: token);
       
       print('ProfileUI: Delete response: $resp');
       

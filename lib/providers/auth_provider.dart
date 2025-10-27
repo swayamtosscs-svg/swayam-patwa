@@ -9,6 +9,7 @@ import '../models/post_model.dart'; // Fixed import path
 import '../models/message_model.dart';
 import '../services/notification_service.dart';
 import '../services/dp_service.dart';
+import '../services/feed_cache_service.dart';
 import 'dart:io';
 import 'dart:convert';
 
@@ -679,6 +680,14 @@ class AuthProvider extends ChangeNotifier {
     
     // Clear local storage immediately
     await _clearAuthToken();
+    
+    // Clear feed cache to prevent showing previous user's data
+    try {
+      await FeedCacheService.clearAllCache();
+      print('AuthProvider: Cleared feed cache on logout');
+    } catch (e) {
+      print('AuthProvider: Error clearing feed cache: $e');
+    }
     
     // Call logout API in background (don't wait for it) - use stored values
     if (tokenToLogout != null && userIdToLogout != null) {

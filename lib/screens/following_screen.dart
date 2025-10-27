@@ -181,7 +181,7 @@ class _FollowingScreenState extends State<FollowingScreen> {
     if (_isLoading) {
       return Center(
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
@@ -210,12 +210,16 @@ class _FollowingScreenState extends State<FollowingScreen> {
                     strokeWidth: 2,
                   ),
                   SizedBox(height: 16),
-                  Text(
-                    'Loading following...',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 16,
-                      fontFamily: 'Poppins',
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text(
+                      'Loading following...',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontFamily: 'Poppins',
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],

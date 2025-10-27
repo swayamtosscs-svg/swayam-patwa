@@ -236,7 +236,7 @@ class _InAppVideoWidgetState extends State<InAppVideoWidget> {
                   videoUrl: widget.reel.video.url,
                   autoPlay: widget.autoplay,
                   looping: true,
-                  muted: false, // Always start unmuted (audio on)
+                  muted: true, // Audio disabled for baba page videos
                   showControls: true, // Show video controls
                 ),
 

@@ -207,7 +207,7 @@ class _ProfileReelWidgetState extends State<ProfileReelWidget> {
                 videoUrl: widget.reel.videoUrl!,
                 autoPlay: false,
                 looping: true,
-                muted: false,
+                muted: true, // Audio disabled for profile reels
                 showControls: false,
               ),
               

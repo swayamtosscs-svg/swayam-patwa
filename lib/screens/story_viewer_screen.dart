@@ -35,6 +35,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   late AnimationController _progressController;
   final Set<String> _viewedStoryIds = <String>{};
   int _lastIndex = 0;
+  
+  // Gesture detection
+  double _dragStartX = 0;
+  double _dragStartY = 0;
+  double _dragOffsetY = 0;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -65,27 +71,53 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Story Content
-          PageView.builder(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                // Mark previous story as viewed when leaving it
-                final prevStory = widget.allStories[_currentIndex];
-                _viewedStoryIds.add(prevStory.id);
-                _lastIndex = _currentIndex;
-                _currentIndex = index;
-              });
-              _startTimerForCurrentStory();
-            },
-            itemCount: widget.allStories.length,
-            itemBuilder: (context, index) {
-              final story = widget.allStories[index];
-              return _buildStoryPage(story);
-            },
-          ),
+      body: GestureDetector(
+        onVerticalDragStart: (details) {
+          _dragStartY = details.globalPosition.dy;
+          _isDragging = true;
+        },
+        onVerticalDragUpdate: (details) {
+          final deltaY = details.globalPosition.dy - _dragStartY;
+          if (deltaY > 0) { // Only allow downward drag
+            setState(() {
+              _dragOffsetY = deltaY;
+            });
+          }
+        },
+        onVerticalDragEnd: (details) {
+          final deltaY = details.velocity.pixelsPerSecond.dy;
+          if (_dragOffsetY > 100 || deltaY > 500) {
+            // Close the story viewer if dragged down significantly
+            Navigator.of(context).pop();
+          }
+          setState(() {
+            _dragOffsetY = 0;
+            _isDragging = false;
+          });
+        },
+        child: Transform.translate(
+          offset: Offset(0, _dragOffsetY),
+          child: Stack(
+            children: [
+              // Story Content
+              PageView.builder(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() {
+                    // Mark previous story as viewed when leaving it
+                    final prevStory = widget.allStories[_currentIndex];
+                    _viewedStoryIds.add(prevStory.id);
+                    _lastIndex = _currentIndex;
+                    _currentIndex = index;
+                  });
+                  _startTimerForCurrentStory();
+                },
+                itemCount: widget.allStories.length,
+                itemBuilder: (context, index) {
+                  final story = widget.allStories[index];
+                  return _buildStoryPage(story);
+                },
+              ),
           
           // Progress Bar - Always show for navigation
           Positioned(
@@ -143,7 +175,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           if (widget.allStories.isNotEmpty && 
               widget.allStories[_currentIndex].type.toLowerCase() != 'video')
             _buildBottomControls(),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -9,8 +9,8 @@ class VideoManager {
   // Track the currently playing video
   String? _currentPlayingVideoId;
   
-  // Callback to notify when video state changes
-  Function(String? videoId)? _onVideoStateChanged;
+  // Callbacks to notify when video state changes (support multiple listeners)
+  final List<Function(String? videoId)> _onVideoStateChangedCallbacks = [];
   
   // Track visibility of videos
   final Map<String, bool> _videoVisibility = {};
@@ -32,7 +32,17 @@ class VideoManager {
 
   // Register callback for video state changes
   void setOnVideoStateChanged(Function(String? videoId) callback) {
-    _onVideoStateChanged = callback;
+    // Add callback if not already added
+    if (!_onVideoStateChangedCallbacks.contains(callback)) {
+      _onVideoStateChangedCallbacks.add(callback);
+      print('VideoManager: Added callback, total callbacks: ${_onVideoStateChangedCallbacks.length}');
+    }
+  }
+
+  // Remove callback
+  void removeOnVideoStateChanged(Function(String? videoId) callback) {
+    _onVideoStateChangedCallbacks.remove(callback);
+    print('VideoManager: Removed callback, total callbacks: ${_onVideoStateChangedCallbacks.length}');
   }
 
   // Update video visibility
@@ -96,14 +106,25 @@ class VideoManager {
       
       // Pause previous video if any
       if (_currentPlayingVideoId != null) {
-        _onVideoStateChanged?.call(_currentPlayingVideoId);
+        _notifyAllCallbacks(_currentPlayingVideoId);
       }
       
       // Set new current video
       _currentPlayingVideoId = videoId;
       
       // Notify that this video should play
-      _onVideoStateChanged?.call(videoId);
+      _notifyAllCallbacks(videoId);
+    }
+  }
+  
+  // Helper to notify all registered callbacks
+  void _notifyAllCallbacks(String? videoId) {
+    for (final callback in _onVideoStateChangedCallbacks) {
+      try {
+        callback(videoId);
+      } catch (e) {
+        print('VideoManager: Error in callback: $e');
+      }
     }
   }
 
@@ -111,9 +132,13 @@ class VideoManager {
   void pauseCurrentVideo() {
     if (_currentPlayingVideoId != null) {
       print('VideoManager: Pausing current video $_currentPlayingVideoId');
-      _onVideoStateChanged?.call(_currentPlayingVideoId);
+      // First pause the current video
+      _notifyAllCallbacks(_currentPlayingVideoId);
       _currentPlayingVideoId = null;
     }
+    // Call with null to ensure ALL videos pause (including any that might have started)
+    print('VideoManager: Pausing ALL videos');
+    _notifyAllCallbacks(null);
   }
 
   // Check if a video is currently playing
@@ -153,7 +178,7 @@ class VideoManager {
   // Reset manager
   void reset() {
     _currentPlayingVideoId = null;
-    _onVideoStateChanged = null;
+    _onVideoStateChangedCallbacks.clear();
     _videoVisibility.clear();
     _videoPositions.clear();
     _currentPageIndex = null;

@@ -44,10 +44,27 @@ class _ReelsScreenState extends State<ReelsScreen> {
     super.initState();
     _setupVideoManager();
     _loadReels();
+    
+    // Listen to route changes to pause video when screen is pushed/popped
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = Navigator.of(context);
+      // Pause video when this screen is no longer active (e.g., when navigating to profile)
+      // This ensures video stops when navigating away from reels screen
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Pause video if modal route is active (paused)
+    if (ModalRoute.of(context)?.isCurrent == false) {
+      _videoManager.pauseCurrentVideo();
+    }
   }
 
   @override
   void dispose() {
+    _videoManager.pauseCurrentVideo(); // Pause video before disposing
     _videoManager.reset();
     _pageController.dispose();
     super.dispose();
@@ -448,6 +465,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
             videoId: reel.id, // Pass video ID for tracking
             autoPlay: index == _currentIndex,
             showControls: false,
+            muted: false, // Audio enabled in reels section
           ),
         ),
         
@@ -1121,6 +1139,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
   void _navigateToUserProfile(String userId, String username, bool isBabaJiPost, {BabaPage? babaPageData}) async {
     print('Navigating to profile for user: $userId, username: $username, isBabaJiPost: $isBabaJiPost');
     
+    // IMMEDIATELY pause all videos and audio before navigating
+    _videoManager.pauseCurrentVideo();
+    print('Paused current video before navigation');
+    
+    // Add small delay to ensure video player registers the pause command and stops audio
+    await Future.delayed(const Duration(milliseconds: 100));
+    
     try {
       if (isBabaJiPost && babaPageData != null) {
         print('Baba Ji profile detected with complete data, navigating to Baba Ji page screen');
@@ -1230,6 +1255,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
       } else {
         print('Regular user profile, navigating to user profile screen');
         // Navigate to regular user profile screen
+        // Already paused video at the start of the function
         Navigator.push(
           context,
           MaterialPageRoute(

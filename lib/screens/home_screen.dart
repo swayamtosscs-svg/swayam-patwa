@@ -37,6 +37,7 @@ import '../services/story_service.dart';
 import '../services/feed_service.dart';
 import '../services/realtime_feed_service.dart';
 import '../services/chat_service.dart';
+import '../services/user_media_service.dart';
 import '../models/chat_thread_model.dart';
 import '../screens/profile_screen.dart'; // Added import for ProfileScreen
 import '../screens/baba_pages_screen.dart'; // Added import for BabaPagesScreen
@@ -53,6 +54,7 @@ import '../screens/discover_users_screen.dart'; // Added import for DiscoverUser
 import '../screens/notifications_screen.dart'; // Added import for NotificationsScreen
 import '../utils/performance_test.dart';
 import '../services/feed_refresh_service.dart'; // Added import for FeedRefreshService
+import '../services/feed_cache_service.dart'; // Added import for FeedCacheService
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -68,7 +70,7 @@ class HomeScreen extends StatefulWidget {
   }
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   List<Story> _stories = [];
   Map<String, List<Story>> _groupedStories = {}; // Grouped stories by user
   List<String> _followedUserIds = []; // Store followed user IDs for story filtering
@@ -79,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasNewPosts = false; // Track if there are new posts available
   int _newPostsCount = 0; // Count of new posts
   bool _hasMorePosts = true; // Track if there are more posts to load
+  bool _dataLoadedOnce = false; // Track if data has been loaded once
   final ScrollController _scrollController = ScrollController();
   int _currentPostIndex = 0;
   static const int _postsPerPage = 5; // Load more posts per page
@@ -104,6 +107,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   DateTime? _lastApiCallTime;
   static const Duration _apiCallDebounceDelay = Duration(milliseconds: 1000);
 
+  String? _lastUserId; // Track last user ID to detect user changes
+  
+  @override
+  bool get wantKeepAlive => true; // Preserve state when navigating away
+  
   @override
   void initState() {
     super.initState();
@@ -119,6 +127,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     FeedRefreshService().registerRefreshCallback(refreshFeedOnFollowChange);
     
     // Skip heavy operations for ultra-fast loading
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Check if user has changed (e.g., after logout/login)
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserId = authProvider.userProfile?.id;
+    
+    if (currentUserId != null && currentUserId != _lastUserId && _lastUserId != null) {
+      print('HomeScreen: User changed detected. Previous: $_lastUserId, Current: $currentUserId');
+      print('HomeScreen: Resetting state and reloading data...');
+      
+      // Reset state flags
+      setState(() {
+        _dataLoadedOnce = false;
+        _posts.clear();
+        _stories.clear();
+        _groupedStories.clear();
+      });
+      
+      // Reload data for the new user
+      _loadInitialData();
+    }
+    
+    _lastUserId = currentUserId;
   }
   
   // Ensure Babaji stories are visible ONLY if user is following Babaji
@@ -209,27 +244,121 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     print('=== END MANUAL FORCE LOAD (FOLLOW CHECK) ===');
   }
 
-  // Ultra-fast initial data loading
+  // Ultra-fast initial data loading with persistent cache
   Future<void> _loadInitialData() async {
+    // Don't reload if data was already loaded
+    if (_dataLoadedOnce && _posts.isNotEmpty) {
+      print('HomeScreen: Data already loaded, skipping reload');
+      return;
+    }
+    
     setState(() {
       _isLoading = true;
     });
     
     try {
-      // Ultra-fast parallel loading with minimal data
-      await Future.wait([
-        _loadStoriesUltraFast(),
-        _loadInitialPostsUltraFast(),
-      ]);
-    } catch (e) {
-      print('HomeScreen: Error loading initial data: $e');
-    } finally {
+      // Get current user ID
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.userProfile?.id;
+      
+      print('HomeScreen: Starting load initial data for user: $currentUserId');
+      
+      // Step 1: Load from cache first (instant display) - with user ID check
+      print('HomeScreen: Loading data from persistent cache...');
+      final cachedPosts = await FeedCacheService.getCachedPosts(currentUserId: currentUserId);
+      final cachedStories = await FeedCacheService.getCachedStories(currentUserId: currentUserId);
+      
+      print('HomeScreen: Cache check - Posts: ${cachedPosts?.length ?? 0}, Stories: ${cachedStories?.length ?? 0}');
+      
+      if (cachedPosts != null && cachedPosts.isNotEmpty) {
+        setState(() {
+          _posts = cachedPosts;
+        });
+        print('HomeScreen: Loaded ${cachedPosts.length} posts from cache');
+      }
+      
+      if (cachedStories != null && cachedStories.isNotEmpty) {
+        setState(() {
+          _groupedStories = cachedStories;
+          _stories = cachedStories.values.expand((list) => list).toList();
+        });
+        print('HomeScreen: Loaded ${cachedStories.length} story groups from cache');
+      }
+      
+      // Step 2: If cache is empty, fetch from server before showing UI
+      if ((cachedPosts == null || cachedPosts.isEmpty) && (cachedStories == null || cachedStories.isEmpty)) {
+        print('HomeScreen: Cache is empty, fetching data from server immediately...');
+        await _fetchFreshDataInBackground();
+        print('HomeScreen: Finished fetching from server. Posts loaded: ${_posts.length}');
+      }
+      
+      // Step 3: Hide loading indicator after data is loaded
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _dataLoadedOnce = true;
+        });
+        print('HomeScreen: Loading complete. Showing UI with ${_posts.length} posts');
+      }
+      
+      // Step 4: If cache had data, update in background without showing loading
+      if ((cachedPosts != null && cachedPosts.isNotEmpty) || (cachedStories != null && cachedStories.isNotEmpty)) {
+        print('HomeScreen: Cache had data, fetching fresh data from server in background...');
+        _fetchFreshDataInBackground(); // Don't await - let it run in background
+      }
+      
+    } catch (e) {
+      print('HomeScreen: Error loading initial data: $e');
+      print('HomeScreen: Stack trace: ${StackTrace.current}');
+      // If cache loading fails, try loading from server
+      await _fetchFreshDataInBackground();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _dataLoadedOnce = true;
         });
       }
     }
+  }
+  
+  // Fetch fresh data from server in background
+  Future<void> _fetchFreshDataInBackground() async {
+    print('HomeScreen: _fetchFreshDataInBackground started');
+    try {
+      print('HomeScreen: Starting parallel load of stories and posts...');
+      await Future.wait([
+        _loadStoriesOptimized(), // Use optimized method to load stories from followed users
+        _loadInitialPostsUltraFast(),
+      ]);
+      
+      print('HomeScreen: Parallel load completed. Posts: ${_posts.length}, Stories: ${_groupedStories.length}');
+      
+      // Get current user ID for cache
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.userProfile?.id;
+      
+      // Save to cache after successful fetch with user ID
+      if (_posts.isNotEmpty) {
+        await FeedCacheService.cachePosts(_posts, userId: currentUserId);
+        print('HomeScreen: Cached ${_posts.length} posts');
+      }
+      if (_groupedStories.isNotEmpty) {
+        await FeedCacheService.cacheStories(_groupedStories, userId: currentUserId);
+        print('HomeScreen: Cached ${_groupedStories.length} story groups');
+      }
+      
+      // Update UI if data changed
+      if (mounted) {
+        setState(() {
+          // Data already updated by the loading methods
+        });
+        print('HomeScreen: UI updated with fresh data');
+      }
+    } catch (e) {
+      print('HomeScreen: Error fetching fresh data in background: $e');
+      print('HomeScreen: Stack trace: ${StackTrace.current}');
+    }
+    print('HomeScreen: _fetchFreshDataInBackground completed');
   }
 
   /// Validate that only followed users and Baba Ji content is being shown
@@ -292,12 +421,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       // Clear all caches to ensure fresh data
       FeedService.clearCache();
+      await FeedCacheService.clearAllCache();
       
       // Force refresh both posts and stories
       await Future.wait([
         _refreshFeedWithRealtime(),
         _loadStoriesOptimized(),
       ]);
+      
+      // Save to cache after successful refresh
+      if (_posts.isNotEmpty) {
+        await FeedCacheService.cachePosts(_posts);
+      }
+      if (_groupedStories.isNotEmpty) {
+        await FeedCacheService.cacheStories(_groupedStories);
+      }
       
       print('HomeScreen: Force refresh completed - showing latest followed users + Baba Ji content');
     } catch (e) {
@@ -314,11 +452,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     print('HomeScreen: Follow status changed - refreshing feed to update content...');
     
     try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.userProfile?.id;
+      
       // Clear caches to ensure fresh data
       FeedService.clearCache();
+      await FeedCacheService.clearAllCache();
       
       // Reload followed users list
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.authToken != null) {
         await _getFollowedUsers(authProvider.authToken!);
       }
@@ -328,6 +469,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _loadInitialPostsUltraFast(),
         _loadStoriesOptimized(),
       ]);
+      
+      // Save to cache after successful refresh with user ID
+      if (_posts.isNotEmpty) {
+        await FeedCacheService.cachePosts(_posts, userId: currentUserId);
+      }
+      if (_groupedStories.isNotEmpty) {
+        await FeedCacheService.cacheStories(_groupedStories, userId: currentUserId);
+      }
       
       print('HomeScreen: Feed refreshed after follow status change');
     } catch (e) {
@@ -376,20 +525,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     _lastApiCallTime = now;
     
+    print('HomeScreen: _loadInitialPostsUltraFast started');
+    
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       
       if (authProvider.userProfile != null) {
+        print('HomeScreen: Loading posts for user: ${authProvider.userProfile!.id}');
         // First load followed users to ensure proper filtering
         await _getFollowedUsers(authProvider.authToken!);
         
         // Load more posts initially to show content from all followed users
+        print('HomeScreen: Fetching posts from FeedService...');
         final posts = await FeedService.getMixedFeedPosts(
           token: authProvider.authToken!,
           currentUserId: authProvider.userProfile!.id,
           page: 1,
           limit: 10, // Load more posts to show content from all followed users
         );
+        
+        print('HomeScreen: Received ${posts.length} posts from FeedService');
 
         if (mounted) {
           setState(() {
@@ -397,13 +552,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _hasMorePosts = posts.length >= 10;
           });
           
+          print('HomeScreen: Set ${_posts.length} posts in state');
+          
           // Validate content filtering
           _validateContentFiltering();
         }
+      } else {
+        print('HomeScreen: userProfile is null, cannot load posts');
       }
     } catch (e) {
       print('HomeScreen: Error loading posts (ultra-fast): $e');
+      print('HomeScreen: Stack trace: ${StackTrace.current}');
     }
+    print('HomeScreen: _loadInitialPostsUltraFast completed');
   }
 
   // Ultra-optimized posts loading for refresh with better error handling
@@ -627,7 +788,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadStoriesOptimized() async {
 
     try {
-      List<Story> allStories = [];
+      // **PERSISTENT STORIES**: Keep existing stories before loading new ones
+      List<Story> existingStories = List.from(_stories);
+      Set<String> existingStoryIds = existingStories.map((s) => s.id).toSet();
+      print('HomeScreen: Preserving ${existingStories.length} existing stories');
+      
+      List<Story> newStories = [];
       
       // Load stories from server first (only if we have auth token)
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -655,7 +821,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _isFollowingBabaJi = await _isUserFollowingBabaJi(authProvider.authToken!, authProvider.userProfile?.id);
           print('HomeScreen: Cached Baba Ji follow status: $_isFollowingBabaJi');
           
-          // Load Babaji stories only if user is following Baba Ji
+          // Load Babaji stories - only if user is following Baba Ji
           futures.add(_getBabajiStoriesIfFollowing(authProvider.authToken!, authProvider.userProfile?.id));
           
           // Wait for all story loading operations to complete in parallel
@@ -665,14 +831,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           for (int i = 0; i < results.length; i++) {
             final storyList = results[i];
             print('Story loading result $i: ${storyList.length} stories');
-            allStories.addAll(storyList);
+            newStories.addAll(storyList);
           }
           
-          print('Total stories loaded: ${allStories.length}');
+          print('Total new stories loaded: ${newStories.length}');
         } catch (e) {
           print('Error loading stories from story API: $e');
         }
       }
+      
+      // **MERGE STORIES**: Combine existing and new stories, removing duplicates
+      List<Story> allStories = List.from(existingStories);
+      
+      // Add only new stories that don't already exist
+      for (var newStory in newStories) {
+        if (!existingStoryIds.contains(newStory.id)) {
+          allStories.add(newStory);
+          existingStoryIds.add(newStory.id);
+          print('HomeScreen: Added new story ${newStory.id} from ${newStory.authorName}');
+        } else {
+          print('HomeScreen: Skipping duplicate story ${newStory.id}');
+        }
+      }
+      
+      print('Total stories after merge: ${allStories.length} (existing: ${existingStories.length}, new: ${newStories.length})');
       
       // Sort stories by creation date (newest first) - only if we have stories
       if (allStories.isNotEmpty) {
@@ -789,9 +971,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Helper method to get Babaji stories only if user is following
+  // Helper method to get Babaji stories - only load if user is following Baba Ji
   Future<List<Story>> _getBabajiStoriesIfFollowing(String token, String? userId) async {
     try {
+      // Check if user is following Baba Ji before loading stories
       final isFollowingBabaJi = await _isUserFollowingBabaJi(token, userId);
       if (!isFollowingBabaJi) {
         print('User is not following Baba Ji, skipping Baba Ji stories');
@@ -1249,22 +1432,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _onAppResumed() {
+    // DISABLED AUTO-REFRESH: Only refresh manually (pull down to refresh)
     // Check for new posts when app comes to foreground
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.userProfile != null && authProvider.authToken != null) {
-      print('HomeScreen: App resumed - refreshing feed with followed users + Baba Ji content');
+      print('HomeScreen: App resumed - skipping auto-refresh (manual refresh only)');
       
+      // DISABLED: Only refresh when user manually pulls down
       // Trigger manual check for new posts (now includes Baba Ji)
-      RealtimeFeedService.manualCheck(
-        token: authProvider.authToken!,
-        currentUserId: authProvider.userProfile!.id,
-      );
+      // RealtimeFeedService.manualCheck(
+      //   token: authProvider.authToken!,
+      //   currentUserId: authProvider.userProfile!.id,
+      // );
       
-      // Also refresh stories when app resumes
-      _loadStoriesOptimized();
+      // DISABLED: Only refresh stories when user manually pulls down
+      // _loadStoriesOptimized();
       
-      // Force refresh posts to ensure latest content is shown
-      _refreshFeed();
+      // DISABLED: Only refresh feed when user manually pulls down
+      // _refreshFeed();
     }
   }
 
@@ -1431,6 +1616,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     // Get screen dimensions for responsive design
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
@@ -1555,6 +1742,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 icon: const Icon(Icons.search, color: Colors.black, size: 24),
                 tooltip: 'Search Users',
               ),
+              // Refresh Icon
+              IconButton(
+                onPressed: () {
+                  _refreshFeed();
+                },
+                icon: const Icon(Icons.refresh, color: Colors.black, size: 24),
+                tooltip: 'Refresh Feed',
+              ),
               // Notification Bell Widget
               const NotificationBellWidget(
                 size: 24,
@@ -1628,10 +1823,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: Stack(
         children: [
-          // Spiritual symbols overlay
-          Positioned.fill(
-            child: CustomPaint(
-              painter: SpiritualSymbolsPainter(),
+          // Blur effect overlay
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 3.0, sigmaY: 3.0),
+            child: Container(
+              color: Colors.transparent,
             ),
           ),
           SafeArea(
@@ -1928,7 +2124,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    _buildStatItem('Posts', postsCount.toString()),
+                    // Display real post count
+                    FutureBuilder<int>(
+                      future: userId.isNotEmpty ? UserMediaService.getRealPostCount(userId: userId) : Future.value(postsCount),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return SkeletonStatItem(width: 50, height: 20);
+                        }
+                        int realPostsCount = postsCount;
+                        if (snapshot.hasData && userId.isNotEmpty) {
+                          realPostsCount = snapshot.data ?? postsCount;
+                        }
+                        return _buildStatItem('Posts', realPostsCount.toString());
+                      },
+                    ),
                     const SizedBox(width: 16),
                     FutureBuilder<Map<String, int>>(
                       future: userId.isNotEmpty ? Provider.of<AuthProvider>(context, listen: false).getUserCounts(userId) : Future.value({'followers': 0, 'following': 0}),
@@ -2218,7 +2427,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       }
                     }
 
-                    // Filter: show only followed users' stories; exclude current user
+                    // Filter: show Baba Ji stories and followed users' stories (excluding current user - shown in "Your Story")
                     print('HomeScreen: Debug - _followedUserIds: $_followedUserIds');
                     print('HomeScreen: Debug - _groupedStories keys: ${_groupedStories.keys.toList()}');
                     print('HomeScreen: Debug - Total grouped stories: ${_groupedStories.length}');
@@ -2232,17 +2441,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         print('HomeScreen: Debug - User $userId has no stories, skipping');
                         return false;
                       }
+                      
+                      // EXCLUDE current user's stories (they're shown in "Your Story" tile at index 0)
                       if (stories.first.authorId == currentUserId) {
-                        print('HomeScreen: Debug - User $userId is current user, skipping');
-                        return false;
+                        print('HomeScreen: Debug - User $userId is current user, excluding from list (shown in Your Story tile)');
+                        return false; // Current user's stories are shown in "Your Story" tile
                       }
+                      
                       // at least one valid media story
                       if (!stories.any((s) => (s.media.isNotEmpty && s.media != 'null'))) {
                         print('HomeScreen: Debug - User $userId has no valid media stories, skipping');
                         return false;
                       }
                       
-                      // Check if this is Baba Ji content - only show if user is following Baba Ji
+                      // Check if this is Baba Ji content - only show if following Baba Ji
                       final isBabaJiContent = stories.any((story) => 
                         story.authorName.toLowerCase().contains('baba') || 
                         story.authorUsername.toLowerCase().contains('babaji') ||
@@ -2252,12 +2464,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       
                       if (isBabaJiContent) {
                         // Only show Baba Ji content if user is following Baba Ji
-                        // Use cached Baba Ji follow status
-                        print('HomeScreen: Debug - Baba Ji content detected for user $userId (${stories.first.authorUsername}) - isFollowingBabji: $_isFollowingBabaJi');
-                        return _isFollowingBabaJi; // Only show if following Baba Ji
+                        print('HomeScreen: Debug - Baba Ji content detected for user $userId (${stories.first.authorUsername}) - isFollowing: $_isFollowingBabaJi');
+                        return _isFollowingBabaJi; // Show if following Baba Ji
                       }
                       
-                      // Only show stories from users that current user is following
+                      // Show stories from users that current user is following
                       final isFollowing = _followedUserIds.contains(userId);
                       print('HomeScreen: Debug - User $userId (${stories.first.authorUsername}) - isFollowing: $isFollowing');
                       return isFollowing;
@@ -2289,7 +2500,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           return _buildAddStoryButton(currentUserStories: currentUserStories);
                         }
 
-                        // Get user story section (excluding current user)
+                        // Get user story section (now includes current user, Baba Ji, and followed users)
                         final userId = displayUserIds[index - 1];
                         final userStories = _groupedStories[userId]!;
                         final firstStory = userStories.first; // Use first story for user info

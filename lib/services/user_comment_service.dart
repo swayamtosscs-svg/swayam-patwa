@@ -59,15 +59,22 @@ class UserCommentService {
   static List<UserComment> _mergeComments(List<UserComment> serverComments, List<UserComment> localComments) {
     final Map<String, UserComment> commentMap = {};
     
-    // Add server comments first (they take priority)
+    // Filter out local comments that start with "local_" (these are offline-only comments)
+    final realLocalComments = localComments.where((comment) => !comment.id.startsWith('local_')).toList();
+    
+    // Add server comments first (they take priority) - these come from the database
     for (final comment in serverComments) {
-      commentMap[comment.id] = comment;
+      // Use a combination of userId+postId+content as a unique key since IDs might differ
+      final uniqueKey = '${comment.userId}_${comment.postId}_${comment.content.substring(0, comment.content.length > 50 ? 50 : comment.content.length)}';
+      commentMap[uniqueKey] = comment;
     }
     
-    // Add local comments that don't exist on server
-    for (final comment in localComments) {
-      if (!commentMap.containsKey(comment.id)) {
-        commentMap[comment.id] = comment;
+    // Add real local comments (that were synced to server) that don't exist in server list
+    // Only add if they're not duplicate
+    for (final comment in realLocalComments) {
+      final uniqueKey = '${comment.userId}_${comment.postId}_${comment.content.substring(0, comment.content.length > 50 ? 50 : comment.content.length)}';
+      if (!commentMap.containsKey(uniqueKey)) {
+        commentMap[uniqueKey] = comment;
       }
     }
     
@@ -83,17 +90,31 @@ class UserCommentService {
     required String postId,
     required String token,
     int page = 1,
-    int limit = 20,
+    int limit = 1000, // Increased to show all comments including old ones
+    bool forceRefresh = false, // Add option to force refresh from server
   }) async {
     try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/comments?page=$page&limit=$limit');
+      // Use the unified comment receive endpoint (same as baba comments)
+      final url = Uri.parse('$_baseUrl/comments/receive?postId=$postId&sortBy=createdAt&sortOrder=desc&limit=$limit&page=$page&_=${DateTime.now().millisecondsSinceEpoch}');
+      
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate', // Force fresh data
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      };
+      
+      // DON'T pass Authorization header when fetching comments
+      // The server filters by userId from the token, which only returns current user's comments
+      // We want ALL comments for the post, not just the current user's
       
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'Cache-Control': 'no-cache', // Ensure fresh data
+        headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout - please check your internet connection');
         },
       );
 
@@ -102,25 +123,41 @@ class UserCommentService {
       print('UserCommentService: Get comments response body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final apiResponse = UserCommentResponse.fromJson(data);
-        
-        // Always save API comments to local storage for persistence
-        await saveLocalComments(postId, apiResponse.comments);
-        
-        // Also merge with any local comments that might not be on server yet
-        final localComments = await getLocalComments(postId);
-        final mergedComments = _mergeComments(apiResponse.comments, localComments);
-        
-        // Save merged comments back to local storage
-        await saveLocalComments(postId, mergedComments);
-        
-        return UserCommentResponse(
-          success: true,
-          message: 'Comments loaded successfully',
-          comments: mergedComments,
-          pagination: apiResponse.pagination,
-        );
+        try {
+          final data = jsonDecode(response.body);
+          print('UserCommentService: Parsed response data: $data');
+          final apiResponse = UserCommentResponse.fromJson(data);
+          print('UserCommentService: Comment response - success: ${apiResponse.success}, comments count: ${apiResponse.comments.length}');
+          
+          // IMPORTANT: Replace local storage with server comments to ensure sync
+          // Clear any stale local data and use only server data for cross-device sync
+          await saveLocalComments(postId, apiResponse.comments);
+          print('UserCommentService: Saved ${apiResponse.comments.length} comments from server to local storage');
+          
+          return UserCommentResponse(
+            success: true,
+            message: 'Comments loaded successfully',
+            comments: apiResponse.comments,
+            pagination: apiResponse.pagination,
+          );
+        } catch (e) {
+          print('UserCommentService: Error parsing JSON response: $e');
+          print('UserCommentService: Response body: ${response.body}');
+          // If API fails, get comments from local storage
+          print('UserCommentService: API parsing failed, loading from local storage');
+          final localComments = await getLocalComments(postId);
+          return UserCommentResponse(
+            success: true,
+            message: 'Comments loaded (local)',
+            comments: localComments,
+            pagination: {
+              'currentPage': page,
+              'totalPages': 0,
+              'totalItems': localComments.length,
+              'itemsPerPage': limit,
+            },
+          );
+        }
       } else {
         // If API fails, get comments from local storage
         print('UserCommentService: API failed with ${response.statusCode}, loading from local storage');
@@ -160,37 +197,52 @@ class UserCommentService {
     required String userId,
     required String content,
     required String token,
+    required String userName,
   }) async {
     try {
-      final url = Uri.parse('$_baseUrl/posts/$postId/comments');
+      // Use the unified comment send endpoint (same as baba comments)
+      final url = Uri.parse('$_baseUrl/comments/send?userId=$userId');
+      
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
         body: jsonEncode({
-          'content': content,
           'userId': userId,
+          'postId': postId,
+          'content': content,
         }),
       );
 
       print('UserCommentService: Add comment - URL: $url');
+      print('UserCommentService: Add comment - PostId: $postId, UserId: $userId');
       print('UserCommentService: Add comment response status: ${response.statusCode}');
       print('UserCommentService: Add comment response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final result = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+        
         // Always save to local storage for persistence
-        if (result['data']?['comment'] != null) {
-          final comment = UserComment.fromJson(result['data']['comment']);
+        if (data['data']?['comment'] != null) {
+          // Handle comment response structure
+          final commentJson = data['data']['comment'];
+          final comment = UserComment.fromJson(commentJson);
+          print('UserCommentService: Comment successfully saved to server with ID: ${comment.id}');
           await addLocalComment(postId, comment);
           
-          // Also trigger a refresh to get all comments and ensure sync
+          // Also trigger a refresh to get all comments from server and ensure sync
+          print('UserCommentService: Refreshing comments from server...');
           await getComments(postId: postId, token: token);
+          print('UserCommentService: Comments refreshed from server');
         }
-        return result;
+        return data;
       } else {
         // If API fails, create local comment that will persist
         print('UserCommentService: Add comment API failed with ${response.statusCode}, creating persistent local comment');
@@ -199,7 +251,7 @@ class UserCommentService {
           content: content,
           userId: userId,
           postId: postId,
-          username: 'You', // Will be updated with actual username
+          username: userName,
           userAvatar: '',
           createdAt: DateTime.now(),
         );
@@ -221,7 +273,7 @@ class UserCommentService {
         content: content,
         userId: userId,
         postId: postId,
-        username: 'You',
+        username: userName,
         userAvatar: '',
         createdAt: DateTime.now(),
       );
@@ -246,40 +298,65 @@ class UserCommentService {
     required String token,
   }) async {
     try {
-      final url = Uri.parse('$_baseUrl/comments/$commentId');
+      // Use the unified comment delete endpoint (same as baba comments)
+      final url = Uri.parse('$_baseUrl/comments/delete?commentId=$commentId&userId=$userId');
+      
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       
       final response = await http.delete(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        headers: headers,
       );
 
       print('UserCommentService: Delete comment - URL: $url');
+      print('UserCommentService: Delete comment - CommentId: $commentId, UserId: $userId');
       print('UserCommentService: Delete comment response status: ${response.statusCode}');
       print('UserCommentService: Delete comment response body: ${response.body}');
 
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        final result = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201 || response.statusCode == 204) {
+        // Parse response if there's a body
+        Map<String, dynamic>? result;
+        try {
+          if (response.body.isNotEmpty) {
+            result = jsonDecode(response.body);
+          } else {
+            result = {'success': true, 'message': 'Comment deleted successfully'};
+          }
+        } catch (e) {
+          print('UserCommentService: Error parsing delete response: $e');
+          result = {'success': true, 'message': 'Comment deleted successfully'};
+        }
+        
         // Also remove from local storage
         await deleteLocalComment(postId, commentId);
+        print('UserCommentService: Comment deleted from server and local storage');
         return result;
       } else {
-        // If API fails, remove from local storage
-        print('UserCommentService: Delete comment API failed with ${response.statusCode}, removing from local storage');
+        print('UserCommentService: Delete comment API failed with ${response.statusCode}');
+        // Even if API fails, try to remove from local storage
         await deleteLocalComment(postId, commentId);
         return {
-          'success': true,
-          'message': 'Comment deleted successfully (local)',
+          'success': false,
+          'message': 'Failed to delete comment from server',
         };
       }
     } catch (e) {
-      print('UserCommentService: Error deleting comment: $e, removing from local storage');
-      await deleteLocalComment(postId, commentId);
+      print('UserCommentService: Error deleting comment: $e');
+      // Try to remove from local storage even on error
+      try {
+        await deleteLocalComment(postId, commentId);
+      } catch (localError) {
+        print('UserCommentService: Error deleting from local storage: $localError');
+      }
       return {
-        'success': true,
-        'message': 'Comment deleted successfully (local)',
+        'success': false,
+        'message': 'Error deleting comment: $e',
       };
     }
   }

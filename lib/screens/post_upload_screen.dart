@@ -43,7 +43,7 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
         imageQuality: 85,
       );
 
-      if (image != null) {
+      if (image != null && mounted) {
         setState(() {
           _selectedImage = File(image.path);
         });
@@ -62,7 +62,7 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
         imageQuality: 85,
       );
 
-      if (photo != null) {
+      if (photo != null && mounted) {
         setState(() {
           if (kIsWeb) {
             // On web, use the photo object directly
@@ -84,16 +84,22 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
       return;
     }
 
+    if (!mounted) return;
+    
     setState(() {
       _isUploading = true;
     });
 
     try {
+      // Check if widget is still mounted
+      if (!mounted) return;
+      
       // Get current user ID from AuthProvider
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final currentUserId = authProvider.userProfile?.id;
       
       if (currentUserId == null) {
+        if (!mounted) return;
         _showErrorSnackBar('User not authenticated');
         return;
       }
@@ -118,6 +124,9 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
         );
         
         if (postResponse.success) {
+          // Check if widget is still mounted before proceeding
+          if (!mounted) return;
+          
           // Save the post locally so it shows up in the profile
           if (postResponse.post != null) {
             await LocalStorageService.savePost(postResponse.post!);
@@ -137,6 +146,9 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
             await LocalStorageService.savePost(localPost);
           }
           
+          // Check again after async operations
+          if (!mounted) return;
+          
           _showSuccessSnackBar('Post created successfully!');
           
           // Notify that media has been updated for this user
@@ -147,21 +159,27 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
           // Navigate back
           Navigator.pop(context);
         } else {
+          if (!mounted) return;
           _showErrorSnackBar('Failed to create post: ${postResponse.message}');
         }
       } else {
+        if (!mounted) return;
         _showErrorSnackBar(uploadResponse.message ?? 'Media upload failed');
       }
     } catch (e) {
+      if (!mounted) return;
       _showErrorSnackBar('Error uploading post: $e');
     } finally {
-      setState(() {
-        _isUploading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -172,6 +190,7 @@ class _PostUploadScreenState extends State<PostUploadScreen> {
   }
 
   void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),

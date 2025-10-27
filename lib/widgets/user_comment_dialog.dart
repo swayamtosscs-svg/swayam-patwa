@@ -51,10 +51,15 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
 
+      print('UserCommentDialog: Loading comments from SERVER for post: ${widget.postId}');
+      
       final response = await UserCommentService.getComments(
         postId: widget.postId,
         token: token ?? '',
+        forceRefresh: true, // Always fetch from server
       );
+      
+      print('UserCommentDialog: Server returned ${response.comments.length} comments');
 
       if (response.success) {
         print('UserCommentDialog: Response successful, comments count: ${response.comments.length}');
@@ -102,12 +107,14 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
+      final userName = authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'User';
 
       final response = await UserCommentService.addComment(
         postId: widget.postId,
         userId: userId,
         content: content,
         token: token ?? '',
+        userName: userName,
       );
 
       if (response != null && response['success'] == true) {
@@ -201,6 +208,9 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
         token: token ?? '',
       );
 
+      // Always refresh comments after delete attempt to sync with server
+      await _loadComments(); // Refresh comments from server
+      
       if (response != null && response['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -208,12 +218,11 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
             backgroundColor: Colors.green,
           ),
         );
-        await _loadComments(); // Refresh comments
         widget.onCommentAdded?.call(); // Notify parent
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response?['message'] ?? 'Failed to delete comment'),
+            content: Text(response?['message'] ?? 'Failed to delete comment from server'),
             backgroundColor: Colors.red,
           ),
         );
@@ -851,15 +860,21 @@ class _UserCommentDialogState extends State<UserCommentDialog> {
     final currentUserId = authProvider.userProfile?.id;
     
     if (comment.userId == currentUserId) {
-      // This is a comment from current user
+      // This is a comment from current user - show current user's name
       return authProvider.userProfile?.name ?? authProvider.userProfile?.username ?? 'You';
     } else {
-      // This is a comment from another user - show their name or generate a display name
-      if (comment.username.isNotEmpty && comment.username != 'Unknown') {
+      // This is a comment from another user - show their actual name from the comment data
+      // Check various possibilities for the username
+      if (comment.username.isNotEmpty && 
+          comment.username != 'Unknown' && 
+          comment.username != 'User') {
         return comment.username;
       } else if (comment.userId.isNotEmpty) {
         // Generate a display name based on user ID for better identification
-        return 'User ${comment.userId.substring(0, 6)}';
+        final userIdPreview = comment.userId.length >= 6 
+            ? comment.userId.substring(0, 6) 
+            : comment.userId;
+        return 'User $userIdPreview';
       } else {
         return 'Anonymous User';
       }

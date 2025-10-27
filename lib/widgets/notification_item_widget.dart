@@ -181,44 +181,6 @@ class NotificationItemWidget extends StatelessWidget {
                       ],
                     ),
                   ),
-                  
-                  // Action buttons - checkmark and X like in the image
-                  if (notification.type.toLowerCase() == 'friend_request' ||
-                      notification.type.toLowerCase() == 'follow')
-                    Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.check,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                 ],
               ),
             ),

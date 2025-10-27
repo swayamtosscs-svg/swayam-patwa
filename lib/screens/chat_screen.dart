@@ -14,6 +14,9 @@ import '../services/chat_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/dp_widget.dart';
 import '../widgets/video_player_widget.dart';
+import '../services/baba_page_service.dart';
+import '../models/baba_page_model.dart';
+import 'baba_profile_ui_demo.dart';
 
 class ChatScreen extends StatefulWidget {
   final String recipientUserId;
@@ -1381,21 +1384,63 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                widget.recipientFullName,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Poppins',
-                                  color: Colors.black,
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      widget.recipientFullName,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Poppins',
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                  // Check if this is a baba page and show tag
+                                  if (_isBabaPage())
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        'BABA JI',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              GestureDetector(
+                                onTap: _navigateToBabaProfile,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      'ID: ${widget.recipientUserId.length > 3 ? widget.recipientUserId.substring(0, 3) : widget.recipientUserId}...',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.black.withOpacity(0.6),
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              Text(
-                                '@${widget.recipientUsername}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.black.withOpacity(0.7),
-                                  fontFamily: 'Poppins',
+                              GestureDetector(
+                                onTap: _navigateToBabaProfile,
+                                child: Text(
+                                  '@${widget.recipientUserId}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black.withOpacity(0.6),
+                                    fontFamily: 'Poppins',
+                                  ),
                                 ),
                               ),
                             ],
@@ -2074,6 +2119,82 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return '${difference.inMinutes}m ago';
     } else {
       return 'now';
+    }
+  }
+
+  // Check if the recipient is a baba page
+  bool _isBabaPage() {
+    // Simple heuristic: if the userId looks like a baba page ID or matches known baba IDs
+    // You can enhance this by calling an API to check
+    return widget.recipientUserId.length > 20 && 
+           (widget.recipientUserId.startsWith('68') || 
+            widget.recipientFullName.toLowerCase().contains('baba') ||
+            widget.recipientUsername.toLowerCase().contains('babaji'));
+  }
+
+  // Navigate to baba profile page
+  Future<void> _navigateToBabaProfile() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.authToken;
+      
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please login to view profile')),
+        );
+        return;
+      }
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(child: CircularProgressIndicator()),
+      );
+
+      // Fetch baba pages and find the matching one
+      final babaPagesResponse = await BabaPageService.getBabaPages(
+        token: token,
+        page: 1,
+        limit: 50,
+      );
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      if (babaPagesResponse.success && babaPagesResponse.pages.isNotEmpty) {
+        // Try to find baba page by creator ID or match the recipient user ID
+        BabaPage? babaPage;
+        try {
+          babaPage = babaPagesResponse.pages.firstWhere(
+            (page) => page.id == widget.recipientUserId || page.creatorId == widget.recipientUserId,
+          );
+        } catch (e) {
+          // If not found, use first baba page as fallback
+          babaPage = babaPagesResponse.pages.first;
+        }
+
+        // Navigate to baba profile
+        if (babaPage != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BabaProfileUiDemoScreen(babaPage: babaPage),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Baba page not found')),
+        );
+      }
+    } catch (e) {
+      print('Error loading baba profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading profile: $e')),
+        );
+      }
     }
   }
 }

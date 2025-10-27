@@ -1347,7 +1347,7 @@ class ApiService {
     required String token,
     required String userId,
   }) async {
-    print('Unlike Post API: Using new unified like API endpoint with fallback');
+    print('Unlike Post API: Using DELETE method for unlike');
     
     // First check if this is a local/mock post
     if (postId.startsWith('mock_') || postId.startsWith('local_')) {
@@ -1355,71 +1355,91 @@ class ApiService {
       return await _handleLocalPostLike(postId: postId, userId: userId, action: 'unlike');
     }
     
-    // Try the new unified like API first
+    // Try DELETE unlike endpoint first
     try {
-      print('Unlike Post API: Trying new unified like endpoint');
+      print('Unlike Post API: Trying DELETE unlike endpoint');
       
-      final response = await http.post(
-        Uri.parse('http://103.14.120.163:8081/api/likes/like'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'contentType': 'post',
-          'contentId': postId,
-        }),
+      // For DELETE with body, we need to use http.Request
+      final request = http.Request(
+        'DELETE',
+        Uri.parse('http://103.14.120.163:8081/api/likes/unlike'),
       );
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode({
+        'contentType': 'post',
+        'contentId': postId,
+      });
+      
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
-      print('Unlike Post API - URL: http://103.14.120.163:8081/api/likes/like');
+      print('Unlike Post API - URL: DELETE http://103.14.120.163:8081/api/likes/unlike');
       print('Unlike Post API - PostId: $postId');
       print('Unlike Post API response status: ${response.statusCode}');
       print('Unlike Post API response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final result = jsonDecode(response.body);
-        print('Unlike Post API succeeded with new endpoint');
+        print('Unlike Post API succeeded with DELETE endpoint');
         return result;
       } else if (response.statusCode == 404) {
-        print('Unlike Post API: New endpoint returned 404, trying fallback endpoint');
-        // Try the old working endpoint as fallback
+        print('Unlike Post API: DELETE endpoint returned 404, trying toggle endpoint');
+        // Try the toggle endpoint as fallback
         return await _tryFallbackLikeEndpoint(postId: postId, token: token, userId: userId, action: 'unlike');
       } else {
-        print('Unlike Post API: New endpoint failed with ${response.statusCode}, trying fallback');
+        print('Unlike Post API: DELETE endpoint failed with ${response.statusCode}, trying toggle fallback');
         return await _tryFallbackLikeEndpoint(postId: postId, token: token, userId: userId, action: 'unlike');
       }
     } catch (e) {
-      print('Unlike Post API: Error with new endpoint: $e, trying fallback');
+      print('Unlike Post API: Error with DELETE endpoint: $e, trying toggle fallback');
       return await _tryFallbackLikeEndpoint(postId: postId, token: token, userId: userId, action: 'unlike');
     }
   }
 
-  // Fallback method to try the old working like API
+  // Fallback method to try the old working like API (toggle endpoint)
   static Future<Map<String, dynamic>> _tryFallbackLikeEndpoint({
     required String postId,
     required String token,
     required String userId,
     required String action,
   }) async {
-    print('Fallback Like API: Trying old working endpoint');
+    print('Fallback Like API: Trying toggle endpoint for action: $action');
     
-    // Try the old working endpoint: POST /api/feed/like/{postId}
+    // Try the toggle endpoint: POST /api/feed/like/{postId}
     try {
       final response = await http.post(
         Uri.parse('http://103.14.120.163:8081/api/feed/like/$postId'),
         headers: {
-          'Authorization': token, // Direct token, not Bearer
+          'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
-      print('Fallback Like API - URL: http://103.14.120.163:8081/api/feed/like/$postId');
+      print('Fallback Like API - URL: POST http://103.14.120.163:8081/api/feed/like/$postId');
+      print('Fallback Like API - Action: $action');
       print('Fallback Like API response status: ${response.statusCode}');
       print('Fallback Like API response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final result = jsonDecode(response.body);
-        print('Fallback Like API succeeded');
+        print('Fallback Like API succeeded with toggle endpoint');
+        
+        // Update result based on action to ensure correct state
+        if (action == 'like') {
+          result['data'] = result['data'] ?? {};
+          result['data']['liked'] = true;
+          if (result['data']['likesCount'] != null) {
+            result['data']['likesCount'] = (result['data']['likesCount'] as int);
+          }
+        } else if (action == 'unlike') {
+          result['data'] = result['data'] ?? {};
+          result['data']['liked'] = false;
+          if (result['data']['likesCount'] != null) {
+            result['data']['likesCount'] = (result['data']['likesCount'] as int);
+          }
+        }
+        
         return result;
       } else {
         print('Fallback Like API: Failed with ${response.statusCode}, using local storage');

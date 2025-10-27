@@ -802,8 +802,8 @@ class _EnhancedPostWidgetState extends State<EnhancedPostWidget> {
 
       print('EnhancedPostWidget: Starting permanent deletion for post ID: ${widget.post.id}');
 
-      // Call enhanced deletion API with verification
-      final response = await ApiService.deleteMediaWithVerification(
+      // Call deletion API directly
+      final response = await ApiService.deleteMedia(
         mediaId: widget.post.id,
         token: token,
       );

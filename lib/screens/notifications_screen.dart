@@ -7,6 +7,7 @@ import '../widgets/notification_item_widget.dart';
 import 'follow_requests_screen.dart';
 import 'test_follow_request_demo.dart';
 import 'test_rupesh_follow_screen.dart';
+import 'user_profile_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -157,6 +158,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   }
 
   Future<void> _onNotificationTapped(NotificationModel notification) async {
+    // Mark as read if not already read
     if (!notification.isRead) {
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -179,6 +181,41 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         }
       } catch (e) {
         print('Error marking notification as read: $e');
+      }
+    }
+
+    // Navigate to user profile if it's a follow notification
+    if (notification.type.toLowerCase() == 'follow' && 
+        notification.followerId.isNotEmpty) {
+      try {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => UserProfileScreen(
+              userId: notification.followerId,
+              username: notification.followerName.isNotEmpty 
+                  ? notification.followerName 
+                  : 'User',
+              fullName: notification.followerName.isNotEmpty 
+                  ? notification.followerName 
+                  : 'User',
+              avatar: notification.followerProfileImage,
+              bio: '',
+              followersCount: 0,
+              followingCount: 0,
+              postsCount: 0,
+              isPrivate: false,
+            ),
+          ),
+        );
+      } catch (e) {
+        print('Error navigating to profile: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }

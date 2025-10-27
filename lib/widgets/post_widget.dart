@@ -750,10 +750,13 @@ class _PostWidgetState extends State<PostWidget> {
 
   Future<void> _deletePost() async {
     try {
+      if (!mounted) return;
+      
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final token = authProvider.authToken;
       
       if (token == null) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please login to delete posts'),
@@ -763,6 +766,8 @@ class _PostWidgetState extends State<PostWidget> {
         return;
       }
 
+      if (!mounted) return;
+      
       // Show loading
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -773,13 +778,15 @@ class _PostWidgetState extends State<PostWidget> {
 
       print('PostWidget: Starting permanent deletion for post ID: ${widget.post.id}');
 
-      // Call enhanced deletion API with verification
-      final response = await ApiService.deleteMediaWithVerification(
+      // Call deletion API directly (without strict verification)
+      final response = await ApiService.deleteMedia(
         mediaId: widget.post.id,
         token: token,
       );
 
       print('PostWidget: Delete response: $response');
+
+      if (!mounted) return;
 
       if (response['success'] == true) {
         // Show success message
@@ -803,23 +810,27 @@ class _PostWidgetState extends State<PostWidget> {
         }
       } else {
         // Show error message with more details
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Failed to delete post'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('PostWidget: Delete error: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['message'] ?? 'Failed to delete post'),
+            content: Text('Error deleting post: $e'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 4),
           ),
         );
       }
-    } catch (e) {
-      print('PostWidget: Delete error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error deleting post: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 4),
-        ),
-      );
     }
   }
 

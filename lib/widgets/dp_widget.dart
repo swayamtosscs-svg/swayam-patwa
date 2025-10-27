@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/dp_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/avatar_utils.dart';
@@ -239,6 +240,54 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     }
   }
 
+  /// Check and request permissions
+  Future<bool> _checkAndRequestPermissions(ImageSource source) async {
+    try {
+      if (kIsWeb) return true;
+      
+      if (source == ImageSource.camera) {
+        final cameraStatus = await Permission.camera.status;
+        if (!cameraStatus.isGranted) {
+          final result = await Permission.camera.request();
+          if (!result.isGranted) {
+            _showSnackBar('Camera permission is required', Colors.red);
+            return false;
+          }
+        }
+      }
+      
+      // For gallery, check storage permission
+      if (source == ImageSource.gallery) {
+        if (Platform.isAndroid) {
+          // For Android 13+, check photos permission
+          final photosStatus = await Permission.photos.status;
+          if (!photosStatus.isGranted) {
+            final result = await Permission.photos.request();
+            if (!result.isGranted) {
+              _showSnackBar('Gallery permission is required', Colors.red);
+              return false;
+            }
+          }
+        } else {
+          // For iOS and older Android
+          final storageStatus = await Permission.storage.status;
+          if (!storageStatus.isGranted) {
+            final result = await Permission.storage.request();
+            if (!result.isGranted) {
+              _showSnackBar('Storage permission is required', Colors.red);
+              return false;
+            }
+          }
+        }
+      }
+      
+      return true;
+    } catch (e) {
+      print('DPWidget: Error checking permissions: $e');
+      return false;
+    }
+  }
+
   Future<void> _pickAndUploadImage() async {
     if (widget.token.isEmpty) {
       _showSnackBar('Authentication token not found', Colors.red);
@@ -252,6 +301,12 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     final ImageSource? source = await _showImageSourceDialog();
     if (source == null) return;
 
+    // Check permissions before proceeding
+    if (!kIsWeb) {
+      final hasPermission = await _checkAndRequestPermissions(source);
+      if (!hasPermission) return;
+    }
+
     try {
       print('DPWidget: Starting image picker with source: $source');
       final ImagePicker picker = ImagePicker();
@@ -263,30 +318,47 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       );
 
       if (image != null) {
+        if (!mounted) return; // Check if widget is still mounted
+        
         print('DPWidget: Image selected: ${image.path}');
         print('DPWidget: Image name: ${image.name}');
-        print('DPWidget: Image size: ${await image.length()} bytes');
+        
+        try {
+          final imageSize = await image.length();
+          print('DPWidget: Image size: $imageSize bytes');
+        } catch (e) {
+          print('DPWidget: Could not get image size: $e');
+        }
         
         // Handle web platform differently
         if (kIsWeb) {
           try {
+            if (!mounted) return;
             // For web, use the web-compatible upload method
             final bytes = await image.readAsBytes();
             print('DPWidget: Web image bytes length: ${bytes.length}');
-            await _uploadImageWeb(bytes, image.name);
+            if (mounted) {
+              await _uploadImageWeb(bytes, image.name);
+            }
           } catch (e) {
             print('DPWidget: Error processing web image: $e');
-            _showSnackBar('Error processing selected image. Please try again.', Colors.red);
+            if (mounted) {
+              _showSnackBar('Error processing selected image. Please try again.', Colors.red);
+            }
           }
         } else {
           // For mobile platforms, use File object with cropping
           final imageFile = File(image.path);
           if (await imageFile.exists()) {
             print('DPWidget: Image file exists, proceeding with crop and upload');
-            await _cropAndUploadImage(imageFile);
+            if (mounted) {
+              await _cropAndUploadImage(imageFile);
+            }
           } else {
             print('DPWidget: Image file does not exist');
-            _showSnackBar('Selected image file not found', Colors.red);
+            if (mounted) {
+              _showSnackBar('Selected image file not found', Colors.red);
+            }
           }
         }
       } else {
@@ -294,7 +366,9 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       }
     } catch (e) {
       print('DPWidget: Error picking image: $e');
-      _showSnackBar('Error picking image: $e', Colors.red);
+      if (mounted) {
+        _showSnackBar('Error picking image: ${e.toString()}', Colors.red);
+      }
     }
   }
 
@@ -333,13 +407,17 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
   }
 
   Future<void> _cropAndUploadImage(File imageFile) async {
+    if (!mounted) return; // Check if widget is still mounted
+    
     try {
       print('DPWidget: Starting image cropping');
       
       // Validate file exists and is readable
       if (!await imageFile.exists()) {
         print('DPWidget: Image file does not exist: ${imageFile.path}');
-        _showSnackBar('Selected image file not found', Colors.red);
+        if (mounted) {
+          _showSnackBar('Selected image file not found', Colors.red);
+        }
         return;
       }
       
@@ -347,11 +425,24 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       final fileSize = await imageFile.length();
       if (fileSize == 0) {
         print('DPWidget: Image file is empty');
-        _showSnackBar('Selected image file is empty', Colors.red);
+        if (mounted) {
+          _showSnackBar('Selected image file is empty', Colors.red);
+        }
+        return;
+      }
+      
+      // Check if file is too large (10MB limit)
+      if (fileSize > 10 * 1024 * 1024) {
+        print('DPWidget: Image file too large: $fileSize bytes');
+        if (mounted) {
+          _showSnackBar('Image is too large. Please choose a smaller image.', Colors.red);
+        }
         return;
       }
       
       print('DPWidget: Image file size: $fileSize bytes');
+      
+      if (!mounted) return; // Check again before starting cropping
       
       // Show cropping dialog with proper error handling
       final CroppedFile? croppedFile = await ImageCropper().cropImage(
@@ -388,10 +479,18 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
           ),
         ],
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 90,
+        compressQuality: 85, // Reduced from 90 to help with memory
         maxWidth: 800,
         maxHeight: 800,
+      ).timeout(
+        const Duration(minutes: 1),
+        onTimeout: () {
+          print('DPWidget: Image cropping timed out');
+          return null;
+        },
       );
+
+      if (!mounted) return; // Check after cropping
 
       if (croppedFile != null) {
         print('DPWidget: Image cropped successfully: ${croppedFile.path}');
@@ -399,18 +498,26 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         
         // Validate cropped file
         if (await croppedImageFile.exists()) {
-          await _uploadImage(croppedImageFile);
+          if (mounted) {
+            await _uploadImage(croppedImageFile);
+          }
         } else {
           print('DPWidget: Cropped file does not exist');
-          _showSnackBar('Cropping failed, please try again', Colors.red);
+          if (mounted) {
+            _showSnackBar('Cropping failed, please try again', Colors.red);
+          }
         }
       } else {
-        print('DPWidget: Image cropping cancelled');
-        _showSnackBar('Image cropping cancelled', Colors.orange);
+        print('DPWidget: Image cropping cancelled or timed out');
+        if (mounted) {
+          _showSnackBar('Image cropping cancelled', Colors.orange);
+        }
       }
     } catch (e) {
       print('DPWidget: Error cropping image: $e');
       print('DPWidget: Error type: ${e.runtimeType}');
+      
+      if (!mounted) return;
       
       // Provide more specific error messages
       String errorMessage = 'Cropping failed, uploading original image';
@@ -426,19 +533,26 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       
       // If cropping fails, try to upload original image with validation
       try {
+        if (!mounted) return;
         if (await imageFile.exists()) {
           await _uploadImage(imageFile);
         } else {
-          _showSnackBar('Original image file not found', Colors.red);
+          if (mounted) {
+            _showSnackBar('Original image file not found', Colors.red);
+          }
         }
       } catch (uploadError) {
         print('DPWidget: Error uploading original image: $uploadError');
-        _showSnackBar('Failed to upload image. Please try again.', Colors.red);
+        if (mounted) {
+          _showSnackBar('Failed to upload image. Please try again.', Colors.red);
+        }
       }
     }
   }
 
   Future<void> _uploadImage(File imageFile) async {
+    if (!mounted) return; // Check if widget is still mounted
+    
     print('DPWidget: Starting image upload');
     print('DPWidget: User ID: ${widget.userId}');
     print('DPWidget: Token available: ${widget.token.isNotEmpty}');
@@ -446,31 +560,43 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     
     // Validate inputs before starting upload
     if (widget.userId.isEmpty) {
-      _showSnackBar('User ID is required', Colors.red);
+      if (mounted) {
+        _showSnackBar('User ID is required', Colors.red);
+      }
       return;
     }
     
     if (widget.token.isEmpty) {
-      _showSnackBar('Authentication token is required', Colors.red);
+      if (mounted) {
+        _showSnackBar('Authentication token is required', Colors.red);
+      }
       return;
     }
     
     if (!await imageFile.exists()) {
-      _showSnackBar('Image file not found', Colors.red);
+      if (mounted) {
+        _showSnackBar('Image file not found', Colors.red);
+      }
       return;
     }
     
     final fileSize = await imageFile.length();
     if (fileSize == 0) {
-      _showSnackBar('Image file is empty', Colors.red);
+      if (mounted) {
+        _showSnackBar('Image file is empty', Colors.red);
+      }
       return;
     }
     
     // Check file size limit (10MB)
     if (fileSize > 10 * 1024 * 1024) {
-      _showSnackBar('Image file is too large. Please choose a smaller image.', Colors.red);
+      if (mounted) {
+        _showSnackBar('Image file is too large. Please choose a smaller image.', Colors.red);
+      }
       return;
     }
+    
+    if (!mounted) return;
     
     setState(() {
       _isLoading = true;
@@ -486,7 +612,9 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
 
       print('DPWidget: Upload response: $response');
 
-      if (response['success'] == true && mounted) {
+      if (!mounted) return;
+      
+      if (response['success'] == true) {
         final data = response['data'];
         print('DPWidget: Upload successful, data: $data');
         
@@ -502,19 +630,25 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
           // Notify parent about the change
           widget.onImageChanged(data['dpUrl']);
 
-          _showSnackBar('Display picture uploaded successfully!', Colors.green);
+          if (mounted) {
+            _showSnackBar('Display picture uploaded successfully!', Colors.green);
+          }
         } else {
           print('DPWidget: Invalid response data');
           setState(() {
             _isLoading = false;
           });
-          _showSnackBar('Upload successful but invalid response data', Colors.orange);
+          if (mounted) {
+            _showSnackBar('Upload successful but invalid response data', Colors.orange);
+          }
         }
       } else {
         print('DPWidget: Upload failed: ${response['message']}');
         setState(() {
           _isLoading = false;
         });
+        
+        if (!mounted) return;
         
         // Provide more specific error messages
         String errorMessage = response['message'] ?? 'Failed to upload display picture';
@@ -537,6 +671,8 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
     } catch (e) {
       print('DPWidget: Error uploading image: $e');
       print('DPWidget: Error type: ${e.runtimeType}');
+      
+      if (!mounted) return;
       
       setState(() {
         _isLoading = false;
@@ -561,6 +697,8 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
   }
 
   Future<void> _uploadImageWeb(List<int> imageBytes, String fileName) async {
+    if (!mounted) return;
+    
     print('DPWidget: Starting web image upload');
     print('DPWidget: User ID: ${widget.userId}');
     print('DPWidget: Token available: ${widget.token.isNotEmpty}');
@@ -586,7 +724,9 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
 
       print('DPWidget: Web upload response: $response');
 
-      if (response['success'] == true && mounted) {
+      if (!mounted) return;
+      
+      if (response['success'] == true) {
         final data = response['data'];
         print('DPWidget: Web upload successful, data: $data');
         
@@ -600,39 +740,53 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
         // Notify parent about the change
         widget.onImageChanged(data['dpUrl']);
 
-        _showSnackBar('Display picture uploaded successfully!', Colors.green);
+        if (mounted) {
+          _showSnackBar('Display picture uploaded successfully!', Colors.green);
+        }
       } else {
         print('DPWidget: Web upload failed: ${response['message']}');
         setState(() {
           _isLoading = false;
         });
-        _showSnackBar(
-          response['message'] ?? 'Failed to upload display picture',
-          Colors.red,
-        );
+        if (mounted) {
+          _showSnackBar(
+            response['message'] ?? 'Failed to upload display picture',
+            Colors.red,
+          );
+        }
       }
     } catch (e) {
       print('DPWidget: Error uploading web image: $e');
-      setState(() {
-        _isLoading = false;
-      });
-      _showSnackBar('Error uploading image: $e', Colors.red);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar('Error uploading image: $e', Colors.red);
+      }
     }
   }
 
   Future<void> _deleteDP() async {
+    if (!mounted) return;
+    
     if (_fileName == null || _fileName!.isEmpty) {
-      _showSnackBar('No display picture to delete', Colors.orange);
+      if (mounted) {
+        _showSnackBar('No display picture to delete', Colors.orange);
+      }
       return;
     }
 
     if (widget.token.isEmpty) {
-      _showSnackBar('Authentication token not found', Colors.red);
+      if (mounted) {
+        _showSnackBar('Authentication token not found', Colors.red);
+      }
       return;
     }
 
     print('DPWidget: Attempting to delete DP with fileName: $_fileName');
 
+    if (!mounted) return;
+    
     // Show confirmation dialog
     final shouldDelete = await showDialog<bool>(
       context: context,
@@ -655,7 +809,7 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
       ),
     );
 
-    if (shouldDelete != true) return;
+    if (shouldDelete != true || !mounted) return;
 
     setState(() {
       _isLoading = true;
@@ -673,7 +827,9 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
 
       print('DPWidget: Delete response: $response');
 
-      if (response['success'] == true && mounted) {
+      if (!mounted) return;
+      
+      if (response['success'] == true) {
         setState(() {
           _localImageUrl = null;
           _fileName = null;
@@ -686,25 +842,33 @@ class _DPWidgetState extends State<DPWidget> with SingleTickerProviderStateMixin
 
         // Show appropriate message based on the response
         if (response['warning'] != null) {
-          _showSnackBar(response['warning'], Colors.orange);
+          if (mounted) {
+            _showSnackBar(response['warning'], Colors.orange);
+          }
         } else {
-          _showSnackBar('Display picture deleted successfully!', Colors.green);
+          if (mounted) {
+            _showSnackBar('Display picture deleted successfully!', Colors.green);
+          }
         }
       } else {
         setState(() {
           _isLoading = false;
         });
-        _showSnackBar(
-          response['message'] ?? 'Failed to delete display picture',
-          Colors.red,
-        );
+        if (mounted) {
+          _showSnackBar(
+            response['message'] ?? 'Failed to delete display picture',
+            Colors.red,
+          );
+        }
       }
     } catch (e) {
       print('DPWidget: Error deleting DP: $e');
-      setState(() {
-        _isLoading = false;
-      });
-      _showSnackBar('Error deleting display picture: $e', Colors.red);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar('Error deleting display picture: $e', Colors.red);
+      }
     }
   }
 

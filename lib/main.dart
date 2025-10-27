@@ -36,6 +36,9 @@ import 'screens/reels_screen.dart';
 import 'screens/create_live_stream_screen.dart';
 import 'screens/live_stream_viewer_screen.dart';
 import 'screens/baba_page_detail_screen.dart';
+import 'screens/baba_profile_ui_demo.dart';
+import 'screens/baba_pages_screen.dart';
+import 'screens/discover_users_screen.dart';
 import 'widgets/global_navigation_wrapper.dart';
 
 // import 'services/custom_http_client.dart';
@@ -210,10 +213,16 @@ class DivineConnectApp extends StatelessWidget {
                   );
                 }
                 
-                return BabaPageDetailScreen(
+                // Navigate to BabaProfileUiDemoScreen to show Posts/Videos/Stories/Events tabs
+                return BabaProfileUiDemoScreen(
                   babaPage: babaPage,
                 );
               },
+              '/discover-users': (context) => const DiscoverUsersScreen(),
+              '/baba-pages': (context) => const GlobalNavigationWrapper(
+                child: BabaPagesScreen(),
+                initialIndex: 3,
+              ),
             },
           );
         },
